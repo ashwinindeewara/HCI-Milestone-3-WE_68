@@ -1,0 +1,147 @@
+package com.freelance.backend.entity;
+
+import jakarta.persistence.*;
+import java.time.LocalDateTime;
+
+@Entity
+@Table(name = "disputes")
+public class Dispute {
+
+    @Id
+    private String id;
+
+    @Column(nullable = false)
+    private String dspNumber;
+
+    @Column(nullable = false)
+    private String project;
+
+    private String parties;
+    private String issueType;
+
+    @Column(columnDefinition = "TEXT")
+    private String description;
+
+    private String evidenceFile;
+    private Double amount;
+
+    @Column(nullable = false)
+    private String status; // Open, Under Review, Resolved
+
+    private String statusType; // open, review, resolved
+    private String resolutionNote;
+
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt = LocalDateTime.now();
+
+    public Dispute() {}
+
+    public Dispute(String id, String dspNumber, String project, String parties, String issueType, String description, String evidenceFile, Double amount, String status, String statusType) {
+        this.id = id;
+        this.dspNumber = dspNumber;
+        this.project = project;
+        this.parties = parties;
+        this.issueType = issueType;
+        this.description = description;
+        this.evidenceFile = evidenceFile;
+        this.amount = amount;
+        this.status = status;
+        this.statusType = statusType;
+    }
+
+    public String getId() {
+        return id;
+    }
+
+    public void setId(String id) {
+        this.id = id;
+    }
+
+    public String getDspNumber() {
+        return dspNumber;
+    }
+
+    public void setDspNumber(String dspNumber) {
+        this.dspNumber = dspNumber;
+    }
+
+    public String getProject() {
+        return project;
+    }
+
+    public void setProject(String project) {
+        this.project = project;
+    }
+
+    public String getParties() {
+        return parties;
+    }
+
+    public void setParties(String parties) {
+        this.parties = parties;
+    }
+
+    public String getIssueType() {
+        return issueType;
+    }
+
+    public void setIssueType(String issueType) {
+        this.issueType = issueType;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    public String getEvidenceFile() {
+        return evidenceFile;
+    }
+
+    public void setEvidenceFile(String evidenceFile) {
+        this.evidenceFile = evidenceFile;
+    }
+
+    public Double getAmount() {
+        return amount;
+    }
+
+    public void setAmount(Double amount) {
+        this.amount = amount;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
+    public String getStatusType() {
+        return statusType;
+    }
+
+    public void setStatusType(String statusType) {
+        this.statusType = statusType;
+    }
+
+    public String getResolutionNote() {
+        return resolutionNote;
+    }
+
+    public void setResolutionNote(String resolutionNote) {
+        this.resolutionNote = resolutionNote;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+}

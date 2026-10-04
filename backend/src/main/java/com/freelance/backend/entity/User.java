@@ -24,6 +24,9 @@ public class User {
     @Column(nullable = false)
     private UserRole role;
 
+    @Column(nullable = false)
+    private String status = "Active";
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 
@@ -34,6 +37,15 @@ public class User {
         this.email = email;
         this.password = password;
         this.role = role;
+        this.status = "Active";
+    }
+
+    public User(String fullName, String email, String password, UserRole role, String status) {
+        this.fullName = fullName;
+        this.email = email;
+        this.password = password;
+        this.role = role;
+        this.status = status;
     }
 
     public Long getId() {
@@ -74,6 +86,14 @@ public class User {
 
     public void setRole(UserRole role) {
         this.role = role;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
     }
 
     public LocalDateTime getCreatedAt() {
