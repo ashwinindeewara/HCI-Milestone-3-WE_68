@@ -9,7 +9,9 @@ import org.springframework.stereotype.Component;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Arrays;
 import java.util.HexFormat;
+import java.util.List;
 
 @Component
 public class DataInitializer implements CommandLineRunner {
@@ -128,10 +130,21 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     private void seedTransactions() {
-        if (transactionRepository.count() == 0) {
-            transactionRepository.save(new Transaction("TXN-2847", "FTX-90182", "C-101", "M-1", "Wireframes & UX Research", 2500.0, "RELEASE", "COMPLETED", "2026-09-16 10:30 AM"));
-            transactionRepository.save(new Transaction("TXN-2848", "FTX-90183", "C-101", "M-2", "UI Design Phase & Design System", 3000.0, "FUND", "COMPLETED", "2026-09-28 02:15 PM"));
-            transactionRepository.save(new Transaction("TXN-2849", "FTX-90184", "C-102", "M-4", "Brand Guidelines & Logo Assets", 1800.0, "FUND", "COMPLETED", "2026-10-01 09:45 AM"));
+        List<Transaction> initialTxns = java.util.Arrays.asList(
+            new Transaction("TXN-2847", "FTX-90182", "C-101", "M-1", "Wireframes & UX Research", 2500.0, "RELEASE", "COMPLETED", "2026-09-16 10:30 AM"),
+            new Transaction("TXN-2848", "FTX-90183", "C-101", "M-2", "UI Design Phase & Design System", 3000.0, "FUND", "COMPLETED", "2026-09-28 02:15 PM"),
+            new Transaction("TXN-2849", "FTX-90184", "C-102", "M-4", "Brand Guidelines & Logo Assets", 1800.0, "FUND", "COMPLETED", "2026-10-01 09:45 AM"),
+            new Transaction("TXN-2846", "FTX-90125", "C-102", "M-5", "API Integration Escrow Fund", 1200.0, "FUND", "PENDING", "Today, 11:15 AM"),
+            new Transaction("TXN-2845", "FTX-90126", "C-103", "M-1", "Illustrations & Branding Release", 4800.0, "RELEASE", "COMPLETED", "Yesterday"),
+            new Transaction("TXN-2844", "FTX-90127", "C-104", "M-3", "React Landing Page Gateway Deposit", 950.0, "FUND", "FAILED", "Oct 12, 2024"),
+            new Transaction("TXN-2843", "FTX-90128", "C-105", "M-1", "Mobile App UI Audit Settlement", 1500.0, "FUND", "FAILED", "Oct 11, 2024"),
+            new Transaction("TXN-2842", "FTX-90129", "C-106", "M-2", "Escrow Refund Settlement", 650.0, "REFUND", "REFUNDED", "Oct 10, 2024"),
+            new Transaction("TXN-2841", "FTX-90130", "C-107", "M-1", "Database Migration Project Escrow", 2400.0, "FUND", "PENDING", "Oct 09, 2024")
+        );
+        for (Transaction tx : initialTxns) {
+            if (!transactionRepository.existsById(tx.getId())) {
+                transactionRepository.save(tx);
+            }
         }
     }
 
@@ -145,11 +158,15 @@ public class DataInitializer implements CommandLineRunner {
 
     private void seedReconciliationRecords() {
         if (reconciliationRepository.count() == 0) {
-            reconciliationRepository.save(new ReconciliationRecord("FTX-90182", "BATCH-202610-A", 2500.0, "MATCHED", "2026-09-16", "Successfully settled via Escrow pool"));
-            reconciliationRepository.save(new ReconciliationRecord("FTX-90183", "BATCH-202610-A", 3000.0, "MATCHED", "2026-09-28", "Escrow deposit locked"));
-            reconciliationRepository.save(new ReconciliationRecord("FTX-90184", "BATCH-202610-B", 1800.0, "MATCHED", "2026-10-01", "Payment verified by Gateway"));
+            reconciliationRepository.save(new ReconciliationRecord("TXN-2847", "BATCH-202610-A", 3150.0, 3150.0, "MATCHED", "2026-09-16", "Successfully settled via Escrow pool"));
+            reconciliationRepository.save(new ReconciliationRecord("TXN-2846", "BATCH-202610-A", 1200.0, 1195.0, "DISCREPANCY", "2026-09-28", "Under-received by $5.00 due to wire transfer fees"));
+            reconciliationRepository.save(new ReconciliationRecord("TXN-2845", "BATCH-202610-B", 4800.0, 4800.0, "MATCHED", "2026-10-01", "Payment verified by Gateway"));
+            reconciliationRepository.save(new ReconciliationRecord("TXN-2844", "BATCH-202610-C", 2250.0, 2250.0, "PENDING", "2026-10-04", "Awaiting bank processing confirmation"));
+            reconciliationRepository.save(new ReconciliationRecord("TXN-2843", "BATCH-202610-C", 1750.0, 0.0, "UNMATCHED", "2026-10-04", "Gateway reference missing"));
+            reconciliationRepository.save(new ReconciliationRecord("TXN-2842", "BATCH-202610-D", 950.0, 950.0, "MATCHED", "2026-10-05", "Direct deposit matched"));
         }
     }
+
 
     private void seedSecurityLogs() {
         if (securityLogRepository.count() == 0) {

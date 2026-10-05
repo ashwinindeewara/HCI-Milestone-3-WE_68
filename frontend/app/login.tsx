@@ -14,6 +14,7 @@ import { useRouter } from 'expo-router';
 import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
 import apiClient from '../src/services/api';
+import { saveAuthSession } from '../src/services/authService';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -40,7 +41,14 @@ export default function LoginScreen() {
         password: password,
       });
 
+      // Save auth session (JWT token & profile details)
+      if (response.data?.token) {
+        saveAuthSession(response.data.token, response.data);
+      }
+
       const userRole = response.data?.role;
+
+
 
       // Role-based dynamic routing from returned AuthResponse
       if (userRole === 'ADMIN') {
