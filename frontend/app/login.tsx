@@ -34,8 +34,12 @@ export default function LoginScreen() {
 
     setIsSubmitting(true);
     try {
-      // Spring Boot backend authentication call to Neon PostgreSQL
-      const response = await apiClient.post('/auth/login', { email, password });
+      // Spring Boot backend authentication call to Neon PostgreSQL via /auth/login
+      const response = await apiClient.post('/auth/login', {
+        email: email.trim().toLowerCase(),
+        password: password,
+      });
+
       const userRole = response.data?.role;
 
       // Role-based dynamic routing from returned AuthResponse
@@ -46,16 +50,20 @@ export default function LoginScreen() {
       } else if (userRole === 'CLIENT') {
         router.replace({ pathname: '/(tabs)/dashboard', params: { role: 'CLIENT' } });
       } else {
-        router.replace('/select-role');
+        router.replace({ pathname: '/(tabs)/dashboard', params: { role: 'FREELANCER' } });
       }
-    } catch {
-      // Fallback transition to Role Selection for demo preview
-      setTimeout(() => {
-        setIsSubmitting(false);
-        router.replace('/select-role');
-      }, 600);
+    } catch (error: any) {
+      const errorMessage =
+        error.response?.data?.message ||
+        (typeof error.response?.data === 'string' ? error.response.data : null) ||
+        error.message ||
+        'Invalid email address or password. Please try again.';
+      Alert.alert('Login Failed', errorMessage);
+    } finally {
+      setIsSubmitting(false);
     }
   };
+
 
   const handleGoogleLogin = () => {
     Alert.alert('Google Sign In', 'Connecting to Google OAuth 2.0...');

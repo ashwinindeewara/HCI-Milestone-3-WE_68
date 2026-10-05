@@ -63,22 +63,33 @@ export default function RegisterScreen() {
 
     setIsSubmitting(true);
     try {
-      // Spring Boot backend POST call to Neon PostgreSQL
-      await apiClient.post('/auth/register', {
-        fullName,
-        email,
-        password,
+      // Spring Boot backend POST call to Neon PostgreSQL via /auth/register
+      const response = await apiClient.post('/auth/register', {
+        fullName: fullName.trim(),
+        email: email.trim().toLowerCase(),
+        password: password,
         role: getRoleEnum(role),
       });
-      router.push('/account-created');
-    } catch {
-      // Fallback transition for offline demo state
-      setTimeout(() => {
-        setIsSubmitting(false);
-        router.push('/account-created');
-      }, 600);
+
+      const message = response.data?.message || 'Account registered successfully!';
+      Alert.alert('Success', message, [
+        {
+          text: 'Continue',
+          onPress: () => router.push('/account-created'),
+        },
+      ]);
+    } catch (error: any) {
+      const errorMessage =
+        error.response?.data?.message ||
+        (typeof error.response?.data === 'string' ? error.response.data : null) ||
+        error.message ||
+        'Registration failed. Please check your details and try again.';
+      Alert.alert('Registration Failed', errorMessage);
+    } finally {
+      setIsSubmitting(false);
     }
   };
+
 
   return (
     <SafeAreaView style={styles.safeArea}>

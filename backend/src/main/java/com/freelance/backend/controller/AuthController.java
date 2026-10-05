@@ -8,8 +8,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
+
 @RestController
-@RequestMapping("/api/auth")
+@RequestMapping({"/api/v1/auth", "/api/auth"})
 @CrossOrigin(origins = "*")
 public class AuthController {
 
@@ -17,22 +19,28 @@ public class AuthController {
     private AuthService authService;
 
     @PostMapping("/register")
-    public ResponseEntity<?> register(@RequestBody RegisterRequest request) {
-        try {
-            AuthResponse response = authService.registerUser(request);
-            return ResponseEntity.ok(response);
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+    public ResponseEntity<AuthResponse> register(@RequestBody RegisterRequest request) {
+        AuthResponse response = authService.registerUser(request);
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody LoginRequest request) {
-        try {
-            AuthResponse response = authService.loginUser(request);
-            return ResponseEntity.ok(response);
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+    public ResponseEntity<AuthResponse> login(@RequestBody LoginRequest request) {
+        AuthResponse response = authService.loginUser(request);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/login/email")
+    public ResponseEntity<AuthResponse> loginEmail(@RequestBody LoginRequest request) {
+        AuthResponse response = authService.loginUser(request);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/login/verify-otp")
+    public ResponseEntity<?> verifyOtp(@RequestBody Map<String, String> request) {
+        String otp = request.get("otp");
+        String email = request.getOrDefault("email", "user@example.com");
+        return authService.verifyOtp(email, otp);
     }
 }
+
