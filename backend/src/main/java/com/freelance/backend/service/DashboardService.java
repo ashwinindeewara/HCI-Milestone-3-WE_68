@@ -25,21 +25,21 @@ public class DashboardService {
         List<Milestone> milestones = milestoneRepository.findAll();
 
         int activeContractsCount = (int) contracts.stream()
-                .filter(c -> "ACTIVE".equalsIgnoreCase(c.getStatus()) || "IN_PROGRESS".equalsIgnoreCase(c.getStatus()))
+                .filter(c -> c.getStatus() != null && ("ACTIVE".equalsIgnoreCase(c.getStatus()) || "IN_PROGRESS".equalsIgnoreCase(c.getStatus())))
                 .count();
 
         Double totalEarnings = milestones.stream()
-                .filter(m -> "RELEASED".equalsIgnoreCase(m.getStatus()))
-                .mapToDouble(Milestone::getAmount)
+                .filter(m -> m.getStatus() != null && "RELEASED".equalsIgnoreCase(m.getStatus()))
+                .mapToDouble(m -> m.getAmount() != null ? m.getAmount() : 0.0)
                 .sum();
 
         int pendingMilestonesCount = (int) milestones.stream()
-                .filter(m -> "PENDING".equalsIgnoreCase(m.getStatus()) || "FUNDED".equalsIgnoreCase(m.getStatus()))
+                .filter(m -> m.getStatus() != null && ("PENDING".equalsIgnoreCase(m.getStatus()) || "FUNDED".equalsIgnoreCase(m.getStatus())))
                 .count();
 
         Double totalInEscrow = milestones.stream()
-                .filter(m -> "FUNDED".equalsIgnoreCase(m.getStatus()))
-                .mapToDouble(Milestone::getAmount)
+                .filter(m -> m.getStatus() != null && "FUNDED".equalsIgnoreCase(m.getStatus()))
+                .mapToDouble(m -> m.getAmount() != null ? m.getAmount() : 0.0)
                 .sum();
 
         List<DashboardMetricsDTO.RecentActivity> activities = new ArrayList<>();

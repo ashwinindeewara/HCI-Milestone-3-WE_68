@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/dashboard")
+@RequestMapping({"/api/v1/dashboard", "/api/dashboard"})
 @CrossOrigin(origins = "*")
 public class DashboardController {
 
