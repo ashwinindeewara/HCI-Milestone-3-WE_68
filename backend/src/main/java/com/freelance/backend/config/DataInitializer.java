@@ -128,7 +128,19 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     private void seedTransactions() {
-        if (transactionRepository.count() == 0) {
+        if (!transactionRepository.existsById("TXN-2845")) {
+            transactionRepository.save(new Transaction("TXN-2845", "FTX-90180", "C-103", "M-3", "Illustrations & Branding Release", 4800.0, "DISPUTE", "DISPUTED", "Yesterday"));
+        }
+        if (!transactionRepository.existsById("TXN-2846")) {
+            transactionRepository.save(new Transaction("TXN-2846", "FTX-90181", "C-102", "M-2", "API Integration Escrow Fund", 1200.0, "FUND", "COMPLETED", "Today, 11:15 AM"));
+        }
+        if (!transactionRepository.existsById("TXN-2844")) {
+            transactionRepository.save(new Transaction("TXN-2844", "FTX-90179", "C-104", "M-1", "React Landing Page Gateway Deposit", 950.0, "FUND", "COMPLETED", "Oct 12, 2024"));
+        }
+        if (!transactionRepository.existsById("TXN-2843")) {
+            transactionRepository.save(new Transaction("TXN-2843", "FTX-90178", "C-105", "M-5", "Mobile App UI Audit Settlement", 1500.0, "RELEASE", "COMPLETED", "Oct 11, 2024"));
+        }
+        if (transactionRepository.count() <= 4) {
             transactionRepository.save(new Transaction("TXN-2847", "FTX-90182", "C-101", "M-1", "Wireframes & UX Research", 2500.0, "RELEASE", "COMPLETED", "2026-09-16 10:30 AM"));
             transactionRepository.save(new Transaction("TXN-2848", "FTX-90183", "C-101", "M-2", "UI Design Phase & Design System", 3000.0, "FUND", "COMPLETED", "2026-09-28 02:15 PM"));
             transactionRepository.save(new Transaction("TXN-2849", "FTX-90184", "C-102", "M-4", "Brand Guidelines & Logo Assets", 1800.0, "FUND", "COMPLETED", "2026-10-01 09:45 AM"));
