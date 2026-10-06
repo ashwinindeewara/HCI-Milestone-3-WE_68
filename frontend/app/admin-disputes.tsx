@@ -102,8 +102,8 @@ export default function AdminDisputesScreen() {
                     item.statusType === 'review'
                       ? styles.tagReview
                       : item.statusType === 'open'
-                      ? styles.tagOpen
-                      : styles.tagResolved,
+                        ? styles.tagOpen
+                        : styles.tagResolved,
                   ]}
                 >
                   <Text
@@ -112,8 +112,8 @@ export default function AdminDisputesScreen() {
                       item.statusType === 'review'
                         ? styles.textReview
                         : item.statusType === 'open'
-                        ? styles.textOpen
-                        : styles.textResolved,
+                          ? styles.textOpen
+                          : styles.textResolved,
                     ]}
                   >
                     {item.status}
