@@ -9,6 +9,7 @@ import {
   SafeAreaView,
   ActivityIndicator,
   Alert,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import Colors from '../src/constants/colors';
@@ -41,6 +42,16 @@ export default function LoginScreen() {
       });
 
       const userRole = response.data?.role;
+
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+        localStorage.setItem('auth_user', JSON.stringify(response.data));
+        localStorage.setItem('auth_email', response.data.email || email.trim().toLowerCase());
+        localStorage.setItem('auth_name', response.data.fullName || 'Freelancer');
+        localStorage.setItem('auth_role', response.data.role || 'FREELANCER');
+        if (response.data.token) {
+          localStorage.setItem('auth_token', response.data.token);
+        }
+      }
 
       // Role-based dynamic routing from returned AuthResponse
       if (userRole === 'ADMIN') {
