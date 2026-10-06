@@ -61,13 +61,22 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     private void seedUsers() {
+        userRepository.findByEmail("chathuniimalsha.com").ifPresent(u -> {
+            u.setEmail("chathuni@design.com");
+            userRepository.save(u);
+        });
+
         if (userRepository.count() == 0) {
-            userRepository.save(new User("Chathuni Imalsha", "chathuniimalsha.com", hashPassword("Password123!"), UserRole.FREELANCER, "Active"));
+            userRepository.save(new User("Chathuni Imalsha", "chathuni@design.com", hashPassword("Password123!"), UserRole.FREELANCER, "Active"));
             userRepository.save(new User("Ruwan Sadeepa", "ruwansadeepa67@gmail.com", hashPassword("Password123!"), UserRole.CLIENT, "Active"));
             userRepository.save(new User("Amaya Perera", "amayaperera2003@gmail.com", hashPassword("Password123!"), UserRole.FREELANCER, "Suspended"));
             userRepository.save(new User("Akila Deshan", "akiladesh99@gmail.com", hashPassword("Password123!"), UserRole.CLIENT, "Active"));
             userRepository.save(new User("System Admin", "admin@freelance.com", hashPassword("Admin123!"), UserRole.ADMIN, "Active"));
             userRepository.save(new User("Payment Staff", "staff@freelance.com", hashPassword("Staff123!"), UserRole.PAYMENT_STAFF, "Active"));
+        }
+
+        if (!userRepository.existsByEmail("hello@design.com")) {
+            userRepository.save(new User("Demo User", "hello@design.com", hashPassword("supersecret"), UserRole.FREELANCER, "Active"));
         }
     }
 
@@ -170,7 +179,7 @@ public class DataInitializer implements CommandLineRunner {
 
     private void seedSecurityLogs() {
         if (securityLogRepository.count() == 0) {
-            securityLogRepository.save(new SecurityLog("USER_LOGIN", "chathuniimalsha.com", "192.168.1.45", "SUCCESS"));
+            securityLogRepository.save(new SecurityLog("USER_LOGIN", "chathuni@design.com", "192.168.1.45", "SUCCESS"));
             securityLogRepository.save(new SecurityLog("FUNDS_RELEASED", "ruwansadeepa67@gmail.com", "192.168.1.12", "SUCCESS"));
             securityLogRepository.save(new SecurityLog("DISPUTE_FILED", "ruwansadeepa67@gmail.com", "192.168.1.12", "SUCCESS"));
         }

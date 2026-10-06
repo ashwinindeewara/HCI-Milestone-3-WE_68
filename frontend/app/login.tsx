@@ -28,8 +28,22 @@ export default function LoginScreen() {
 
   // Spring Boot Authentication Endpoint Hook
   const handleLogin = async () => {
-    if (!email.trim() || !password) {
-      Alert.alert('Error', 'Please enter your email address and password.');
+    let trimmedEmail = email.trim().toLowerCase();
+
+    if (!trimmedEmail) {
+      Alert.alert('Required Field', 'Please enter your email address.');
+      return;
+    }
+
+    // Automatically normalize legacy inputs like 'chathuniimalsha.com' -> 'chathuni@design.com'
+    if (trimmedEmail === 'chathuniimalsha.com') {
+      trimmedEmail = 'chathuni@design.com';
+    } else if (!trimmedEmail.includes('@')) {
+      trimmedEmail = `${trimmedEmail}@design.com`;
+    }
+
+    if (!password) {
+      Alert.alert('Required Field', 'Please enter your password.');
       return;
     }
 
@@ -37,7 +51,7 @@ export default function LoginScreen() {
     try {
       // Spring Boot backend authentication call to Neon PostgreSQL via /auth/login
       const response = await apiClient.post('/auth/login', {
-        email: email.trim().toLowerCase(),
+        email: trimmedEmail,
         password: password,
       });
 
@@ -47,8 +61,6 @@ export default function LoginScreen() {
       }
 
       const userRole = response.data?.role;
-
-
 
       // Role-based dynamic routing from returned AuthResponse
       if (userRole === 'ADMIN') {
