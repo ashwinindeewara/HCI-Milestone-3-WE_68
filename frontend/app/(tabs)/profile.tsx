@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,9 +11,28 @@ import { useRouter } from 'expo-router';
 import Colors from '../../src/constants/colors';
 import Theme from '../../src/constants/theme';
 import StatusBadge from '../../src/components/StatusBadge';
+import { getUserSession, clearUserSession } from '../../src/services/storage';
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const [userName, setUserName] = useState('Chathuni Imalsha');
+  const [userEmail, setUserEmail] = useState('user@freelance.com');
+  const [userRole, setUserRole] = useState('Freelancer');
+
+  useEffect(() => {
+    const session = getUserSession();
+    if (session) {
+      if (session.fullName) setUserName(session.fullName);
+      if (session.email) setUserEmail(session.email);
+      if (session.role) {
+        const r = session.role.toUpperCase();
+        if (r === 'CLIENT') setUserRole('Client');
+        else if (r === 'ADMIN') setUserRole('Administrator');
+        else if (r === 'PAYMENT_STAFF') setUserRole('Payment Staff');
+        else setUserRole('Freelancer');
+      }
+    }
+  }, []);
 
   const handleSwitchRole = () => {
     router.push('/select-role');
@@ -25,7 +44,10 @@ export default function ProfileScreen() {
       {
         text: 'Sign Out',
         style: 'destructive',
-        onPress: () => router.replace('/login'),
+        onPress: () => {
+          clearUserSession();
+          router.replace('/login');
+        },
       },
     ]);
   };
@@ -35,16 +57,18 @@ export default function ProfileScreen() {
       {/* Profile Header Card */}
       <View style={styles.profileHeaderCard}>
         <View style={styles.avatarCircle}>
-          <Text style={styles.avatarText}>CI</Text>
+          <Text style={styles.avatarText}>
+            {userName ? userName.charAt(0).toUpperCase() : 'U'}
+          </Text>
         </View>
 
-        <Text style={styles.userName}>Chathuni Imalsha</Text>
-        <Text style={styles.userEmail}>it23662278@my.sliit.lk</Text>
+        <Text style={styles.userName}>{userName}</Text>
+        <Text style={styles.userEmail}>{userEmail}</Text>
 
         <View style={styles.roleBadgeContainer}>
           <StatusBadge status="ACTIVE" />
           <View style={styles.roleTag}>
-            <Text style={styles.roleTagText}>Role: Freelancer</Text>
+            <Text style={styles.roleTagText}>Role: {userRole}</Text>
           </View>
         </View>
       </View>

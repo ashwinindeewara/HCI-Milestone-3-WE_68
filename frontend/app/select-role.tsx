@@ -13,6 +13,8 @@ import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
 import apiClient from '../src/services/api';
 
+import { getUserSession, saveUserSession } from '../src/services/storage';
+
 export type UserRole = 'FREELANCER' | 'CLIENT' | 'ADMIN' | 'PAYMENT_STAFF';
 
 interface RoleOption {
@@ -54,15 +56,18 @@ export default function SelectRoleScreen() {
   const [selectedRole, setSelectedRole] = useState<UserRole>('FREELANCER');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  /**
-   * Fix 2: Direct Role Navigation Handler
-   * Navigates directly to the Freelancer Workspace Dashboard
-   */
   const handleConfirmRole = async () => {
     setIsSubmitting(true);
     try {
-      // Spring Boot backend POST role selection
-      await apiClient.post('/users/role', { role: selectedRole });
+      const currentSession = getUserSession() || {};
+      saveUserSession({
+        ...currentSession,
+        role: selectedRole,
+      });
+
+      if (currentSession.id) {
+        await apiClient.patch(`/users/${currentSession.id}/role?role=${selectedRole}`);
+      }
     } catch {
       // Fallback for offline API state
     } finally {
