@@ -15,6 +15,7 @@ import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
 import apiClient from '../src/services/api';
 import { saveUserSession } from '../src/services/storage';
+import { saveAuthSession } from '../src/services/authService';
 
 import ContactSupportModal from '../src/components/ContactSupportModal';
 import ForgotPasswordModal from '../src/components/ForgotPasswordModal';
@@ -80,6 +81,15 @@ export default function LoginScreen() {
 
   // Spring Boot Authentication Endpoint Hook
   const handleLogin = async () => {
+    let trimmedEmail = email.trim().toLowerCase();
+
+    // Automatically normalize legacy inputs like 'chathuniimalsha.com' -> 'chathuni@design.com'
+    if (trimmedEmail === 'chathuniimalsha.com') {
+      trimmedEmail = 'chathuni@design.com';
+    } else if (trimmedEmail && !trimmedEmail.includes('@')) {
+      trimmedEmail = `${trimmedEmail}@design.com`;
+    }
+
     if (!validateForm()) {
       return;
     }
@@ -88,9 +98,14 @@ export default function LoginScreen() {
     setGeneralError('');
     try {
       const response = await apiClient.post('/auth/login', {
-        email: email.trim().toLowerCase(),
+        email: trimmedEmail,
         password: password,
       });
+
+      // Save auth session (JWT token & profile details)
+      if (response.data?.token) {
+        saveAuthSession(response.data.token, response.data);
+      }
 
       const userRole = response.data?.role;
 
