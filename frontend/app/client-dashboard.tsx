@@ -146,7 +146,7 @@ export default function ClientDashboardScreen() {
           {/* Active Projects List Section */}
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionTitle}>Active Projects</Text>
-            <TouchableOpacity onPress={() => router.push('/(tabs)/contracts')}>
+            <TouchableOpacity onPress={() => router.push('/client-contracts')}>
               <Text style={styles.seeAllText}>See All</Text>
             </TouchableOpacity>
           </View>
@@ -253,17 +253,17 @@ export default function ClientDashboardScreen() {
 
 
         <View style={styles.clientTabBar}>
-            <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/staff-dashboard')}>
+            <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-dashboard')}>
               <Text style={[styles.tabIcon, styles.tabIconActive]}>🏠</Text>
               <Text style={[styles.tabLabel, styles.tabLabelActive]}>Home</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/staff-transactions')}>
+            <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-contracts')}>
               <Text style={styles.tabIcon}>📁</Text>
               <Text style={styles.tabLabel}>Projects</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/staff-reconcile')}>
+            <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/(tabs)/find-talent')}>
               <Text style={styles.tabIcon}>🔍</Text>
               <Text style={styles.tabLabel}>Find Talent</Text>
             </TouchableOpacity>
