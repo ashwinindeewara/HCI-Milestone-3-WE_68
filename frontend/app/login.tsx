@@ -20,8 +20,8 @@ export default function LoginScreen() {
   const router = useRouter();
 
   // Form State Management
-  const [email, setEmail] = useState('hello@design.com');
-  const [password, setPassword] = useState('supersecret');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
