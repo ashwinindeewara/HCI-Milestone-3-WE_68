@@ -14,8 +14,11 @@ import java.util.Random;
 @Service
 public class DisputeService {
 
-    @Autowired
-    private DisputeRepository disputeRepository;
+    private final DisputeRepository disputeRepository;
+
+    public DisputeService(DisputeRepository disputeRepository) {
+        this.disputeRepository = disputeRepository;
+    }
 
     public List<Dispute> getAllDisputes() {
         return disputeRepository.findAll();

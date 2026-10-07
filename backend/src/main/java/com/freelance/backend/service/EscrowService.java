@@ -13,11 +13,13 @@ import java.util.List;
 @Service
 public class EscrowService {
 
-    @Autowired
-    private MilestoneRepository milestoneRepository;
+    private final MilestoneRepository milestoneRepository;
+    private final TransactionService transactionService;
 
-    @Autowired
-    private TransactionService transactionService;
+    public EscrowService(MilestoneRepository milestoneRepository, TransactionService transactionService) {
+        this.milestoneRepository = milestoneRepository;
+        this.transactionService = transactionService;
+    }
 
     public EscrowSummaryDTO getEscrowSummary() {
         List<Milestone> milestones = milestoneRepository.findAll();

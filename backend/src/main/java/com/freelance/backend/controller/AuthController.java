@@ -18,8 +18,11 @@ public class AuthController {
 
     private static final Logger logger = LoggerFactory.getLogger(AuthController.class);
 
-    @Autowired
-    private AuthService authService;
+    private final AuthService authService;
+
+    public AuthController(AuthService authService) {
+        this.authService = authService;
+    }
 
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(@RequestBody(required = false) RegisterRequest request) {
@@ -66,7 +69,8 @@ public class AuthController {
     }
 
     @PostMapping("/forgot-password")
-    public ResponseEntity<Map<String, Object>> forgotPassword(@RequestBody(required = false) ForgotPasswordRequest request) {
+    public ResponseEntity<Map<String, Object>> forgotPassword(
+            @RequestBody(required = false) ForgotPasswordRequest request) {
         if (request == null) {
             request = new ForgotPasswordRequest("user@example.com");
         }
@@ -75,7 +79,8 @@ public class AuthController {
     }
 
     @PostMapping("/reset-password")
-    public ResponseEntity<Map<String, Object>> resetPassword(@RequestBody(required = false) ResetPasswordRequest request) {
+    public ResponseEntity<Map<String, Object>> resetPassword(
+            @RequestBody(required = false) ResetPasswordRequest request) {
         if (request == null) {
             request = new ResetPasswordRequest("user@example.com", "123456", "Password123!");
         }

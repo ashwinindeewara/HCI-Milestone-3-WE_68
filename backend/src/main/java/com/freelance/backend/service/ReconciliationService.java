@@ -6,7 +6,6 @@ import com.freelance.backend.entity.Transaction;
 import com.freelance.backend.exception.ResourceNotFoundException;
 import com.freelance.backend.repository.ReconciliationRepository;
 import com.freelance.backend.repository.TransactionRepository;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,11 +16,13 @@ import java.util.Optional;
 @Service
 public class ReconciliationService {
 
-    @Autowired
-    private ReconciliationRepository reconciliationRepository;
+    private final ReconciliationRepository reconciliationRepository;
+    private final TransactionRepository transactionRepository;
 
-    @Autowired
-    private TransactionRepository transactionRepository;
+    public ReconciliationService(ReconciliationRepository reconciliationRepository, TransactionRepository transactionRepository) {
+        this.reconciliationRepository = reconciliationRepository;
+        this.transactionRepository = transactionRepository;
+    }
 
     public List<ReconciliationRecord> getReconciliationRecords(String filterStatus) {
         if (filterStatus == null || filterStatus.isBlank() || "all".equalsIgnoreCase(filterStatus)) {
@@ -64,7 +65,7 @@ public class ReconciliationService {
 
         // Try lookup by reference number (e.g. TXN-2847 or FTX-90182)
         return reconciliationRepository.findByReferenceNo(idOrRef)
-            .orElseThrow(() -> new ResourceNotFoundException("Reconciliation record not found for: " + idOrRef));
+                .orElseThrow(() -> new ResourceNotFoundException("Reconciliation record not found for: " + idOrRef));
     }
 
     @Transactional
@@ -75,7 +76,7 @@ public class ReconciliationService {
             record.setReceivedAmount(record.getExpectedAmount());
             record.setDifference(0.0);
         }
-        
+
         String currentNotes = record.getNotes() != null ? record.getNotes() : "";
         if (!currentNotes.contains("[MATCHED]")) {
             record.setNotes((currentNotes + " [MATCHED: Verified by Payment Staff]").trim());
@@ -102,7 +103,7 @@ public class ReconciliationService {
     public ReconciliationRecord flagRecord(String idOrRef, String reason) {
         ReconciliationRecord record = findRecordByIdOrReference(idOrRef);
         record.setStatus("DISCREPANCY");
-        
+
         String flagText = (reason != null && !reason.isBlank()) ? reason : "Flagged for billing audit review.";
         String existingNotes = record.getNotes() != null ? record.getNotes() : "";
         record.setNotes((existingNotes + " [FLAGGED: " + flagText + "]").trim());
@@ -115,7 +116,7 @@ public class ReconciliationService {
         ReconciliationRecord record = findRecordByIdOrReference(idOrRef);
         String existingNotes = record.getNotes() != null ? record.getNotes() : "";
         String newNote = (noteText != null) ? noteText.trim() : "";
-        
+
         if (!existingNotes.isBlank()) {
             record.setNotes(existingNotes + " | " + newNote);
         } else {
@@ -129,4 +130,3 @@ public class ReconciliationService {
         return reconciliationRepository.findAll();
     }
 }
-

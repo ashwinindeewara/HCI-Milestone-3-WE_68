@@ -10,8 +10,11 @@ import java.util.List;
 @Service
 public class SecurityLogService {
 
-    @Autowired
-    private SecurityLogRepository securityLogRepository;
+    private final SecurityLogRepository securityLogRepository;
+
+    public SecurityLogService(SecurityLogRepository securityLogRepository) {
+        this.securityLogRepository = securityLogRepository;
+    }
 
     public List<SecurityLog> getSecurityLogs() {
         return securityLogRepository.findTop20ByOrderByTimestampDesc();

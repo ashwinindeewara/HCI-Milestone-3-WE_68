@@ -6,15 +6,19 @@ import {
   TouchableOpacity,
   SafeAreaView,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
 
 export default function AccountCreatedScreen() {
   const router = useRouter();
+  const { email, password } = useLocalSearchParams<{ email?: string, password?: string }>();
 
   const handleGoToLogin = () => {
-    router.replace('/login');
+    router.replace({
+      pathname: '/login',
+      params: { email, password }
+    });
   };
 
   return (

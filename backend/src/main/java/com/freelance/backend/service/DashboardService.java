@@ -14,11 +14,13 @@ import java.util.List;
 @Service
 public class DashboardService {
 
-    @Autowired
-    private ContractRepository contractRepository;
+    private final ContractRepository contractRepository;
+    private final MilestoneRepository milestoneRepository;
 
-    @Autowired
-    private MilestoneRepository milestoneRepository;
+    public DashboardService(ContractRepository contractRepository, MilestoneRepository milestoneRepository) {
+        this.contractRepository = contractRepository;
+        this.milestoneRepository = milestoneRepository;
+    }
 
     public DashboardMetricsDTO getDashboardMetrics() {
         List<Contract> contracts = contractRepository.findAll();

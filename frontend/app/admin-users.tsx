@@ -145,8 +145,8 @@ export default function AdminUserManagementScreen() {
       resetForm();
       showToast('User account updated successfully!', 'success');
     },
-    onError: () => {
-      showToast('Failed to update user account details.', 'error');
+    onError: (err: any) => {
+      showToast(err.response?.data?.message || 'Failed to update user account details.', 'error');
     }
   });
 

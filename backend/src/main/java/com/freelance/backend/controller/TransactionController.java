@@ -14,8 +14,11 @@ import java.util.List;
 @CrossOrigin(origins = "*")
 public class TransactionController {
 
-    @Autowired
-    private TransactionService transactionService;
+    private final TransactionService transactionService;
+
+    public TransactionController(TransactionService transactionService) {
+        this.transactionService = transactionService;
+    }
 
     @GetMapping
     public ResponseEntity<List<Transaction>> getTransactions(

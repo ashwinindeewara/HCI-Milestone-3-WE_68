@@ -15,14 +15,17 @@ import java.util.Map;
 @Service
 public class SupportService {
 
-    @Autowired
-    private AdminAuditLogRepository adminAuditLogRepository;
+    private final AdminAuditLogRepository adminAuditLogRepository;
+    private final SecurityLogRepository securityLogRepository;
+    private final DisputeRepository disputeRepository;
 
-    @Autowired
-    private SecurityLogRepository securityLogRepository;
-
-    @Autowired
-    private DisputeRepository disputeRepository;
+    public SupportService(AdminAuditLogRepository adminAuditLogRepository,
+                          SecurityLogRepository securityLogRepository,
+                          DisputeRepository disputeRepository) {
+        this.adminAuditLogRepository = adminAuditLogRepository;
+        this.securityLogRepository = securityLogRepository;
+        this.disputeRepository = disputeRepository;
+    }
 
     public Map<String, Object> submitSupportTicket(Map<String, Object> payload) {
         if (payload == null) payload = Map.of();
