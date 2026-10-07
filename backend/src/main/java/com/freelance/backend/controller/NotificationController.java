@@ -17,7 +17,18 @@ public class NotificationController {
     private NotificationRepository notificationRepository;
 
     @GetMapping
-    public ResponseEntity<List<Notification>> getAllNotifications() {
+    public ResponseEntity<List<Notification>> getAllNotifications(
+            @RequestParam(required = false) String freelancerName,
+            @RequestParam(required = false) String freelancerEmail
+    ) {
+        if ((freelancerName != null && !freelancerName.isBlank()) || (freelancerEmail != null && !freelancerEmail.isBlank())) {
+            String name = freelancerName != null ? freelancerName.trim() : "";
+            String email = freelancerEmail != null ? freelancerEmail.trim() : "";
+            boolean isChathuni = name.toLowerCase().contains("chathuni") || email.toLowerCase().contains("chathuni");
+
+            List<Notification> userNotifs = notificationRepository.findForUser(name, email, isChathuni);
+            return ResponseEntity.ok(userNotifs);
+        }
         return ResponseEntity.ok(notificationRepository.findAllByOrderByIdDesc());
     }
 
@@ -46,5 +57,11 @@ public class NotificationController {
         }
         notificationRepository.saveAll(list);
         return ResponseEntity.ok().build();
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteNotification(@PathVariable Long id) {
+        notificationRepository.deleteById(id);
+        return ResponseEntity.noContent().build();
     }
 }

@@ -29,6 +29,15 @@ public class Notification {
     @Column(columnDefinition = "TEXT")
     private String message;
 
+    @Column(name = "recipient_name")
+    private String recipientName;
+
+    @Column(name = "recipient_email")
+    private String recipientEmail;
+
+    @Column(name = "sender_name")
+    private String senderName;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 
@@ -53,6 +62,12 @@ public class Notification {
         this.type = type;
         this.relatedEntityId = relatedEntityId;
         this.message = message;
+    }
+
+    public Notification(String recipientName, String senderName, String title, String subtitle, String badgeText, String badgeType, String amount, String category, String actionUrl, String actionLabel, boolean unread, String timestamp, String type, String relatedEntityId, String message) {
+        this(title, subtitle, badgeText, badgeType, amount, category, actionUrl, actionLabel, unread, timestamp, type, relatedEntityId, message);
+        this.recipientName = recipientName;
+        this.senderName = senderName;
     }
 
     public Long getId() {
@@ -173,5 +188,37 @@ public class Notification {
 
     public void setMessage(String message) {
         this.message = message;
+    }
+
+    public String getRecipientName() {
+        return recipientName;
+    }
+
+    public void setRecipientName(String recipientName) {
+        this.recipientName = recipientName;
+    }
+
+    public String getRecipientEmail() {
+        return recipientEmail;
+    }
+
+    public void setRecipientEmail(String recipientEmail) {
+        this.recipientEmail = recipientEmail;
+    }
+
+    public String getSenderName() {
+        return senderName;
+    }
+
+    public void setSenderName(String senderName) {
+        this.senderName = senderName;
+    }
+
+    public String getFreelancerName() {
+        return recipientName;
+    }
+
+    public void setFreelancerName(String freelancerName) {
+        this.recipientName = freelancerName;
     }
 }
