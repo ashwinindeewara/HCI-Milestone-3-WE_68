@@ -250,9 +250,20 @@ public class AdminService {
             String refNo = "FTX-RES-" + (1000 + (int)(Math.random() * 9000));
             final String targetTitle = projectTitle.trim().toLowerCase();
 
+            String actualContractId = "UNKNOWN";
+            String actualMilestoneId = "UNKNOWN";
+            Transaction matchingTxn = transactionRepository.findAll().stream()
+                    .filter(t -> t.getMilestoneTitle() != null && (t.getMilestoneTitle().equalsIgnoreCase(projectTitle) || t.getMilestoneTitle().toLowerCase().contains(targetTitle) || targetTitle.contains(t.getMilestoneTitle().toLowerCase())))
+                    .findFirst().orElse(null);
+            
+            if (matchingTxn != null) {
+                if (matchingTxn.getContractId() != null) actualContractId = matchingTxn.getContractId();
+                if (matchingTxn.getMilestoneId() != null) actualMilestoneId = matchingTxn.getMilestoneId();
+            }
+
             if (isRefund) {
                 // Record Escrow Refund Reversal
-                Transaction resTxn = new Transaction("TXN-" + System.currentTimeMillis() % 10000, refNo, "C-101", "M-1", "Dispute Refund: " + projectTitle, disputeAmount, "REFUND", "REFUNDED", LocalDateTime.now().toString());
+                Transaction resTxn = new Transaction("TXN-" + System.currentTimeMillis() % 10000, refNo, actualContractId, actualMilestoneId, "Dispute Refund: " + projectTitle, disputeAmount, "REFUND", "REFUNDED", LocalDateTime.now().toString());
                 transactionRepository.save(resTxn);
 
                 // Update matching transactions for this project title to REFUNDED
@@ -274,8 +285,8 @@ public class AdminService {
                 reconciliationRepository.save(new ReconciliationRecord(refNo, "BATCH-DISPUTE-REFUNDED", disputeAmount, "MATCHED", LocalDateTime.now().toString().substring(0, 10), "Full refund arbitration verdict"));
             } else if (isSplit) {
                 double splitAmount = disputeAmount / 2.0;
-                Transaction refundTxn = new Transaction("TXN-" + System.currentTimeMillis() % 10000, refNo + "-A", "C-101", "M-1", "50% Dispute Refund: " + projectTitle, splitAmount, "REFUND", "REFUNDED", LocalDateTime.now().toString());
-                Transaction releaseTxn = new Transaction("TXN-" + (System.currentTimeMillis() % 10000 + 1), refNo + "-B", "C-101", "M-1", "50% Dispute Release: " + projectTitle, splitAmount, "RELEASE", "COMPLETED", LocalDateTime.now().toString());
+                Transaction refundTxn = new Transaction("TXN-" + System.currentTimeMillis() % 10000, refNo + "-A", actualContractId, actualMilestoneId, "50% Dispute Refund: " + projectTitle, splitAmount, "REFUND", "REFUNDED", LocalDateTime.now().toString());
+                Transaction releaseTxn = new Transaction("TXN-" + (System.currentTimeMillis() % 10000 + 1), refNo + "-B", actualContractId, actualMilestoneId, "50% Dispute Release: " + projectTitle, splitAmount, "RELEASE", "COMPLETED", LocalDateTime.now().toString());
                 transactionRepository.save(refundTxn);
                 transactionRepository.save(releaseTxn);
 
@@ -296,7 +307,7 @@ public class AdminService {
                 reconciliationRepository.save(new ReconciliationRecord(refNo, "BATCH-DISPUTE-SPLIT", disputeAmount, "MATCHED", LocalDateTime.now().toString().substring(0, 10), "50/50 split arbitration verdict"));
             } else {
                 // Release to Freelancer
-                Transaction resTxn = new Transaction("TXN-" + System.currentTimeMillis() % 10000, refNo, "C-101", "M-1", "Dispute Release: " + projectTitle, disputeAmount, "RELEASE", "COMPLETED", LocalDateTime.now().toString());
+                Transaction resTxn = new Transaction("TXN-" + System.currentTimeMillis() % 10000, refNo, actualContractId, actualMilestoneId, "Dispute Release: " + projectTitle, disputeAmount, "RELEASE", "COMPLETED", LocalDateTime.now().toString());
                 transactionRepository.save(resTxn);
 
                 transactionRepository.findAll().stream()
@@ -387,21 +398,29 @@ public class AdminService {
     public void reviewSecurityAlert(String id) {
         try {
             Long logId = Long.parseLong(id);
-            if (securityLogRepository.existsById(logId)) {
-                securityLogRepository.deleteById(logId);
+            SecurityLog log = securityLogRepository.findById(logId).orElse(null);
+            if (log != null) {
+                log.setStatus("REVIEWED");
+                securityLogRepository.save(log);
             } else {
                 securityLogRepository.findAll().stream()
                         .filter(a -> String.valueOf(a.getId()).equalsIgnoreCase(id))
                         .findFirst()
-                        .ifPresent(securityLogRepository::delete);
+                        .ifPresent(a -> {
+                            a.setStatus("REVIEWED");
+                            securityLogRepository.save(a);
+                        });
             }
         } catch (Exception e) {
             securityLogRepository.findAll().stream()
                     .filter(a -> String.valueOf(a.getId()).equalsIgnoreCase(id))
                     .findFirst()
-                    .ifPresent(securityLogRepository::delete);
+                    .ifPresent(a -> {
+                        a.setStatus("REVIEWED");
+                        securityLogRepository.save(a);
+                    });
         }
-        logAdminAudit("SECURITY_ALERT_REVIEWED", id, "Reviewed and dismissed security alert log ID: " + id);
+        logAdminAudit("SECURITY_ALERT_REVIEWED", id, "Reviewed security alert log ID: " + id);
     }
 
     public User createUser(Map<String, String> payload) {
@@ -409,14 +428,13 @@ public class AdminService {
         String fullName = payload.getOrDefault("fullName", payload.getOrDefault("name", "New User"));
         String email = payload.get("email");
         if (email == null || email.isBlank()) {
-            email = "user" + System.currentTimeMillis() + "@platform.com";
+            throw new com.freelance.backend.exception.BadRequestException("Email is required");
         } else {
             email = email.trim().toLowerCase();
         }
 
         if (userRepository.existsByEmail(email)) {
-            String[] parts = email.split("@");
-            email = parts[0] + "_" + (System.currentTimeMillis() % 10000) + "@" + (parts.length > 1 ? parts[1] : "platform.com");
+            throw new com.freelance.backend.exception.BadRequestException("A user with this email already exists");
         }
 
         String password = payload.getOrDefault("password", "Password123!");
@@ -430,7 +448,7 @@ public class AdminService {
             role = UserRole.FREELANCER;
         }
 
-        User user = new User(fullName, email, password, role, status);
+        User user = new User(fullName, email, hashPassword(password), role, status);
         User saved = userRepository.save(user);
         logAdminAudit("USER_CREATED", String.valueOf(saved.getId()), "Created user account for " + email + " with role " + roleStr);
         return saved;
@@ -456,8 +474,7 @@ public class AdminService {
                     .orElse(null);
         }
         if (user == null) {
-            user = new User("Updated User", "user" + id + "@platform.com", "Password123!", UserRole.FREELANCER, "Active");
-            user.setId(id);
+            throw new com.freelance.backend.exception.ResourceNotFoundException("User not found with ID: " + id);
         }
 
         if (payload != null) {
@@ -566,10 +583,7 @@ public class AdminService {
                         .orElse(null));
 
         if (existing == null) {
-            String project = (payload != null && payload.get("project") != null) ? payload.get("project") : "Flagged Milestone Transaction";
-            Double amount = (payload != null && payload.get("amount") != null) ? Double.parseDouble(payload.get("amount").toString().replace("$", "")) : 500.0;
-            String contract = (payload != null && payload.get("client") != null) ? payload.get("client") : "C-101";
-            existing = new Transaction(id, "FTX-" + id, contract, "M-1", project, amount, "DISPUTE", "DISPUTED", "Today");
+            throw new com.freelance.backend.exception.ResourceNotFoundException("Transaction not found with ID: " + id);
         }
 
         String newStatus = (payload != null && payload.containsKey("status")) ? payload.get("status") : "DISPUTED";
@@ -622,27 +636,7 @@ public class AdminService {
                         .orElse(null));
 
         if (existing == null) {
-            Double reqAmount = 500.0;
-            String reqProject = "Milestone Refund";
-            String reqContract = "C-103";
-
-            if (payload != null) {
-                if (payload.get("amount") != null) {
-                    try {
-                        reqAmount = Double.parseDouble(payload.get("amount").toString().replace("$", ""));
-                    } catch (Exception ignored) {}
-                }
-                if (payload.get("project") != null && !payload.get("project").toString().isBlank()) {
-                    reqProject = payload.get("project").toString();
-                } else if (payload.get("milestoneTitle") != null && !payload.get("milestoneTitle").toString().isBlank()) {
-                    reqProject = payload.get("milestoneTitle").toString();
-                }
-                if (payload.get("client") != null && !payload.get("client").toString().isBlank()) {
-                    reqContract = payload.get("client").toString();
-                }
-            }
-
-            existing = new Transaction(id, "FTX-" + id, reqContract, "M-1", reqProject, reqAmount, "REFUND", "REFUNDED", "Today");
+            throw new com.freelance.backend.exception.ResourceNotFoundException("Transaction not found with ID: " + id);
         }
 
         existing.setStatus("REFUNDED");
@@ -695,7 +689,14 @@ public class AdminService {
     }
 
     public BlockedIp blockIp(String ipAddress, String reason) {
-        String ip = ipAddress != null ? ipAddress.trim() : "127.0.0.1";
+        if (ipAddress == null || ipAddress.isBlank()) {
+            throw new com.freelance.backend.exception.BadRequestException("IP address is required");
+        }
+        String ip = ipAddress.trim();
+        if (ip.equals("127.0.0.1") || ip.equals("0:0:0:0:0:0:0:1") || ip.equals("::1")) {
+            throw new com.freelance.backend.exception.BadRequestException("Cannot block localhost");
+        }
+
         String r = reason != null ? reason : "Security threat detected by admin";
 
         BlockedIp blockedIp = blockedIpRepository.findByIpAddress(ip)
