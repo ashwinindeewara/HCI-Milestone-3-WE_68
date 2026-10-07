@@ -63,14 +63,9 @@ export default function AdminUserManagementScreen() {
         }
       } catch (error) {
         console.warn('[AdminUsers] Users endpoint connection error:', error);
+        throw error;
       }
-      return [
-        { id: '1', name: 'Chathuni Imalsha', email: 'chathuniimalsha.com', role: 'Freelancer', rawRole: 'FREELANCER', status: 'Active', joined: 'Sep 01, 2026' },
-        { id: '2', name: 'Ruwan Sadeepa', email: 'ruwansadeepa67@gmail.com', role: 'Client', rawRole: 'CLIENT', status: 'Active', joined: 'Sep 05, 2026' },
-        { id: '3', name: 'Amaya Perera', email: 'amayaperera2003@gmail.com', role: 'Freelancer', rawRole: 'FREELANCER', status: 'Suspended', joined: 'Sep 10, 2026' },
-        { id: '4', name: 'Akila Deshan', email: 'akiladesh99@gmail.com', role: 'Client', rawRole: 'CLIENT', status: 'Active', joined: 'Sep 12, 2026' },
-        { id: '5', name: 'System Admin', email: 'admin@freelance.com', role: 'Admin', rawRole: 'ADMIN', status: 'Active', joined: 'Aug 15, 2026' }
-      ];
+      return [];
     },
     retry: 2,
     retryDelay: 1000,

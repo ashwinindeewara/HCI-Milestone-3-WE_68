@@ -122,9 +122,17 @@ public class TransactionService {
                 .limit(10)
                 .toList();
 
+        long heldCount = all.stream()
+                .filter(t -> "HELD".equalsIgnoreCase(t.getStatus()))
+                .count();
+
         return new StaffDashboardMetricsDTO(
                 totalEscrowHold,
                 totalProcessed,
+                pendingCount,
+                heldCount,
+                0L,
+                totalEscrowHold,
                 pendingCount,
                 failedCount,
                 refundCount,

@@ -71,45 +71,9 @@ export default function AdminDisputesScreen() {
         }
       } catch (error) {
         console.warn('[AdminDisputes] Disputes endpoint connection error:', error);
+        throw error;
       }
-      return [
-        {
-          id: 'DSP-401',
-          dspNumber: 'DSP-401',
-          title: 'Brand Style Guide Final Release',
-          parties: 'Akila vs. Vihaga',
-          type: 'Copyright',
-          amount: '$3100.00',
-          rawAmount: 3100.0,
-          status: 'Resolved',
-          statusType: 'resolved',
-          description: 'Disagreement over logo vector rights.'
-        },
-        {
-          id: 'DSP-409',
-          dspNumber: 'DSP-409',
-          title: 'UI Design Assets Delayed',
-          parties: 'Ruwan vs. Chathuni',
-          type: 'Delay',
-          amount: '$1400.00',
-          rawAmount: 1400.0,
-          status: 'Under Review',
-          statusType: 'review',
-          description: 'Delays in submitting UI kit assets.'
-        },
-        {
-          id: 'DSP-408',
-          dspNumber: 'DSP-408',
-          title: 'E-Commerce Back-end Bugs',
-          parties: 'Ruwan vs. Amaya',
-          type: 'Quality',
-          amount: '$850.00',
-          rawAmount: 850.0,
-          status: 'Open',
-          statusType: 'open',
-          description: 'Backend response formatting error.'
-        }
-      ];
+      return [];
     },
     retry: 2,
     retryDelay: 1000,

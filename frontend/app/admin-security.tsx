@@ -39,51 +39,24 @@ export default function AdminSecurityScreen() {
   // Log Form Fields
   const [newAction, setNewAction] = useState('');
   const [newUserEmail, setNewUserEmail] = useState('');
-  const [newIpAddress, setNewIpAddress] = useState('192.168.1.100');
+  const [newIpAddress, setNewIpAddress] = useState('');
   const [newSeverity, setNewSeverity] = useState('High');
 
-  // Fetch Security Alerts
+  // Fetch Security Alerts — all data comes directly from the database via the backend API
   const { data: alertsData, isLoading } = useQuery({
     queryKey: ['adminSecurityAlerts'],
     queryFn: async () => {
-      try {
-        const response = await apiClient.get('/admin/security-alerts');
-        if (Array.isArray(response.data) && response.data.length > 0) {
-          return response.data.map((a: any) => {
-            const rawSev = String(a.severity || a.status || 'Medium').toUpperCase();
-            let mappedSev = 'Medium';
-            let mappedType = 'medium';
-            if (rawSev.includes('HIGH') || rawSev.includes('CRITICAL') || rawSev.includes('FLAGGED')) {
-              mappedSev = 'High';
-              mappedType = 'high';
-            } else if (rawSev.includes('MED') || rawSev.includes('WARN')) {
-              mappedSev = 'Medium';
-              mappedType = 'medium';
-            } else {
-              mappedSev = 'Low';
-              mappedType = 'low';
-            }
-
-            return {
-              ...a,
-              id: a.id?.toString(),
-              title: a.title || a.action || 'Security Event Recorded',
-              user: a.user || a.userEmail || 'system@platform.com',
-              target: a.target || a.ipAddress || '127.0.0.1',
-              severity: mappedSev,
-              severityType: mappedType,
-              time: a.time || 'Recently',
-            };
-          });
-        }
-      } catch (error) {
-        console.warn('[AdminSecurity] Security alerts endpoint connection error:', error);
-      }
-      return [
-        { id: '1', title: 'Suspicious IP Login Attempt', user: 'chathuniimalsha.com', target: '192.168.1.45', severity: 'High', severityType: 'high', time: '10 min ago' },
-        { id: '2', title: 'Multiple Failed Password Retries', user: 'ruwansadeepa67@gmail.com', target: '192.168.1.12', severity: 'Medium', severityType: 'medium', time: '1 hr ago' },
-        { id: '3', title: 'API Token Export Triggered', user: 'admin@freelance.com', target: '127.0.0.1', severity: 'Low', severityType: 'low', time: '2 hrs ago' }
-      ];
+      const response = await apiClient.get('/admin/security-alerts');
+      if (!Array.isArray(response.data)) return [];
+      return response.data.map((a: any) => ({
+        id: String(a.id ?? ''),
+        title: a.title || 'Security Event Recorded',
+        user: a.user || 'Unknown User',
+        target: a.target || 'Unknown IP',
+        severity: a.severity || 'Low',
+        severityType: a.severityType || 'low',   // backend already maps REVIEWED → reviewed
+        time: a.time || '',
+      }));
     },
     retry: 2,
     retryDelay: 1000,
@@ -237,7 +210,7 @@ export default function AdminSecurityScreen() {
   const resetLogForm = () => {
     setNewAction('');
     setNewUserEmail('');
-    setNewIpAddress('192.168.1.100');
+    setNewIpAddress('');
     setNewSeverity('High');
   };
 
@@ -268,15 +241,16 @@ export default function AdminSecurityScreen() {
         (a.target || '').toLowerCase().includes(searchQuery.toLowerCase());
 
       const matchesFilter =
-        activeFilter === 'All' ||
+        (activeFilter === 'All' && a.severityType !== 'reviewed') ||
         (activeFilter === 'Critical' && (a.severityType === 'high' || a.severity === 'High')) ||
         (activeFilter === 'Medium' && (a.severityType === 'medium' || a.severity === 'Medium')) ||
-        (activeFilter === 'Low' && (a.severityType === 'low' || a.severity === 'Low'));
+        (activeFilter === 'Low' && (a.severityType === 'low' || a.severity === 'Low') && a.severityType !== 'reviewed') ||
+        (activeFilter === 'Reviewed' && a.severityType === 'reviewed');
 
       return matchesSearch && matchesFilter;
     });
 
-    const severityRank: Record<string, number> = { high: 3, medium: 2, low: 1 };
+    const severityRank: Record<string, number> = { high: 4, medium: 3, low: 2, reviewed: 1 };
     return result.sort((a: any, b: any) => {
       const rA = severityRank[a.severityType] || 0;
       const rB = severityRank[b.severityType] || 0;
@@ -343,20 +317,27 @@ export default function AdminSecurityScreen() {
         {/* Filters & Sort Row */}
         <View style={styles.filterSortRow}>
           <View style={styles.filterChipsRow}>
-            {['All', 'Critical', 'Medium', 'Low'].map((filter) => {
+            {['All', 'Critical', 'Medium', 'Low', 'Reviewed'].map((filter) => {
               const isSelected = activeFilter === filter;
+              const isReviewedActive = isSelected && filter === 'Reviewed';
               return (
                 <TouchableOpacity
                   key={filter}
-                  style={[styles.chip, isSelected && styles.chipActive]}
+                  style={[
+                    styles.chip,
+                    isSelected && (isReviewedActive ? styles.chipActiveReviewed : styles.chipActive),
+                  ]}
                   onPress={() => {
                     setActiveFilter(filter);
                     setCurrentPage(1);
                   }}
                   activeOpacity={0.8}
                 >
-                  <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>
-                    {filter}
+                  <Text style={[
+                    styles.chipText,
+                    isSelected && (isReviewedActive ? styles.chipTextActiveReviewed : styles.chipTextActive),
+                  ]}>
+                    {filter === 'Reviewed' ? '✓ Reviewed' : filter}
                   </Text>
                 </TouchableOpacity>
               );
@@ -409,6 +390,7 @@ export default function AdminSecurityScreen() {
                       alert.severityType === 'high' && styles.sevHigh,
                       alert.severityType === 'medium' && styles.sevMedium,
                       alert.severityType === 'low' && styles.sevLow,
+                      alert.severityType === 'reviewed' && styles.sevReviewed,
                     ]}
                   >
                     <Text
@@ -417,9 +399,10 @@ export default function AdminSecurityScreen() {
                         alert.severityType === 'high' && styles.sevTextHigh,
                         alert.severityType === 'medium' && styles.sevTextMedium,
                         alert.severityType === 'low' && styles.sevTextLow,
+                        alert.severityType === 'reviewed' && styles.sevTextReviewed,
                       ]}
                     >
-                      {alert.severity} Severity
+                      {alert.severity}
                     </Text>
                   </View>
                 </View>
@@ -784,8 +767,10 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   chipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  chipActiveReviewed: { backgroundColor: Colors.info, borderColor: Colors.info },
   chipText: { fontSize: 13, color: Colors.neutralMedium, fontWeight: '500' },
   chipTextActive: { color: Colors.surface, fontWeight: '700' },
+  chipTextActiveReviewed: { color: Colors.surface, fontWeight: '700' },
   sortBtn: {
     paddingHorizontal: Theme.spacing.sm + 2,
     paddingVertical: Theme.spacing.xs + 2,
@@ -824,10 +809,12 @@ const styles = StyleSheet.create({
   sevHigh: { backgroundColor: Colors.errorBg },
   sevMedium: { backgroundColor: Colors.warningBg },
   sevLow: { backgroundColor: Colors.successBg },
+  sevReviewed: { backgroundColor: Colors.infoBg },
   severityText: { fontSize: 10, fontWeight: '700' },
   sevTextHigh: { color: Colors.errorText },
   sevTextMedium: { color: Colors.warningText },
   sevTextLow: { color: Colors.primaryDark },
+  sevTextReviewed: { color: Colors.infoText },
   cardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',

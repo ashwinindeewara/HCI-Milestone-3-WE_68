@@ -18,6 +18,7 @@ public class User {
     private String email;
 
     @Column(nullable = false)
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private String password;
 
     @Enumerated(EnumType.STRING)
@@ -28,9 +29,11 @@ public class User {
     private String status = "Active";
 
     @Transient
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private String resetCode;
 
     @Transient
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private LocalDateTime resetCodeExpiry;
 
     @Column(name = "location")

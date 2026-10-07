@@ -51,14 +51,7 @@ export default function AdminDashboardScreen() {
         return response.data;
       } catch (error) {
         console.warn('[AdminDashboard] KPIs endpoint connection error:', error);
-        return {
-          totalUsers: 6,
-          activeFreelancers: 2,
-          activeClients: 2,
-          totalVolumeEscrow: 16950,
-          disputesPending: 2,
-          securityAlertsCritical: 1
-        };
+        throw error;
       }
     },
   });
