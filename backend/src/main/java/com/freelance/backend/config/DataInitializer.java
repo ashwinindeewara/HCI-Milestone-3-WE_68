@@ -89,6 +89,11 @@ public class DataInitializer implements CommandLineRunner {
             userRepository.save(new User("Demo User", "hello@design.com", hashPassword("supersecret"),
                     UserRole.FREELANCER, "Active"));
         }
+
+        if (!userRepository.existsByEmail("shoun@gmail.com")) {
+            userRepository.save(new User("Shoun", "shoun@gmail.com", hashPassword("supersecret"),
+                    UserRole.CLIENT, "Active"));
+        }
     }
 
     private void seedContractsAndMilestones() {
