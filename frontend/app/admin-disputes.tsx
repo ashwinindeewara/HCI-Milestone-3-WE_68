@@ -14,6 +14,7 @@ import Colors from '../src/constants/colors';
 import AdminTabBar from '../src/components/AdminTabBar';
 import AdminToast, { ToastType } from '../src/components/AdminToast';
 import apiClient from '../src/services/api';
+import { formatAdminMoney } from '../src/services/moneyFormat';
 import {
   Tone,
   adminLayout,
@@ -439,7 +440,7 @@ export default function AdminDisputesScreen() {
                     <StatusPill label={dispute.status} tone={statusTone(dispute.statusType)} />
                   </View>
 
-                  <Text style={styles.amount}>{dispute.amount}</Text>
+                  <Text style={styles.amount}>{formatAdminMoney(dispute.amount)}</Text>
 
                   <View style={styles.metaList}>
                     <View style={styles.metaRow}>
@@ -589,7 +590,7 @@ export default function AdminDisputesScreen() {
                 { label: 'Project', value: selectedDispute.title },
                 { label: 'Parties', value: selectedDispute.parties },
                 { label: 'Issue', value: selectedDispute.type },
-                { label: 'Amount', value: selectedDispute.amount },
+                { label: 'Amount', value: formatAdminMoney(selectedDispute.amount) },
                 {
                   label: 'Status',
                   value: <StatusPill label={selectedDispute.status} tone={statusTone(selectedDispute.statusType)} />,
