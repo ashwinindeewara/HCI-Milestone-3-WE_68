@@ -10,7 +10,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
 import apiClient from '../src/services/api';
@@ -22,10 +22,11 @@ import GoogleAuthModal from '../src/components/GoogleAuthModal';
 
 export default function LoginScreen() {
   const router = useRouter();
+  const { email: paramEmail, password: paramPassword } = useLocalSearchParams<{ email?: string, password?: string }>();
 
   // Form State Management
-  const [email, setEmail] = useState('hello@design.com');
-  const [password, setPassword] = useState('supersecret');
+  const [email, setEmail] = useState(paramEmail || 'hello@design.com');
+  const [password, setPassword] = useState(paramPassword || 'supersecret');
   const [rememberMe, setRememberMe] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
