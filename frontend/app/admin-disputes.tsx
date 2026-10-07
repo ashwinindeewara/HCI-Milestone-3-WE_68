@@ -4,19 +4,41 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TextInput,
   TouchableOpacity,
   SafeAreaView,
-  Modal,
-  ActivityIndicator,
+  useWindowDimensions,
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import SkeletonCard from '../src/components/SkeletonCard';
 import Colors from '../src/constants/colors';
 import AdminTabBar from '../src/components/AdminTabBar';
 import AdminToast, { ToastType } from '../src/components/AdminToast';
-import Theme from '../src/constants/theme';
 import apiClient from '../src/services/api';
+import {
+  Tone,
+  adminLayout,
+  adminRadius,
+  adminSpace,
+  adminType,
+  MUTED_TEXT,
+  toneColors,
+} from '../src/constants/adminTheme';
+import {
+  AdminButton,
+  AdminCard,
+  AdminEmptyState,
+  AdminIcon,
+  AdminIconName,
+  AdminScreenHeader,
+  AdminSearchBar,
+  AdminStatCard,
+  StatusPill,
+} from '../src/components/AdminUI';
+import AdminModal, {
+  AdminDetailList,
+  AdminField,
+  AdminSectionTitle,
+} from '../src/components/AdminModal';
 
 const ITEMS_PER_PAGE = 10;
 
@@ -276,6 +298,7 @@ export default function AdminDisputesScreen() {
     }
   };
 
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <AdminToast
@@ -286,423 +309,366 @@ export default function AdminDisputesScreen() {
       />
 
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-        {/* Title & Action Row */}
-        <View style={styles.headerRow}>
-          <View>
-            <Text style={styles.headerTitle}>Dispute Center</Text>
-            <Text style={styles.headerSubtitle}>{disputes.length} active & past arbitrations</Text>
-          </View>
-          <View style={{ flexDirection: 'row', gap: Theme.spacing.xs, alignItems: 'center' }}>
-            <TouchableOpacity
-              style={styles.exportBtn}
-              onPress={handleExportCSV}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.exportBtnText}>📥 Export CSV</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.addBtn}
-              onPress={() => setIsCreateModalOpen(true)}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.addBtnText}>+ File Dispute</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Search Input Bar */}
-        <View style={styles.searchBar}>
-          <Text style={{ fontSize: 16, marginRight: 8 }}>🔍</Text>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search dispute ID, project, or party..."
-            placeholderTextColor={Colors.neutralLight}
-            value={searchQuery}
-            onChangeText={(text) => {
-              setSearchQuery(text);
-              setCurrentPage(1);
-            }}
+        <View style={adminLayout.content}>
+          <AdminScreenHeader
+            title="Dispute Center"
+            subtitle={`${disputes.length} active & past arbitrations`}
+            right={
+              <AdminButton
+                label="File Dispute"
+                icon="add"
+                onPress={() => setIsCreateModalOpen(true)}
+              />
+            }
           />
-        </View>
 
-        {/* Filter Chips & Sort Controls */}
-        <View style={styles.filterSortRow}>
-          <View style={styles.filterChipsRow}>
-            {['All', 'Open', 'Under Review', 'Resolved'].map((filter) => {
-              const isSelected = activeFilter === filter;
-              return (
-                <TouchableOpacity
-                  key={filter}
-                  style={[styles.chip, isSelected && styles.chipActive]}
-                  onPress={() => handleFilterChange(filter)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>
-                    {filter}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
+          {/* Summary */}
+          <View style={styles.statRow}>
+            <AdminStatCard
+              style={styles.statCompact}
+              label="Open"
+              tone="warning"
+              icon="alert-circle-outline"
+              value={countStatus(disputes, 'open', 'Open')}
+            />
+            <AdminStatCard
+              style={styles.statCompact}
+              label="Under Review"
+              tone="info"
+              icon="time-outline"
+              value={countStatus(disputes, 'review', 'Under Review')}
+            />
+            <AdminStatCard
+              style={styles.statCompact}
+              label="Resolved"
+              tone="success"
+              icon="checkmark-circle-outline"
+              value={countStatus(disputes, 'resolved', 'Resolved')}
+            />
           </View>
 
-          <View style={styles.sortBtnRow}>
-            <TouchableOpacity
-              style={[styles.sortBtn, sortField === 'amount' && styles.sortBtnActive]}
-              onPress={() => toggleSort('amount')}
-            >
-              <Text style={[styles.sortBtnText, sortField === 'amount' && styles.sortBtnTextActive]}>
-                Amount {sortField === 'amount' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.sortBtn, sortField === 'type' && styles.sortBtnActive]}
-              onPress={() => toggleSort('type')}
-            >
-              <Text style={[styles.sortBtnText, sortField === 'type' && styles.sortBtnTextActive]}>
-                Type {sortField === 'type' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
-              </Text>
-            </TouchableOpacity>
+          {/* Toolbar */}
+          <View style={styles.toolbar}>
+            <AdminSearchBar
+              style={styles.toolbarSearch}
+              placeholder="Search dispute ID, project, or party..."
+              value={searchQuery}
+              onChangeText={(text) => {
+                setSearchQuery(text);
+                setCurrentPage(1);
+              }}
+            />
+            <AdminButton
+              label="Export CSV"
+              icon="download-outline"
+              variant="secondary"
+              onPress={handleExportCSV}
+            />
           </View>
-        </View>
 
-        {/* Dispute Cards List */}
-        <View style={styles.disputesList}>
-          {isLoading ? (
-            <>
-              <SkeletonCard height={140} />
-              <SkeletonCard height={140} />
-            </>
-          ) : filteredDisputes.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <Text style={{ fontSize: 32, marginBottom: 8 }}>⚖️</Text>
-              <Text style={styles.emptyTitle}>No Disputes Found</Text>
-              <Text style={styles.emptySub}>No dispute cases match the selected filter criterion.</Text>
-            </View>
-          ) : (
-            filteredDisputes.slice(0, visibleLimit).map((dispute: any) => (
-              <View key={dispute.id} style={styles.disputeCard}>
-                <View style={styles.cardHeader}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.dspNumber}>{dispute.dspNumber}</Text>
-                    <Text style={styles.projectTitle}>{dispute.title}</Text>
-                  </View>
-
-                  <View
-                    style={[
-                      styles.statusBadge,
-                      dispute.statusType === 'open' && styles.badgeOpen,
-                      dispute.statusType === 'review' && styles.badgeReview,
-                      dispute.statusType === 'resolved' && styles.badgeResolved,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.statusBadgeText,
-                        dispute.statusType === 'open' && styles.textOpen,
-                        dispute.statusType === 'review' && styles.textReview,
-                        dispute.statusType === 'resolved' && styles.textResolved,
-                      ]}
-                    >
-                      {dispute.status}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.cardDetails}>
-                  <Text style={styles.partiesText}>👥 Parties: {dispute.parties}</Text>
-                  <Text style={styles.issueText}>📌 Issue: {dispute.type}</Text>
-                  <Text style={styles.amountText}>💰 Disputed Amount: {dispute.amount}</Text>
-                </View>
-
-                <View style={styles.cardFooter}>
-                  <Text style={styles.descriptionSnippet} numberOfLines={1}>
-                    {dispute.description}
-                  </Text>
+          <View style={styles.filterSortRow}>
+            <View style={styles.chipRow}>
+              {['All', 'Open', 'Under Review', 'Resolved'].map((filter) => {
+                const isSelected = activeFilter === filter;
+                return (
                   <TouchableOpacity
-                    style={styles.reviewBtn}
-                    onPress={() => handleOpenResolveModal(dispute)}
+                    key={filter}
+                    style={[styles.chip, isSelected && styles.chipActive]}
+                    onPress={() => handleFilterChange(filter)}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected }}
                   >
-                    <Text style={styles.reviewBtnText}>
-                      {dispute.statusType === 'resolved' ? '🔍 View Case' : '⚖️ Review & Resolve'}
-                    </Text>
+                    <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>{filter}</Text>
                   </TouchableOpacity>
-                </View>
-              </View>
-            ))
+                );
+              })}
+            </View>
+            <View style={styles.sortGroup}>
+              <Text style={styles.sortLabel}>Sort</Text>
+              <TouchableOpacity
+                style={[styles.sortBtn, sortField === 'amount' && styles.sortBtnActive]}
+                onPress={() => toggleSort('amount')}
+                accessibilityRole="button"
+                accessibilityState={{ selected: sortField === 'amount' }}
+              >
+                <Text style={[styles.sortBtnText, sortField === 'amount' && styles.sortBtnTextActive]}>Amount</Text>
+                {sortField === 'amount' ? (
+                  <AdminIcon name={sortOrder === 'asc' ? 'arrow-up' : 'arrow-down'} size={13} color={Colors.primaryDark} />
+                ) : null}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.sortBtn, sortField === 'type' && styles.sortBtnActive]}
+                onPress={() => toggleSort('type')}
+                accessibilityRole="button"
+                accessibilityState={{ selected: sortField === 'type' }}
+              >
+                <Text style={[styles.sortBtnText, sortField === 'type' && styles.sortBtnTextActive]}>Type</Text>
+                {sortField === 'type' ? (
+                  <AdminIcon name={sortOrder === 'asc' ? 'arrow-up' : 'arrow-down'} size={13} color={Colors.primaryDark} />
+                ) : null}
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Dispute cards */}
+          {isLoading ? (
+            <View style={styles.skeletons}>
+              <SkeletonCard height={140} />
+              <SkeletonCard height={140} />
+            </View>
+          ) : filteredDisputes.length === 0 ? (
+            <AdminCard>
+              <AdminEmptyState
+                icon="scale-outline"
+                title="No Disputes Found"
+                message="No dispute cases match the selected filter criterion."
+              />
+            </AdminCard>
+          ) : (
+            <CardGrid>
+              {filteredDisputes.slice(0, visibleLimit).map((dispute: any) => (
+                <AdminCard key={dispute.id} style={styles.disputeCard}>
+                  <View style={styles.cardHeader}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={adminType.overline}>{dispute.dspNumber}</Text>
+                      <Text style={styles.projectTitle} numberOfLines={2}>
+                        {dispute.title}
+                      </Text>
+                    </View>
+                    <StatusPill label={dispute.status} tone={statusTone(dispute.statusType)} />
+                  </View>
+
+                  <Text style={styles.amount}>{dispute.amount}</Text>
+
+                  <View style={styles.metaList}>
+                    <View style={styles.metaRow}>
+                      <AdminIcon name="people-outline" size={16} color={MUTED_TEXT} />
+                      <Text style={styles.metaText} numberOfLines={2}>
+                        {dispute.parties}
+                      </Text>
+                    </View>
+                    <View style={styles.metaRow}>
+                      <AdminIcon name="pricetag-outline" size={16} color={MUTED_TEXT} />
+                      <Text style={styles.metaText} numberOfLines={1}>
+                        {dispute.type}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.cardFooter}>
+                    <Text style={styles.descriptionSnippet} numberOfLines={1}>
+                      {dispute.description}
+                    </Text>
+                    <AdminButton
+                      label={dispute.statusType === 'resolved' ? 'View Case' : 'Review & Resolve'}
+                      icon={dispute.statusType === 'resolved' ? 'eye-outline' : 'scale-outline'}
+                      variant={dispute.statusType === 'resolved' ? 'secondary' : 'primary'}
+                      onPress={() => handleOpenResolveModal(dispute)}
+                    />
+                  </View>
+                </AdminCard>
+              ))}
+            </CardGrid>
+          )}
+
+          {/* Load more */}
+          {filteredDisputes.length > 4 && (
+            <View style={styles.loadMoreContainer}>
+              {visibleLimit < filteredDisputes.length ? (
+                <AdminButton
+                  label={`Load More (+${filteredDisputes.length - visibleLimit} remaining)`}
+                  variant="secondary"
+                  onPress={() => setVisibleLimit((prev) => prev + 4)}
+                />
+              ) : (
+                <AdminButton label="Show Less" variant="ghost" onPress={() => setVisibleLimit(4)} />
+              )}
+            </View>
           )}
         </View>
-
-        {/* Load More Pagination Option for > 4 items */}
-        {filteredDisputes.length > 4 && (
-          <View style={styles.loadMoreContainer}>
-            {visibleLimit < filteredDisputes.length ? (
-              <TouchableOpacity
-                style={styles.loadMoreBtn}
-                onPress={() => setVisibleLimit((prev) => prev + 4)}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.loadMoreText}>
-                  Load More (+{filteredDisputes.length - visibleLimit} remaining)
-                </Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                style={styles.loadMoreBtnOutline}
-                onPress={() => setVisibleLimit(4)}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.loadMoreTextOutline}>Show Less</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
       </ScrollView>
 
       {/* CREATE DISPUTE MODAL */}
-      <Modal
+      <AdminModal
         visible={isCreateModalOpen}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setIsCreateModalOpen(false)}
+        onClose={() => setIsCreateModalOpen(false)}
+        title="Log New Dispute Case"
+        icon="scale-outline"
+        tone="warning"
+        footer={
+          <>
+            <AdminButton label="Cancel" variant="secondary" onPress={() => setIsCreateModalOpen(false)} />
+            <AdminButton
+              label="Log Dispute Case"
+              onPress={handleCreateDisputeSubmit}
+              loading={createMutation.isPending}
+            />
+          </>
+        }
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>⚖️ Log New Dispute Case</Text>
-              <TouchableOpacity onPress={() => setIsCreateModalOpen(false)}>
-                <Text style={styles.closeIcon}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={{ maxHeight: 420 }}>
-              <Text style={styles.inputLabel}>Project Title</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="e.g. Mobile App Redesign Contract"
-                placeholderTextColor={Colors.neutralLight}
-                value={newProject}
-                onChangeText={setNewProject}
-              />
-
-              <Text style={styles.inputLabel}>Parties Involved</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="e.g. Acme Corp vs Alex Rivera"
-                placeholderTextColor={Colors.neutralLight}
-                value={newParties}
-                onChangeText={setNewParties}
-              />
-
-              <Text style={styles.inputLabel}>Issue Type</Text>
-              <View style={styles.radioGroup}>
-                {['Milestone Release', 'Quality of Deliverable', 'Missed Deadline', 'Communication Failure'].map((t) => (
-                  <TouchableOpacity
-                    key={t}
-                    style={[styles.radioItem, newIssueType === t && styles.radioItemActive]}
-                    onPress={() => setNewIssueType(t)}
-                  >
-                    <Text style={[styles.radioText, newIssueType === t && styles.radioTextActive]}>
-                      {t}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <Text style={styles.inputLabel}>Disputed Amount ($)</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="500.00"
-                placeholderTextColor={Colors.neutralLight}
-                keyboardType="numeric"
-                value={newAmount}
-                onChangeText={setNewAmount}
-              />
-
-              <Text style={styles.inputLabel}>Case Description & Details</Text>
-              <TextInput
-                style={[styles.modalInput, { height: 70, paddingTop: 8 }]}
-                placeholder="Explain the background and reasons for opening this dispute..."
-                placeholderTextColor={Colors.neutralLight}
-                multiline
-                value={newDescription}
-                onChangeText={setNewDescription}
-              />
-            </ScrollView>
-
-            <View style={styles.modalFooter}>
+        <AdminField
+          label="Project Title"
+          placeholder="e.g. Mobile App Redesign Contract"
+          value={newProject}
+          onChangeText={setNewProject}
+        />
+        <AdminField
+          label="Parties Involved"
+          placeholder="e.g. Acme Corp vs Alex Rivera"
+          value={newParties}
+          onChangeText={setNewParties}
+        />
+        <View style={styles.fieldBox}>
+          <Text style={styles.fieldLabel}>Issue Type</Text>
+          <View style={styles.chipRow}>
+            {['Milestone Release', 'Quality of Deliverable', 'Missed Deadline', 'Communication Failure'].map((t) => (
               <TouchableOpacity
-                style={styles.cancelModalBtn}
-                onPress={() => setIsCreateModalOpen(false)}
+                key={t}
+                style={[styles.chip, newIssueType === t && styles.chipActive]}
+                onPress={() => setNewIssueType(t)}
+                activeOpacity={0.8}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: newIssueType === t }}
               >
-                <Text style={styles.cancelModalText}>Cancel</Text>
+                <Text style={[styles.chipText, newIssueType === t && styles.chipTextActive]}>{t}</Text>
               </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.submitModalBtn}
-                onPress={handleCreateDisputeSubmit}
-                disabled={createMutation.isPending}
-              >
-                {createMutation.isPending ? (
-                  <ActivityIndicator color={Colors.surface} size="small" />
-                ) : (
-                  <Text style={styles.submitModalText}>Log Dispute Case</Text>
-                )}
-              </TouchableOpacity>
-            </View>
+            ))}
           </View>
         </View>
-      </Modal>
+        <AdminField
+          label="Disputed Amount ($)"
+          placeholder="500.00"
+          keyboardType="numeric"
+          value={newAmount}
+          onChangeText={setNewAmount}
+        />
+        <AdminField
+          label="Case Description & Details"
+          placeholder="Explain the background and reasons for opening this dispute..."
+          multiline
+          value={newDescription}
+          onChangeText={setNewDescription}
+        />
+      </AdminModal>
 
       {/* RESOLVE / REVIEW DISPUTE MODAL */}
-      <Modal
+      <AdminModal
         visible={isResolveModalOpen}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setIsResolveModalOpen(false)}
+        onClose={() => setIsResolveModalOpen(false)}
+        title="Arbitration Case Review"
+        subtitle={selectedDispute ? selectedDispute.dspNumber : undefined}
+        icon="scale-outline"
+        tone="info"
+        size="lg"
+        footer={
+          selectedDispute ? (
+            <View style={styles.reviewFooter}>
+              <AdminButton label="Close" variant="secondary" onPress={() => setIsResolveModalOpen(false)} />
+              <AdminButton
+                label="Dismiss Case"
+                variant="danger"
+                icon="trash-outline"
+                onPress={() => deleteMutation.mutate(selectedDispute.id)}
+                disabled={deleteMutation.isPending}
+              />
+              <AdminButton
+                label="Issue Verdict & Close"
+                onPress={handleResolveSubmit}
+                loading={resolveMutation.isPending}
+              />
+            </View>
+          ) : undefined
+        }
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            {selectedDispute && (
-              <>
-                <View style={styles.modalHeader}>
-                  <Text style={styles.modalTitle}>Arbitration Case Review</Text>
-                  <TouchableOpacity onPress={() => setIsResolveModalOpen(false)}>
-                    <Text style={styles.closeIcon}>✕</Text>
-                  </TouchableOpacity>
-                </View>
+        {selectedDispute && (
+          <>
+            <AdminDetailList
+              rows={[
+                { label: 'Case', value: selectedDispute.dspNumber },
+                { label: 'Project', value: selectedDispute.title },
+                { label: 'Parties', value: selectedDispute.parties },
+                { label: 'Issue', value: selectedDispute.type },
+                { label: 'Amount', value: selectedDispute.amount },
+                {
+                  label: 'Status',
+                  value: <StatusPill label={selectedDispute.status} tone={statusTone(selectedDispute.statusType)} />,
+                },
+              ]}
+            />
 
-                <ScrollView style={{ maxHeight: 420 }}>
-                  <View style={styles.caseSummaryBox}>
-                    <Text style={styles.caseDspNum}>{selectedDispute.dspNumber}</Text>
-                    <Text style={styles.caseTitle}>{selectedDispute.title}</Text>
-                    <Text style={styles.caseMeta}>👥 {selectedDispute.parties}</Text>
-                    <Text style={styles.caseMeta}>💰 Amount: {selectedDispute.amount}</Text>
-                    <Text style={styles.caseDesc}>"{selectedDispute.description}"</Text>
-                  </View>
+            <View style={styles.quote}>
+              <Text style={styles.quoteText}>"{selectedDispute.description}"</Text>
+            </View>
 
-                  <Text style={styles.inputLabel}>
-                    {((selectedDispute.type && selectedDispute.type.toLowerCase().includes('suspension')) ||
-                    (selectedDispute.title && selectedDispute.title.toLowerCase().includes('suspension')))
-                      ? 'Select Appeal Verdict Action'
-                      : 'Select Resolution Award'}
-                  </Text>
-                  <View style={styles.resolutionChoicesColumn}>
-                    {((selectedDispute.type && selectedDispute.type.toLowerCase().includes('suspension')) ||
-                    (selectedDispute.title && selectedDispute.title.toLowerCase().includes('suspension'))) ? (
-                      <>
-                        <TouchableOpacity
-                          style={[
-                            styles.resChoiceBox,
-                            resolutionType === 'UNSUSPEND_REINSTATE' && styles.resChoiceBoxActive,
-                          ]}
-                          onPress={() => setResolutionType('UNSUSPEND_REINSTATE')}
-                        >
-                          <Text style={styles.resChoiceIcon}>🟢</Text>
-                          <View style={{ flex: 1 }}>
-                            <Text style={styles.resChoiceTitle}>Lift Suspension & Reinstate Account</Text>
-                            <Text style={styles.resChoiceSub}>Approve appeal and restore user account status back to Active.</Text>
-                          </View>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          style={[
-                            styles.resChoiceBox,
-                            resolutionType === 'MAINTAIN_SUSPENSION' && styles.resChoiceBoxActive,
-                          ]}
-                          onPress={() => setResolutionType('MAINTAIN_SUSPENSION')}
-                        >
-                          <Text style={styles.resChoiceIcon}>🚫</Text>
-                          <View style={{ flex: 1 }}>
-                            <Text style={styles.resChoiceTitle}>Reject Appeal & Maintain Suspension</Text>
-                            <Text style={styles.resChoiceSub}>Deny appeal request and keep user account in Suspended status.</Text>
-                          </View>
-                        </TouchableOpacity>
-                      </>
-                    ) : (
-                      <>
-                        <TouchableOpacity
-                          style={[
-                            styles.resChoiceBox,
-                            resolutionType === 'FULL_REFUND' && styles.resChoiceBoxActive,
-                          ]}
-                          onPress={() => setResolutionType('FULL_REFUND')}
-                        >
-                          <Text style={styles.resChoiceIcon}>💰</Text>
-                          <View style={{ flex: 1 }}>
-                            <Text style={styles.resChoiceTitle}>Full Refund to Client</Text>
-                            <Text style={styles.resChoiceSub}>Refund 100% of escrow funds back to client account.</Text>
-                          </View>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          style={[
-                            styles.resChoiceBox,
-                            resolutionType === 'RELEASE_FREELANCER' && styles.resChoiceBoxActive,
-                          ]}
-                          onPress={() => setResolutionType('RELEASE_FREELANCER')}
-                        >
-                          <Text style={styles.resChoiceIcon}>💸</Text>
-                          <View style={{ flex: 1 }}>
-                            <Text style={styles.resChoiceTitle}>Release to Freelancer</Text>
-                            <Text style={styles.resChoiceSub}>Pay out 100% of milestone funds to freelancer.</Text>
-                          </View>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          style={[
-                            styles.resChoiceBox,
-                            resolutionType === 'SPLIT_50_50' && styles.resChoiceBoxActive,
-                          ]}
-                          onPress={() => setResolutionType('SPLIT_50_50')}
-                        >
-                          <Text style={styles.resChoiceIcon}>⚖️</Text>
-                          <View style={{ flex: 1 }}>
-                            <Text style={styles.resChoiceTitle}>50/50 Equal Settlement</Text>
-                            <Text style={styles.resChoiceSub}>Split escrow amount equally between both parties.</Text>
-                          </View>
-                        </TouchableOpacity>
-                      </>
-                    )}
-                  </View>
-
-                  <Text style={styles.inputLabel}>Arbitration Verdict / Finding Notes</Text>
-                  <TextInput
-                    style={[styles.modalInput, { height: 60, paddingTop: 8 }]}
-                    placeholder="Enter final arbitration note..."
-                    placeholderTextColor={Colors.neutralLight}
-                    multiline
-                    value={resolutionNote}
-                    onChangeText={setResolutionNote}
-                  />
-                </ScrollView>
-
-                <View style={styles.modalFooter}>
+            <AdminSectionTitle>
+              {isSuspensionCase(selectedDispute) ? 'Select Appeal Verdict Action' : 'Select Resolution Award'}
+            </AdminSectionTitle>
+            <View style={styles.resolutionChoices}>
+              {isSuspensionCase(selectedDispute) ? (
+                <>
                   <TouchableOpacity
-                    style={styles.dangerModalBtn}
-                    onPress={() => deleteMutation.mutate(selectedDispute.id)}
-                    disabled={deleteMutation.isPending}
+                    style={[styles.resChoice, resolutionType === 'UNSUSPEND_REINSTATE' && styles.resChoiceActive]}
+                    onPress={() => setResolutionType('UNSUSPEND_REINSTATE')}
+                    activeOpacity={0.85}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: resolutionType === 'UNSUSPEND_REINSTATE' }}
                   >
-                    <Text style={styles.dangerModalText}>Dismiss Case</Text>
+                    <ResolutionChoiceBody icon="shield-checkmark-outline" title="Lift Suspension & Reinstate Account" sub="Approve appeal and restore user account status back to Active." selected={resolutionType === 'UNSUSPEND_REINSTATE'} />
                   </TouchableOpacity>
-
                   <TouchableOpacity
-                    style={styles.submitModalBtn}
-                    onPress={handleResolveSubmit}
-                    disabled={resolveMutation.isPending}
+                    style={[styles.resChoice, resolutionType === 'MAINTAIN_SUSPENSION' && styles.resChoiceActive]}
+                    onPress={() => setResolutionType('MAINTAIN_SUSPENSION')}
+                    activeOpacity={0.85}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: resolutionType === 'MAINTAIN_SUSPENSION' }}
                   >
-                    {resolveMutation.isPending ? (
-                      <ActivityIndicator color={Colors.surface} size="small" />
-                    ) : (
-                      <Text style={styles.submitModalText}>Issue Verdict & Close</Text>
-                    )}
+                    <ResolutionChoiceBody icon="ban-outline" title="Reject Appeal & Maintain Suspension" sub="Deny appeal request and keep user account in Suspended status." selected={resolutionType === 'MAINTAIN_SUSPENSION'} />
                   </TouchableOpacity>
-                </View>
-              </>
-            )}
-          </View>
-        </View>
-      </Modal>
+                </>
+              ) : (
+                <>
+                  <TouchableOpacity
+                    style={[styles.resChoice, resolutionType === 'FULL_REFUND' && styles.resChoiceActive]}
+                    onPress={() => setResolutionType('FULL_REFUND')}
+                    activeOpacity={0.85}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: resolutionType === 'FULL_REFUND' }}
+                  >
+                    <ResolutionChoiceBody icon="arrow-redo-outline" title="Full Refund to Client" sub="Refund 100% of escrow funds back to client account." selected={resolutionType === 'FULL_REFUND'} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.resChoice, resolutionType === 'RELEASE_FREELANCER' && styles.resChoiceActive]}
+                    onPress={() => setResolutionType('RELEASE_FREELANCER')}
+                    activeOpacity={0.85}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: resolutionType === 'RELEASE_FREELANCER' }}
+                  >
+                    <ResolutionChoiceBody icon="cash-outline" title="Release to Freelancer" sub="Pay out 100% of milestone funds to freelancer." selected={resolutionType === 'RELEASE_FREELANCER'} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.resChoice, resolutionType === 'SPLIT_50_50' && styles.resChoiceActive]}
+                    onPress={() => setResolutionType('SPLIT_50_50')}
+                    activeOpacity={0.85}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: resolutionType === 'SPLIT_50_50' }}
+                  >
+                    <ResolutionChoiceBody icon="swap-horizontal-outline" title="50/50 Equal Settlement" sub="Split escrow amount equally between both parties." selected={resolutionType === 'SPLIT_50_50'} />
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+
+            <AdminField
+              label="Arbitration Verdict / Finding Notes"
+              placeholder="Enter final arbitration note..."
+              multiline
+              value={resolutionNote}
+              onChangeText={setResolutionNote}
+            />
+          </>
+        )}
+      </AdminModal>
 
       <AdminTabBar activeTab="disputes" />
     </SafeAreaView>
@@ -710,319 +676,163 @@ export default function AdminDisputesScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  container: {
-    flex: 1,
-  },
+  safeArea: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1 },
   contentContainer: {
-    padding: Theme.spacing.md,
-    paddingBottom: 80,
+    paddingHorizontal: adminSpace.lg,
+    paddingTop: adminSpace.lg,
+    paddingBottom: adminLayout.bottomClearance,
   },
-  headerRow: {
+  statRow: { flexDirection: 'row', flexWrap: 'wrap', gap: adminSpace.md, marginBottom: adminSpace.xl },
+  statCompact: { minWidth: 100 },
+  toolbar: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexWrap: 'wrap',
     alignItems: 'center',
-    marginBottom: Theme.spacing.md,
+    gap: adminSpace.md,
+    marginBottom: adminSpace.md,
   },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: Colors.dark,
-  },
-  headerSubtitle: {
-    fontSize: 13,
-    color: Colors.neutralMedium,
-    marginTop: 2,
-  },
-  exportBtn: {
-    paddingHorizontal: Theme.spacing.md,
-    paddingVertical: Theme.spacing.xs + 2,
-    borderRadius: Theme.borderRadius.md,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  exportBtnText: {
-    color: Colors.dark,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.surface,
-    borderRadius: Theme.borderRadius.md,
-    paddingHorizontal: Theme.spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    marginBottom: Theme.spacing.md,
-    height: 44,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
-    color: Colors.dark,
-  },
-  addBtn: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: Theme.spacing.md,
-    paddingVertical: Theme.spacing.xs + 4,
-    borderRadius: Theme.borderRadius.md,
-    ...Theme.shadows.card,
-  },
-  addBtnText: {
-    color: Colors.surface,
-    fontWeight: '700',
-    fontSize: 13,
-  },
+  toolbarSearch: { flex: 1, minWidth: 240 },
   filterSortRow: {
-    gap: Theme.spacing.sm,
-    marginBottom: Theme.spacing.md,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: adminSpace.md,
+    marginBottom: adminSpace.xl,
   },
-  filterChipsRow: { flexDirection: 'row', gap: Theme.spacing.xs },
-  chip: {
-    paddingHorizontal: Theme.spacing.md,
-    paddingVertical: Theme.spacing.xs + 2,
-    borderRadius: Theme.borderRadius.full,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  chipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  chipText: { fontSize: 13, color: Colors.neutralMedium, fontWeight: '500' },
-  chipTextActive: { color: Colors.surface, fontWeight: '700' },
-  sortBtnRow: { flexDirection: 'row', gap: Theme.spacing.xs },
+  sortGroup: { flexDirection: 'row', alignItems: 'center', gap: adminSpace.sm },
+  sortLabel: { ...adminType.overline },
   sortBtn: {
-    paddingHorizontal: Theme.spacing.sm + 2,
-    paddingVertical: Theme.spacing.xs,
-    borderRadius: Theme.borderRadius.sm,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-  },
-  sortBtnActive: { borderColor: Colors.primary, backgroundColor: Colors.primary + '10' },
-  sortBtnText: { fontSize: 11, color: Colors.neutralMedium, fontWeight: '600' },
-  sortBtnTextActive: { color: Colors.primary, fontWeight: '700' },
-  disputesList: { gap: Theme.spacing.md },
-  emptyCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: Theme.borderRadius.lg,
-    padding: Theme.spacing.xl,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 4,
+    minHeight: 36,
+    paddingHorizontal: adminSpace.md,
+    borderRadius: adminRadius.sm,
     borderWidth: 1,
     borderColor: Colors.border,
-  },
-  emptyTitle: { fontSize: 16, fontWeight: '700', color: Colors.dark },
-  emptySub: { fontSize: 13, color: Colors.neutralMedium, textAlign: 'center', marginTop: 4 },
-  disputeCard: {
     backgroundColor: Colors.surface,
-    borderRadius: Theme.borderRadius.lg,
-    padding: Theme.spacing.md,
+  },
+  sortBtnActive: { borderColor: Colors.primary, backgroundColor: toneColors.success.bg },
+  sortBtnText: { fontSize: 12, fontWeight: '600', color: Colors.neutralMedium },
+  sortBtnTextActive: { color: Colors.primaryDark, fontWeight: '700' },
+  reviewFooter: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: adminSpace.sm },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: adminSpace.sm },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    minHeight: 36,
+    justifyContent: 'center',
+    borderRadius: adminRadius.pill,
     borderWidth: 1,
     borderColor: Colors.border,
-    ...Theme.shadows.card,
+    backgroundColor: Colors.surface,
   },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  dspNumber: { fontSize: 11, color: Colors.neutralLight, fontWeight: '700' },
-  projectTitle: { fontSize: 16, fontWeight: '800', color: Colors.dark, marginTop: 2 },
-  statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 },
-  badgeOpen: { backgroundColor: Colors.warningBg },
-  badgeReview: { backgroundColor: Colors.infoBg },
-  badgeResolved: { backgroundColor: Colors.successBg },
-  statusBadgeText: { fontSize: 11, fontWeight: '700' },
-  textOpen: { color: Colors.warningText },
-  textReview: { color: Colors.infoText },
-  textResolved: { color: Colors.primaryDark },
-  cardDetails: { marginVertical: Theme.spacing.sm, gap: 2 },
-  partiesText: { fontSize: 13, color: Colors.neutralMedium, fontWeight: '600' },
-  issueText: { fontSize: 13, color: Colors.neutralMedium },
-  amountText: { fontSize: 14, fontWeight: '800', color: Colors.dark, marginTop: 2 },
+  chipActive: { backgroundColor: Colors.dark, borderColor: Colors.dark },
+  chipText: { fontSize: 13, fontWeight: '600', color: Colors.neutralMedium },
+  chipTextActive: { color: Colors.surface },
+  fieldBox: { marginBottom: adminSpace.lg },
+  fieldLabel: { fontSize: 12, fontWeight: '700', color: Colors.neutralDark, marginBottom: 6 },
+  skeletons: { gap: adminSpace.md },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: adminSpace.lg },
+  disputeCard: { width: '100%' },
+  cardHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: adminSpace.md },
+  projectTitle: { fontSize: 16, fontWeight: '800', color: Colors.dark, marginTop: 4 },
+  amount: { fontSize: 26, fontWeight: '800', color: Colors.dark, letterSpacing: -0.5, marginTop: adminSpace.md },
+  metaList: { gap: 6, marginTop: adminSpace.md },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: adminSpace.sm },
+  metaText: { ...adminType.body, flex: 1 },
   cardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    marginTop: adminSpace.lg,
+    paddingTop: adminSpace.md,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
-    paddingTop: Theme.spacing.sm,
-    marginTop: 4,
+    gap: adminSpace.md,
   },
-  descriptionSnippet: { flex: 1, fontSize: 12, color: Colors.neutralLight, marginRight: Theme.spacing.md },
-  reviewBtn: {
-    paddingHorizontal: Theme.spacing.md,
-    paddingVertical: Theme.spacing.xs + 2,
-    borderRadius: Theme.borderRadius.sm,
-    backgroundColor: Colors.dark,
+  descriptionSnippet: { fontSize: 12, color: MUTED_TEXT },
+  loadMoreContainer: { marginTop: adminSpace.xl, alignItems: 'center' },
+  quote: {
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.border,
+    paddingLeft: adminSpace.md,
+    marginBottom: adminSpace.lg,
   },
-  reviewBtnText: { color: Colors.surface, fontSize: 12, fontWeight: '700' },
-  paginationRow: {
+  quoteText: { ...adminType.body, fontStyle: 'italic' },
+  resolutionChoices: { gap: adminSpace.sm, marginBottom: adminSpace.lg },
+  resChoice: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: Theme.spacing.lg,
-    paddingVertical: Theme.spacing.xs,
-  },
-  pageBtn: {
-    paddingHorizontal: Theme.spacing.md,
-    paddingVertical: Theme.spacing.xs + 2,
-    borderRadius: Theme.borderRadius.md,
+    gap: adminSpace.md,
+    padding: adminSpace.md,
+    minHeight: 56,
     borderWidth: 1,
     borderColor: Colors.border,
+    borderRadius: adminRadius.md,
     backgroundColor: Colors.surface,
   },
-  pageBtnDisabled: { opacity: 0.4 },
-  pageBtnText: { fontSize: 12, fontWeight: '700', color: Colors.dark },
-  pageBtnTextDisabled: { color: Colors.neutralLight },
-  pageIndicator: { fontSize: 12, fontWeight: '600', color: Colors.neutralMedium },
-
-  // Modal Styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+  resChoiceActive: { borderColor: Colors.primary, backgroundColor: toneColors.success.bg },
+  resChoiceIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: adminRadius.sm,
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
-    padding: Theme.spacing.md,
+    backgroundColor: toneColors.neutral.bg,
   },
-  modalContent: {
-    width: '100%',
-    maxWidth: 480,
-    backgroundColor: Colors.surface,
-    borderRadius: Theme.borderRadius.lg,
-    padding: Theme.spacing.lg,
-    ...Theme.shadows.modal,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Theme.spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-    paddingBottom: Theme.spacing.sm,
-  },
-  modalTitle: { fontSize: 18, fontWeight: '800', color: Colors.dark },
-  closeIcon: { fontSize: 18, fontWeight: '700', color: Colors.neutralMedium },
-  inputLabel: { fontSize: 13, fontWeight: '700', color: Colors.dark, marginTop: Theme.spacing.sm, marginBottom: 4 },
-  modalInput: {
-    height: 44,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: Theme.borderRadius.md,
-    paddingHorizontal: Theme.spacing.md,
-    fontSize: 14,
-    color: Colors.dark,
-    backgroundColor: Colors.background,
-  },
-  radioGroup: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginVertical: 6 },
-  radioItem: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-  },
-  radioItemActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  radioText: { fontSize: 12, fontWeight: '600', color: Colors.neutralMedium },
-  radioTextActive: { color: Colors.surface, fontWeight: '700' },
-  modalFooter: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: Theme.spacing.sm,
-    marginTop: Theme.spacing.lg,
-    paddingTop: Theme.spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-  },
-  cancelModalBtn: {
-    paddingHorizontal: Theme.spacing.md,
-    paddingVertical: Theme.spacing.xs + 4,
-    borderRadius: Theme.borderRadius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  cancelModalText: { fontSize: 13, fontWeight: '700', color: Colors.neutralMedium },
-  submitModalBtn: {
-    paddingHorizontal: Theme.spacing.lg,
-    paddingVertical: Theme.spacing.xs + 4,
-    borderRadius: Theme.borderRadius.md,
-    backgroundColor: Colors.primary,
-  },
-  submitModalText: { fontSize: 13, fontWeight: '700', color: Colors.surface },
-  dangerModalBtn: {
-    paddingHorizontal: Theme.spacing.md,
-    paddingVertical: Theme.spacing.xs + 4,
-    borderRadius: Theme.borderRadius.md,
-    backgroundColor: Colors.errorText,
-  },
-  dangerModalText: { fontSize: 13, fontWeight: '700', color: Colors.surface },
-
-  // Case summary
-  caseSummaryBox: {
-    backgroundColor: Colors.background,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: Theme.borderRadius.md,
-    padding: Theme.spacing.md,
-    marginBottom: Theme.spacing.md,
-  },
-  caseDspNum: { fontSize: 11, color: Colors.neutralLight, fontWeight: '700' },
-  caseTitle: { fontSize: 16, fontWeight: '800', color: Colors.dark, marginVertical: 2 },
-  caseMeta: { fontSize: 12, color: Colors.neutralMedium, marginTop: 2 },
-  caseDesc: { fontSize: 12, fontStyle: 'italic', color: Colors.dark, marginTop: 6 },
-
-  // Resolution choices
-  resolutionChoicesColumn: { gap: 8, marginVertical: 6 },
-  resChoiceBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: Theme.spacing.sm + 2,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: Theme.borderRadius.md,
-    backgroundColor: Colors.surface,
-  },
-  resChoiceBoxActive: { borderColor: Colors.primary, backgroundColor: Colors.primary + '10' },
-  resChoiceIcon: { fontSize: 22, marginRight: 10 },
+  resChoiceIconActive: { backgroundColor: Colors.primary },
   resChoiceTitle: { fontSize: 13, fontWeight: '700', color: Colors.dark },
-  resChoiceSub: { fontSize: 11, color: Colors.neutralMedium, marginTop: 1 },
-  loadMoreContainer: {
-    marginTop: Theme.spacing.md,
-    marginBottom: Theme.spacing.lg,
-    alignItems: 'center',
-  },
-  loadMoreBtn: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: Theme.spacing.xl,
-    paddingVertical: Theme.spacing.sm + 4,
-    borderRadius: Theme.borderRadius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Theme.shadows.card,
-  },
-  loadMoreText: {
-    color: Colors.surface,
-    fontWeight: '700',
-    fontSize: 13,
-  },
-  loadMoreBtnOutline: {
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    paddingHorizontal: Theme.spacing.xl,
-    paddingVertical: Theme.spacing.sm + 4,
-    borderRadius: Theme.borderRadius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadMoreTextOutline: {
-    color: Colors.neutralMedium,
-    fontWeight: '600',
-    fontSize: 13,
-  },
+  resChoiceSub: { fontSize: 12, color: MUTED_TEXT, marginTop: 1 },
 });
+
+// Presentation helpers (module level, no component state)
+const statusTone = (statusType: string): Tone =>
+  statusType === 'open' ? 'warning' : statusType === 'review' ? 'info' : statusType === 'resolved' ? 'success' : 'neutral';
+
+const isSuspensionCase = (d: any) =>
+  !!((d.type && d.type.toLowerCase().includes('suspension')) || (d.title && d.title.toLowerCase().includes('suspension')));
+
+function CardGrid({ children }: { children: React.ReactNode }) {
+  const { width } = useWindowDimensions();
+  const twoCol = width >= 900;
+  return (
+    <View style={styles.grid}>
+      {React.Children.map(children, (child) => (
+        <View style={{ width: twoCol ? '48%' : '100%', flexGrow: 0 }}>{child}</View>
+      ))}
+    </View>
+  );
+}
+
+function ResolutionChoiceBody({
+  icon,
+  title,
+  sub,
+  selected,
+}: {
+  icon: AdminIconName;
+  title: string;
+  sub: string;
+  selected: boolean;
+}) {
+  return (
+    <>
+      <View style={[styles.resChoiceIcon, selected && styles.resChoiceIconActive]}>
+        <AdminIcon name={icon} size={18} color={selected ? Colors.surface : Colors.dark} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.resChoiceTitle}>{title}</Text>
+        <Text style={styles.resChoiceSub}>{sub}</Text>
+      </View>
+      <AdminIcon
+        name={selected ? 'checkmark-circle' : 'radio-button-off'}
+        size={20}
+        color={selected ? Colors.primary : Colors.neutralLight}
+      />
+    </>
+  );
+}
+
+
+const countStatus = (list: any[], key: 'open' | 'review' | 'resolved', label: string) =>
+  list.filter((d: any) => d.statusType === key || d.status === label).length;
