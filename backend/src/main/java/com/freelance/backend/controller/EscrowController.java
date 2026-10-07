@@ -17,8 +17,10 @@ public class EscrowController {
     private EscrowService escrowService;
 
     @GetMapping("/summary")
-    public ResponseEntity<EscrowSummaryDTO> getEscrowSummary() {
-        return ResponseEntity.ok(escrowService.getEscrowSummary());
+    public ResponseEntity<EscrowSummaryDTO> getEscrowSummary(
+            @RequestParam(required = false) String freelancerName
+    ) {
+        return ResponseEntity.ok(escrowService.getEscrowSummary(freelancerName));
     }
 
     @PostMapping("/fund")

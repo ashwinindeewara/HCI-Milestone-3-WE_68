@@ -15,11 +15,35 @@ public class TransactionService {
     @Autowired
     private TransactionRepository transactionRepository;
 
+    @Autowired
+    private com.freelance.backend.repository.ContractRepository contractRepository;
+
     public List<Transaction> getAllTransactions(String typeFilter) {
-        if (typeFilter != null && !typeFilter.isEmpty() && !"ALL".equalsIgnoreCase(typeFilter)) {
-            return transactionRepository.findByType(typeFilter.toUpperCase());
+        return getAllTransactions(typeFilter, null);
+    }
+
+    public List<Transaction> getAllTransactions(String typeFilter, String freelancerName) {
+        List<Transaction> list = transactionRepository.findAll();
+
+        if (freelancerName != null && !freelancerName.isBlank()) {
+            if (freelancerName.toLowerCase().contains("chathuni")) {
+                // Keep seeded demo transactions for Chathuni
+            } else {
+                List<String> contractIds = contractRepository.findByFreelancerNameIgnoreCase(freelancerName.trim()).stream()
+                        .map(com.freelance.backend.entity.Contract::getId)
+                        .toList();
+                if (contractIds.isEmpty()) {
+                    list = List.of();
+                } else {
+                    list = transactionRepository.findByContractIdIn(contractIds);
+                }
+            }
         }
-        return transactionRepository.findAll();
+
+        if (typeFilter != null && !typeFilter.isEmpty() && !"ALL".equalsIgnoreCase(typeFilter)) {
+            list = list.stream().filter(t -> typeFilter.equalsIgnoreCase(t.getType())).toList();
+        }
+        return list;
     }
 
     public Transaction getTransactionById(String id) {

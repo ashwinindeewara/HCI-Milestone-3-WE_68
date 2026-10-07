@@ -17,8 +17,11 @@ public class TransactionController {
     private TransactionService transactionService;
 
     @GetMapping
-    public ResponseEntity<List<Transaction>> getTransactions(@RequestParam(required = false) String type) {
-        return ResponseEntity.ok(transactionService.getAllTransactions(type));
+    public ResponseEntity<List<Transaction>> getTransactions(
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) String freelancerName
+    ) {
+        return ResponseEntity.ok(transactionService.getAllTransactions(type, freelancerName));
     }
 
     @GetMapping("/{id}")

@@ -17,9 +17,39 @@ public class EscrowService {
     private MilestoneRepository milestoneRepository;
 
     @Autowired
+    private com.freelance.backend.repository.ContractRepository contractRepository;
+
+    @Autowired
     private TransactionService transactionService;
 
     public EscrowSummaryDTO getEscrowSummary() {
+        return getEscrowSummary(null);
+    }
+
+    public EscrowSummaryDTO getEscrowSummary(String freelancerName) {
+        if (freelancerName != null && !freelancerName.isBlank()) {
+            List<com.freelance.backend.entity.Contract> freelancerContracts = contractRepository.findByFreelancerNameIgnoreCase(freelancerName.trim());
+
+            if (freelancerContracts.isEmpty()) {
+                return new EscrowSummaryDTO(0.0, 0.0, 0.0, 0.0);
+            }
+
+            List<String> contractIds = freelancerContracts.stream().map(com.freelance.backend.entity.Contract::getId).toList();
+            List<Milestone> milestones = milestoneRepository.findByContractIdIn(contractIds);
+
+            Double totalFunded = milestones.stream()
+                    .filter(m -> "FUNDED".equalsIgnoreCase(m.getStatus()) || "DELIVERED".equalsIgnoreCase(m.getStatus()))
+                    .mapToDouble(Milestone::getAmount)
+                    .sum();
+
+            Double totalReleased = milestones.stream()
+                    .filter(m -> "RELEASED".equalsIgnoreCase(m.getStatus()))
+                    .mapToDouble(Milestone::getAmount)
+                    .sum();
+
+            return new EscrowSummaryDTO(totalFunded, totalFunded, totalReleased, totalReleased);
+        }
+
         List<Milestone> milestones = milestoneRepository.findAll();
 
         Double totalFunded = milestones.stream()
@@ -32,7 +62,7 @@ public class EscrowService {
                 .mapToDouble(Milestone::getAmount)
                 .sum();
 
-        Double availableBalance = 3200.0; // Default available balance for freelancer/platform user
+        Double availableBalance = totalReleased > 0 ? totalReleased : 0.0;
 
         return new EscrowSummaryDTO(totalFunded, totalFunded, totalReleased, availableBalance);
     }
