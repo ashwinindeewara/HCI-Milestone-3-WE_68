@@ -309,6 +309,7 @@ export function AdminButton({
       onPress={onPress}
       disabled={isDisabled}
       activeOpacity={0.85}
+      hitSlop={size === 'sm' ? { top: 6, bottom: 6, left: 4, right: 4 } : undefined}
       accessibilityRole="button"
       accessibilityState={{ disabled: isDisabled, busy: loading }}
       style={[
