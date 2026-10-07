@@ -18,7 +18,12 @@ public class FreelancerProfileController {
     private FreelancerProfileService profileService;
 
     @GetMapping
-    public ResponseEntity<FreelancerProfile> getDefaultProfile() {
+    public ResponseEntity<FreelancerProfile> getProfile(
+            @RequestParam(value = "email", required = false) String email
+    ) {
+        if (email != null && !email.isBlank()) {
+            return ResponseEntity.ok(profileService.getProfileByEmail(email));
+        }
         return ResponseEntity.ok(profileService.getDefaultProfile());
     }
 
@@ -28,8 +33,13 @@ public class FreelancerProfileController {
     }
 
     @PutMapping
-    public ResponseEntity<FreelancerProfile> updateDefaultProfile(@RequestBody FreelancerProfileDTO dto) {
-        String email = (dto.getEmail() != null && !dto.getEmail().isBlank()) ? dto.getEmail() : "chathuniimalsha.com";
+    public ResponseEntity<FreelancerProfile> updateDefaultProfile(
+            @RequestParam(value = "email", required = false) String emailParam,
+            @RequestBody FreelancerProfileDTO dto
+    ) {
+        String email = (emailParam != null && !emailParam.isBlank())
+                ? emailParam
+                : ((dto.getEmail() != null && !dto.getEmail().isBlank()) ? dto.getEmail() : "chathuniimalsha.com");
         return ResponseEntity.ok(profileService.updateProfile(email, dto));
     }
 
@@ -55,8 +65,16 @@ public class FreelancerProfileController {
     @PostMapping("/image")
     public ResponseEntity<FreelancerProfile> uploadImage(
             @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
-            @RequestParam(value = "email", required = false, defaultValue = "chathuniimalsha.com") String email
+            @RequestParam(value = "email", required = false) String emailParam,
+            jakarta.servlet.http.HttpServletRequest request
     ) {
-        return ResponseEntity.ok(profileService.uploadProfileImage(email, file));
+        String email = emailParam;
+        if (email == null || email.isBlank()) {
+            email = request.getParameter("email");
+        }
+        if (email == null || email.isBlank()) {
+            email = "chathuniimalsha.com";
+        }
+        return ResponseEntity.ok(profileService.uploadProfileImage(email.trim().toLowerCase(), file));
     }
 }

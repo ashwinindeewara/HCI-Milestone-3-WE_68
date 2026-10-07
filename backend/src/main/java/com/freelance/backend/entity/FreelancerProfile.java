@@ -20,33 +20,35 @@ public class FreelancerProfile {
     private String fullName;
 
     @Column(nullable = false)
-    private String title;
+    private String title = "";
 
-    @Column(name = "avatar_url", length = 1024)
+    @Column(name = "avatar_url", columnDefinition = "TEXT")
     private String avatarUrl;
 
     @Column(nullable = false)
-    private Double rating = 4.8;
+    private Double rating = 0.0;
 
     @Column(name = "review_count", nullable = false)
-    private Integer reviewCount = 23;
+    private Integer reviewCount = 0;
 
     @Column(name = "completed_projects", nullable = false)
-    private Integer completedProjects = 18;
+    private Integer completedProjects = 0;
 
     @Column(name = "hourly_rate", nullable = false)
-    private Double hourlyRate = 65.0;
+    private Double hourlyRate = 0.0;
 
     @Column(nullable = false)
     private String status = "Available";
 
     @Column(columnDefinition = "TEXT")
-    private String about;
+    private String about = "";
 
-    private String location = "Colombo, Sri Lanka";
-    private String phone = "+94 77 123 4567";
-    private String experience = "4+ years of professional UX/UI design & product development";
-    private String education = "B.Sc. in Software Engineering, SLIIT";
+    private String location = "";
+    private String phone = "";
+    @Column(columnDefinition = "TEXT")
+    private String experience = "";
+    @Column(columnDefinition = "TEXT")
+    private String education = "";
 
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "freelancer_skills", joinColumns = @JoinColumn(name = "profile_id"))
@@ -64,19 +66,40 @@ public class FreelancerProfile {
 
     public FreelancerProfile() {}
 
+    public FreelancerProfile(String email, String fullName) {
+        this.email = email;
+        this.fullName = fullName;
+        this.title = "";
+        this.avatarUrl = null;
+        this.rating = 0.0;
+        this.reviewCount = 0;
+        this.completedProjects = 0;
+        this.hourlyRate = 0.0;
+        this.status = "Available";
+        this.about = "";
+        this.location = "";
+        this.phone = "";
+        this.experience = "";
+        this.education = "";
+        this.skills = new ArrayList<>();
+        this.featuredProjects = new ArrayList<>();
+        this.createdAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
+    }
+
     public FreelancerProfile(String email, String fullName, String title, String avatarUrl,
                              Double rating, Integer reviewCount, Integer completedProjects,
                              Double hourlyRate, String status, String about) {
         this.email = email;
         this.fullName = fullName;
-        this.title = title;
+        this.title = title != null ? title : "";
         this.avatarUrl = avatarUrl;
-        this.rating = rating;
-        this.reviewCount = reviewCount;
-        this.completedProjects = completedProjects;
-        this.hourlyRate = hourlyRate;
-        this.status = status;
-        this.about = about;
+        this.rating = rating != null ? rating : 0.0;
+        this.reviewCount = reviewCount != null ? reviewCount : 0;
+        this.completedProjects = completedProjects != null ? completedProjects : 0;
+        this.hourlyRate = hourlyRate != null ? hourlyRate : 0.0;
+        this.status = status != null ? status : "Available";
+        this.about = about != null ? about : "";
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
     }

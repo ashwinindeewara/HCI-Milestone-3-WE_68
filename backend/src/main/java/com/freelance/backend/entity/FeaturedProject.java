@@ -10,17 +10,17 @@ public class FeaturedProject {
     @Id
     private String id;
 
-    @Column(nullable = false)
-    private String title;
+    @Column(columnDefinition = "TEXT")
+    private String title = "";
 
-    @Column(nullable = false)
-    private String category;
+    @Column(columnDefinition = "TEXT")
+    private String category = "";
 
-    @Column(name = "project_year", nullable = false)
-    private String year;
+    @Column(name = "project_year")
+    private String year = "2024";
 
-    @Column(name = "image_uri", length = 1024)
-    private String imageUri;
+    @Column(name = "image_uri", columnDefinition = "TEXT")
+    private String imageUri = "";
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "profile_id")
