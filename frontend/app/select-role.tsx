@@ -71,6 +71,8 @@ export default function SelectRoleScreen() {
         router.replace('/admin-dashboard');
       } else if (selectedRole === 'PAYMENT_STAFF') {
         router.replace('/staff-dashboard');
+      } else if (selectedRole === 'CLIENT' ) {
+        router.replace('/client-dashboard');
       } else {
         router.replace({
           pathname: '/(tabs)/dashboard',
