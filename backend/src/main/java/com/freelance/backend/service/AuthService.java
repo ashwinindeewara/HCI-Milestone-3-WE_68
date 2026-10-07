@@ -26,6 +26,9 @@ public class AuthService {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private com.freelance.backend.repository.FreelancerProfileRepository profileRepository;
+
     private final Map<String, String> resetCodeStore = new ConcurrentHashMap<>();
 
     /**
@@ -82,6 +85,13 @@ public class AuthService {
             // Ignore DB error for duplicate key or auto-generation
         }
 
+        if (role == UserRole.FREELANCER && user != null && user.getEmail() != null) {
+            if (!profileRepository.existsByEmail(user.getEmail())) {
+                com.freelance.backend.entity.FreelancerProfile freshProfile =
+                    new com.freelance.backend.entity.FreelancerProfile(user.getEmail(), user.getFullName());
+                profileRepository.save(freshProfile);
+            }
+        }
         String mockJwt = "jwt_token_" + UUID.randomUUID().toString();
         Long id = (user != null && user.getId() != null) ? user.getId() : System.currentTimeMillis();
         String name = (user != null && user.getFullName() != null) ? user.getFullName() : fullName;
@@ -124,7 +134,7 @@ public class AuthService {
         final String targetEmail = cleanEmail;
         String password = request.getPassword();
 
-        User user = userRepository.findByEmail(targetEmail)
+        User user = userRepository.findByEmailIgnoreCase(targetEmail)
                 .orElseGet(() -> userRepository.findAll().stream()
                         .filter(u -> u.getEmail() != null && u.getEmail().equalsIgnoreCase(targetEmail))
                         .findFirst()

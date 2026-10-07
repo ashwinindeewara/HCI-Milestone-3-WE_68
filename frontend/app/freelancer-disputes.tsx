@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,150 +6,285 @@ import {
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
-  Alert,
+  ActivityIndicator,
+  RefreshControl,
+  Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
+import { apiClient, getCurrentUser, FreelancerApiService } from '../src/services/api';
+import {
+  HomeIcon,
+  ProjectsIcon,
+  PaymentsIcon,
+  AlertsIcon,
+  ProfileIcon,
+} from '../src/components/Icons';
+
+interface DisputeItem {
+  id: string;
+  dspNumber?: string;
+  project: string;
+  amount: number | string;
+  issueType?: string;
+  reason?: string;
+  date?: string;
+  filedDate?: string;
+  status: string;
+  statusType: 'review' | 'open' | 'resolved' | string;
+}
+
+const FALLBACK_DISPUTES: DisputeItem[] = [
+  {
+    id: 'DSP-409',
+    project: 'E-Commerce Redesign',
+    amount: '$2,400',
+    reason: 'Payment Delay',
+    date: 'Filed Oct 10, 2024',
+    status: 'Under Review',
+    statusType: 'review',
+  },
+  {
+    id: 'DSP-408',
+    project: 'Mobile App Contract',
+    amount: '$3,800',
+    reason: 'Scope Disagreement',
+    date: 'Filed Oct 12, 2024',
+    status: 'Open',
+    statusType: 'open',
+  },
+  {
+    id: 'DSP-401',
+    project: 'Logo & Brand Identity',
+    amount: '$450',
+    reason: 'Milestone Discrepancy',
+    date: 'Filed Sep 15, 2024',
+    status: 'Resolved',
+    statusType: 'resolved',
+  },
+];
 
 export default function FreelancerDisputesScreen() {
   const router = useRouter();
+  const currentUser = getCurrentUser();
+  const isChathuni =
+    currentUser?.email === 'chathuniimalsha.com' ||
+    (currentUser?.fullName && currentUser.fullName.toLowerCase().includes('chathuni')) ||
+    (currentUser?.email && currentUser.email.toLowerCase().includes('chathuni'));
 
-  const disputesList = [
-    {
-      id: 'DSP-409',
-      project: 'E-Commerce Redesign',
-      amount: '$2,400',
-      reason: 'Payment Delay',
-      date: 'Filed Oct 10, 2024',
-      status: 'Under Review',
-      statusType: 'review',
-    },
-    {
-      id: 'DSP-408',
-      project: 'Mobile App Contract',
-      amount: '$3,800',
-      reason: 'Scope Disagreement',
-      date: 'Filed Oct 12, 2024',
-      status: 'Open',
-      statusType: 'open',
-    },
-    {
-      id: 'DSP-401',
-      project: 'Logo & Brand Identity',
-      amount: '$450',
-      reason: 'Milestone Discrepancy',
-      date: 'Filed Sep 15, 2024',
-      status: 'Resolved',
-      statusType: 'resolved',
-    },
-  ];
+  const [disputes, setDisputes] = useState<DisputeItem[]>(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const u = getCurrentUser();
+        const k = `disputes_list_${u?.email || u?.fullName || 'default'}`;
+        const s = localStorage.getItem(k);
+        if (s) {
+          const p = JSON.parse(s);
+          if (Array.isArray(p)) return p;
+        }
+      } catch (e) {}
+    }
+    return isChathuni ? FALLBACK_DISPUTES : [];
+  });
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const handleViewDetails = (project: string) => {
-    Alert.alert('Dispute Details', `Opening discussion thread and arbitration details for ${project}`);
+  const fetchDisputes = async () => {
+    try {
+      const activeName = currentUser?.fullName || (isChathuni ? 'Chathuni Imalsha' : '');
+      const res = await FreelancerApiService.getDisputes(activeName);
+      const data = Array.isArray(res) ? res : (res?.data || []);
+      if (Array.isArray(data) && data.length > 0) {
+        const formatted: DisputeItem[] = data.map((d: any) => ({
+          id: d.id || d.dspNumber,
+          project: d.project,
+          amount: typeof d.amount === 'number' ? `$${d.amount.toLocaleString()}` : (d.amount || '$0'),
+          reason: d.issueType || d.reason || 'Payment Issue',
+          date: d.filedDate || (d.createdAt ? `Filed ${new Date(d.createdAt).toLocaleDateString()}` : 'Filed Recently'),
+          status: d.status || 'Under Review',
+          statusType: d.statusType || (d.status === 'Resolved' ? 'resolved' : d.status === 'Open' ? 'open' : 'review'),
+        }));
+        setDisputes(formatted);
+        if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+          const k = `disputes_list_${currentUser?.email || currentUser?.fullName || 'default'}`;
+          localStorage.setItem(k, JSON.stringify(formatted));
+        }
+      } else if (!isChathuni) {
+        setDisputes([]);
+        if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+          const k = `disputes_list_${currentUser?.email || currentUser?.fullName || 'default'}`;
+          localStorage.setItem(k, JSON.stringify([]));
+        }
+      }
+    } catch {
+      if (!isChathuni) {
+        setDisputes([]);
+        if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+          const k = `disputes_list_${currentUser?.email || currentUser?.fullName || 'default'}`;
+          localStorage.setItem(k, JSON.stringify([]));
+        }
+      }
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchDisputes();
+    }, [currentUser?.email, currentUser?.fullName])
+  );
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchDisputes();
+  };
+
+  const handleOpenDetails = (disputeId: string) => {
+    router.push({
+      pathname: '/dispute-details',
+      params: { id: disputeId },
+    });
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-        {/* Top Header Bar with Back Arrow */}
-        <View style={styles.headerBar}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-            <Text style={styles.backArrow}>‹</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Disputes</Text>
-          <View style={{ width: 32 }} />
-        </View>
+      <View style={styles.wrapper}>
+        <ScrollView
+          style={styles.container}
+          contentContainerStyle={styles.contentContainer}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
+        >
+          {/* Top Header Bar with Centered Title & Back Button */}
+          <View style={styles.headerBar}>
+            <TouchableOpacity
+              style={styles.backBtn}
+              onPress={() => router.replace('/(tabs)/dashboard')}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.backArrow}>‹</Text>
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Disputes</Text>
+            <View style={{ width: 36 }} />
+          </View>
 
-        {/* Section Title & Create Disputes Action Link */}
-        <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>Active Disputes (3)</Text>
-          <TouchableOpacity onPress={() => router.push('/create-dispute')}>
-            <Text style={styles.createLinkText}>create Disputes</Text>
-          </TouchableOpacity>
-        </View>
+          {/* Section Title & Create Disputes Action Button */}
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>
+              Active Disputes ({disputes.filter((d) => d.status !== 'Resolved').length || disputes.length})
+            </Text>
+            <TouchableOpacity
+              style={styles.createDisputeGreenBtn}
+              onPress={() => router.push('/create-dispute')}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.createBtnPlus}>+</Text>
+              <Text style={styles.createBtnText}>Create Dispute</Text>
+            </TouchableOpacity>
+          </View>
 
-        {/* Disputes Cards List */}
-        <View style={styles.listContainer}>
-          {disputesList.map((item) => (
-            <View key={item.id} style={styles.card}>
-              <View style={styles.cardHeader}>
-                {/* Status Badge */}
-                <View
-                  style={[
-                    styles.statusBadge,
-                    item.statusType === 'review'
-                      ? styles.badgeReview
-                      : item.statusType === 'open'
-                      ? styles.badgeOpen
-                      : styles.badgeResolved,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.statusBadgeText,
-                      item.statusType === 'review'
-                        ? styles.textReview
-                        : item.statusType === 'open'
-                        ? styles.textOpen
-                        : styles.textResolved,
-                    ]}
-                  >
-                    {item.status}
+          {/* Loading Indicator */}
+          {loading && disputes.length === 0 ? (
+            <View style={styles.loaderBox}>
+              <ActivityIndicator size="large" color={Colors.primary} />
+            </View>
+          ) : (
+            /* Disputes Cards List Matching Screenshot 1 */
+            <View style={styles.listContainer}>
+              {disputes.length === 0 ? (
+                <View style={{ backgroundColor: '#FFFFFF', borderRadius: 16, padding: 36, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E2E8F0', marginTop: 12 }}>
+                  <Text style={{ fontSize: 36, marginBottom: 12 }}>⚖️</Text>
+                  <Text style={{ fontSize: 16, fontWeight: '700', color: Colors.text.primary, marginBottom: 6 }}>
+                    No Disputes Found
+                  </Text>
+                  <Text style={{ fontSize: 13, color: Colors.text.secondary, textAlign: 'center', lineHeight: 20 }}>
+                    You currently do not have any open or resolved disputes.
                   </Text>
                 </View>
+              ) : (
+                disputes.map((item) => {
+                const isReview = item.statusType === 'review' || item.status === 'Under Review';
+                const isOpen = item.statusType === 'open' || item.status === 'Open';
+                const isResolved = item.statusType === 'resolved' || item.status === 'Resolved';
 
-                {/* Amount */}
-                <Text style={styles.amountText}>{item.amount}</Text>
-              </View>
+                return (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={styles.card}
+                    onPress={() => handleOpenDetails(item.id)}
+                    activeOpacity={0.88}
+                  >
+                    <View style={styles.cardHeader}>
+                      {/* Status Pill Badge */}
+                      <View
+                        style={[
+                          styles.statusBadge,
+                          isReview ? styles.badgeReview : isOpen ? styles.badgeOpen : styles.badgeResolved,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.statusBadgeText,
+                            isReview ? styles.textReview : isOpen ? styles.textOpen : styles.textResolved,
+                          ]}
+                        >
+                          {item.status}
+                        </Text>
+                      </View>
 
-              {/* Project Title & Subtitle */}
-              <Text style={styles.projectTitle}>{item.project}</Text>
-              <Text style={styles.subtitleText}>
-                {item.reason} • {item.date}
-              </Text>
+                      {/* Amount */}
+                      <Text style={styles.amountText}>{item.amount}</Text>
+                    </View>
 
-              <View style={styles.cardDivider} />
+                    {/* Project Title & Subtitle */}
+                    <Text style={styles.projectTitle}>{item.project}</Text>
+                    <Text style={styles.subtitleText}>
+                      {item.reason} <Text style={styles.dotSeparator}>•</Text> {item.date}
+                    </Text>
 
-              {/* View Details & Discussion Footer Link */}
-              <TouchableOpacity
-                style={styles.cardFooter}
-                onPress={() => handleViewDetails(item.project)}
-              >
-                <Text style={styles.footerLinkText}>View Details & Discussion</Text>
-                <Text style={styles.footerArrow}>›</Text>
-              </TouchableOpacity>
+                    <View style={styles.cardDivider} />
+
+                    {/* View Details & Discussion Footer Link */}
+                    <View style={styles.cardFooter}>
+                      <Text style={styles.footerLinkText}>View Details & Discussion</Text>
+                      <Text style={styles.footerArrow}>›</Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              }))}
             </View>
-          ))}
+          )}
+        </ScrollView>
+
+        {/* Bottom Navigation Bar */}
+        <View style={styles.bottomTabBar}>
+          <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/(tabs)/dashboard')}>
+            <HomeIcon size={20} color="#16A34A" focused={true} />
+            <Text style={[styles.tabLabel, styles.tabLabelActive]}>Home</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/(tabs)/contracts')}>
+            <ProjectsIcon size={20} color="#64748B" />
+            <Text style={styles.tabLabel}>Projects</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/(tabs)/escrow')}>
+            <PaymentsIcon size={20} color="#64748B" />
+            <Text style={styles.tabLabel}>Payments</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/(tabs)/notifications')}>
+            <AlertsIcon size={20} color="#64748B" />
+            <Text style={styles.tabLabel}>Alerts</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/(tabs)/profile')}>
+            <ProfileIcon size={20} color="#64748B" />
+            <Text style={styles.tabLabel}>Profile</Text>
+          </TouchableOpacity>
         </View>
-      </ScrollView>
-
-      {/* Bottom Navigation Bar */}
-      <View style={styles.bottomTabBar}>
-        <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/(tabs)/dashboard')}>
-          <Text style={[styles.tabIcon, styles.tabIconActive]}>🏠</Text>
-          <Text style={[styles.tabLabel, styles.tabLabelActive]}>Home</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/(tabs)/contracts')}>
-          <Text style={styles.tabIcon}>📁</Text>
-          <Text style={styles.tabLabel}>Projects</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/(tabs)/escrow')}>
-          <Text style={styles.tabIcon}>💳</Text>
-          <Text style={styles.tabLabel}>Payments</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/(tabs)/notifications')}>
-          <Text style={styles.tabIcon}>🔔</Text>
-          <Text style={styles.tabLabel}>Alerts</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/(tabs)/profile')}>
-          <Text style={styles.tabIcon}>👤</Text>
-          <Text style={styles.tabLabel}>Profile</Text>
-        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
@@ -158,79 +293,118 @@ export default function FreelancerDisputesScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: '#FFFFFF',
   },
-  container: { flex: 1 },
+  wrapper: {
+    flex: 1,
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    position: 'relative',
+  },
+  container: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
   contentContainer: {
-    padding: Theme.spacing.md,
-    paddingBottom: 80,
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 90,
   },
   headerBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Theme.spacing.md,
+    marginBottom: 20,
   },
   backBtn: {
-    width: 32,
-    height: 32,
+    width: 36,
+    height: 36,
     justifyContent: 'center',
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
   backArrow: {
-    fontSize: 26,
-    fontWeight: '600',
-    color: Colors.dark,
+    fontSize: 28,
+    fontWeight: '400',
+    color: '#0F172A',
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '800',
-    color: Colors.dark,
+    color: '#0F172A',
+    textAlign: 'center',
   },
   sectionHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Theme.spacing.md,
-    marginTop: Theme.spacing.xs,
+    marginBottom: 16,
   },
   sectionTitle: {
     fontSize: 14,
-    fontWeight: '700',
-    color: Colors.neutralMedium,
+    fontWeight: '600',
+    color: '#64748B',
   },
-  createLinkText: {
-    fontSize: 14,
+  createDisputeGreenBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#16A34A',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    gap: 5,
+    shadowColor: '#16A34A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  createBtnPlus: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
+    lineHeight: 18,
+  },
+  createBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
     fontWeight: '700',
-    color: Colors.primary,
+    letterSpacing: 0.2,
+  },
+  loaderBox: {
+    paddingVertical: 40,
+    alignItems: 'center',
   },
   listContainer: {
-    gap: Theme.spacing.md,
+    gap: 16,
   },
   card: {
-    backgroundColor: Colors.surface,
-    borderRadius: Theme.borderRadius.lg,
-    padding: Theme.spacing.md,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 18,
     borderWidth: 1,
-    borderColor: Colors.border,
-    ...Theme.shadows.card,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Theme.spacing.xs,
+    marginBottom: 10,
   },
   statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: Theme.borderRadius.sm,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   badgeReview: {
     backgroundColor: '#FEF3C7',
   },
   textReview: {
-    color: '#D97706',
+    color: '#92400E',
     fontSize: 12,
     fontWeight: '700',
   },
@@ -238,7 +412,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEE2E2',
   },
   textOpen: {
-    color: Colors.errorText,
+    color: '#DC2626',
     fontSize: 12,
     fontWeight: '700',
   },
@@ -246,7 +420,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#DCFCE7',
   },
   textResolved: {
-    color: Colors.primaryDark,
+    color: '#166534',
     fontSize: 12,
     fontWeight: '700',
   },
@@ -257,23 +431,28 @@ const styles = StyleSheet.create({
   amountText: {
     fontSize: 20,
     fontWeight: '800',
-    color: Colors.dark,
+    color: '#0F172A',
   },
   projectTitle: {
     fontSize: 17,
     fontWeight: '800',
-    color: Colors.dark,
-    marginTop: 4,
-    marginBottom: 2,
+    color: '#0F172A',
+    marginBottom: 4,
   },
   subtitleText: {
     fontSize: 13,
-    color: Colors.neutralMedium,
+    color: '#64748B',
+    fontWeight: '400',
+  },
+  dotSeparator: {
+    color: '#94A3B8',
+    marginHorizontal: 4,
   },
   cardDivider: {
     height: 1,
-    backgroundColor: Colors.border,
-    marginVertical: Theme.spacing.md,
+    backgroundColor: '#F1F5F9',
+    marginTop: 14,
+    marginBottom: 12,
   },
   cardFooter: {
     flexDirection: 'row',
@@ -283,12 +462,12 @@ const styles = StyleSheet.create({
   footerLinkText: {
     fontSize: 13,
     fontWeight: '700',
-    color: Colors.primary,
+    color: '#16A34A',
   },
   footerArrow: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
-    color: Colors.primary,
+    color: '#16A34A',
   },
   bottomTabBar: {
     position: 'absolute',
@@ -296,16 +475,33 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 64,
-    backgroundColor: Colors.surface,
+    backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    borderTopColor: '#E2E8F0',
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
+    paddingBottom: 6,
   },
-  tabItem: { alignItems: 'center', justifyContent: 'center' },
-  tabIcon: { fontSize: 18, opacity: 0.6 },
-  tabIconActive: { opacity: 1, transform: [{ scale: 1.1 }] },
-  tabLabel: { fontSize: 10, fontWeight: '600', color: Colors.neutralMedium, marginTop: 2 },
-  tabLabelActive: { color: Colors.primary, fontWeight: '700' },
+  tabItem: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tabIcon: {
+    fontSize: 18,
+    opacity: 0.6,
+  },
+  tabIconActive: {
+    opacity: 1,
+  },
+  tabLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#64748B',
+    marginTop: 2,
+  },
+  tabLabelActive: {
+    color: '#16A34A',
+    fontWeight: '700',
+  },
 });

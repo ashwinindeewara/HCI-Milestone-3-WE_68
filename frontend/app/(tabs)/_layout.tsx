@@ -3,48 +3,45 @@ import { Tabs } from 'expo-router';
 import { View, Text, StyleSheet } from 'react-native';
 import Colors from '../../src/constants/colors';
 
-function TabBarIcon({ title, focused }: { title: string; focused: boolean }) {
-  const getIcon = () => {
-    switch (title) {
-      case 'Home':
-        return '🏠';
-      case 'Projects':
-        return '📁';
-      case 'Find Talent':
-        return '🔍';
-      case 'Payments':
-        return '💳';
-      case 'Profile':
-        return '👤';
-      default:
-        return '📱';
-    }
-  };
+import {
+  HomeIcon,
+  ProjectsIcon,
+  PaymentsIcon,
+  AlertsIcon,
+  ProfileIcon,
+} from '../../src/components/Icons';
 
-  return (
-    <View style={styles.iconContainer}>
-      <Text style={[styles.iconText, focused && styles.iconTextActive]}>{getIcon()}</Text>
-    </View>
-  );
+function TabBarIcon({ title, focused }: { title: string; focused: boolean }) {
+  const iconColor = focused ? '#16A34A' : '#6B7280';
+  const iconSize = 22;
+
+  switch (title) {
+    case 'Home':
+      return <HomeIcon size={iconSize} color={iconColor} focused={focused} />;
+    case 'Projects':
+      return <ProjectsIcon size={iconSize} color={iconColor} />;
+    case 'Payments':
+      return <PaymentsIcon size={iconSize} color={iconColor} />;
+    case 'Alerts':
+      return <AlertsIcon size={iconSize} color={iconColor} />;
+    case 'Profile':
+      return <ProfileIcon size={iconSize} color={iconColor} />;
+    default:
+      return <Text style={{ fontSize: 18 }}>📱</Text>;
+  }
 }
 
 export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerStyle: {
-          backgroundColor: Colors.dark,
-        },
-        headerTintColor: Colors.surface,
-        headerTitleStyle: {
-          fontWeight: '700',
-          fontSize: 18,
-        },
-        tabBarActiveTintColor: Colors.primary,
-        tabBarInactiveTintColor: Colors.neutralLight,
+        headerShown: false,
+        tabBarActiveTintColor: '#16A34A',
+        tabBarInactiveTintColor: '#6B7280',
         tabBarStyle: {
-          backgroundColor: Colors.surface,
-          borderTopColor: Colors.border,
+          backgroundColor: '#FFFFFF',
+          borderTopColor: '#E5E7EB',
+          borderTopWidth: 1,
           height: 64,
           paddingBottom: 8,
           paddingTop: 6,
@@ -59,7 +56,7 @@ export default function TabsLayout() {
         name="dashboard"
         options={{
           title: 'Home',
-          headerTitle: 'Freelancer & Client Workspace',
+          headerTitle: 'Workspace',
           tabBarIcon: ({ focused }) => <TabBarIcon title="Home" focused={focused} />,
         }}
       />
@@ -72,14 +69,6 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="find-talent"
-        options={{
-          title: 'Find Talent',
-          headerTitle: 'Find Talent & Hire',
-          tabBarIcon: ({ focused }) => <TabBarIcon title="Find Talent" focused={focused} />,
-        }}
-      />
-      <Tabs.Screen
         name="escrow"
         options={{
           title: 'Payments',
@@ -88,18 +77,26 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="notifications"
+        options={{
+          title: 'Alerts',
+          headerTitle: 'Notifications',
+          tabBarIcon: ({ focused }) => <TabBarIcon title="Alerts" focused={focused} />,
+        }}
+      />
+      <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
-          headerTitle: 'Profile & Settings',
+          headerShown: false,
           tabBarIcon: ({ focused }) => <TabBarIcon title="Profile" focused={focused} />,
         }}
       />
       <Tabs.Screen
-        name="notifications"
+        name="find-talent"
         options={{
           href: null,
-          headerTitle: 'Notifications',
+          headerTitle: 'Find Talent',
         }}
       />
       <Tabs.Screen
@@ -117,13 +114,17 @@ const styles = StyleSheet.create({
   iconContainer: {
     alignItems: 'center',
     justifyContent: 'center',
+    height: 24,
   },
   iconText: {
-    fontSize: 20,
-    opacity: 0.6,
+    fontSize: 18,
   },
   iconTextActive: {
-    opacity: 1,
-    transform: [{ scale: 1.1 }],
+    color: '#16A34A',
+    fontWeight: '800',
+  },
+  iconTextInactive: {
+    color: '#6B7280',
+    opacity: 0.8,
   },
 });

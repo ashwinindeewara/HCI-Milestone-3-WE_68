@@ -5,666 +5,1195 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert,
-  Modal,
+  Image,
   TextInput,
-  ActivityIndicator,
+  Modal,
+  Platform,
   SafeAreaView,
+  ActivityIndicator,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import Colors from '../../src/constants/colors';
-import Theme from '../../src/constants/theme';
-import StatusBadge from '../../src/components/StatusBadge';
-import { getUserSession, clearUserSession } from '../../src/services/storage';
-import apiClient from '../../src/services/api';
-import { performLogout, getSavedUserData, updateSavedUserData } from '../../src/services/authService';
+import { VerifiedBadge, StarIcon, ExitLogoutIcon } from '../../src/components/Icons';
+import apiClient, { resolveMediaUrl, getCurrentUser, API_BASE_URL, FreelancerApiService } from '../../src/services/api';
 
-export interface UserProfileData {
-  id: number;
-  fullName: string;
-  email: string;
-  location: string;
-  company: string;
-  experience: string;
-  about: string;
+export interface ProjectItem {
+  id: string;
+  title: string;
+  category: string;
+  year: string;
+  imageUri: string;
 }
 
-export default function ProfileScreen() {
+export interface FreelancerProfileData {
+  name: string;
+  email: string;
+  title: string;
+  avatarUri: string;
+  rating: number;
+  reviewCount: number;
+  completedProjects: number;
+  hourlyRate: number;
+  status: 'Available' | 'Busy' | 'On Leave';
+  about: string;
+  skills: string[];
+  featuredProjects: ProjectItem[];
+}
+
+const DEFAULT_PROFILE: FreelancerProfileData = {
+  name: 'Chathuni Imalsha',
+  email: 'chathuniimalsha.com',
+  title: 'UI/UX Designer',
+  avatarUri: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=500&auto=format&fit=crop&q=80',
+  rating: 4.8,
+  reviewCount: 23,
+  completedProjects: 18,
+  hourlyRate: 65,
+  status: 'Available',
+  about:
+    'Productive UI/UX designer with 4+ years of expertise. Specializing in high-fidelity design systems, mobile workflows, and interactive prototyping.',
+  skills: ['Figma', 'UI Design', 'UX Research', 'Prototyping', 'Design Systems'],
+  featuredProjects: [
+    {
+      id: 'p1',
+      title: 'SaaS Finance Portal',
+      category: 'Web Design',
+      year: '2024',
+      imageUri: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=600&auto=format&fit=crop&q=80',
+    },
+    {
+      id: 'p2',
+      title: 'FitTrack App',
+      category: 'iOS Design',
+      year: '2023',
+      imageUri: 'https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?w=600&auto=format&fit=crop&q=80',
+    },
+  ],
+};
+
+const getInitialProfile = (): FreelancerProfileData => {
+  const currentUser = getCurrentUser();
+  const isChathuni =
+    currentUser?.email === 'chathuniimalsha.com' ||
+    (currentUser?.fullName && currentUser.fullName.toLowerCase().includes('chathuni')) ||
+    (currentUser?.email && currentUser.email.toLowerCase().includes('chathuni'));
+
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+    try {
+      const k = `profile_cache_${currentUser?.email || currentUser?.fullName || 'default'}`;
+      const s = localStorage.getItem(k);
+      if (s) {
+        const p = JSON.parse(s);
+        if (p && p.name) return p;
+      }
+    } catch (e) {}
+  }
+
+  if (isChathuni) {
+    return DEFAULT_PROFILE;
+  }
+  return {
+    name: currentUser?.fullName || 'Freelancer',
+    email: currentUser?.email || '',
+    title: '',
+    avatarUri: '',
+    rating: 0,
+    reviewCount: 0,
+    completedProjects: 0,
+    hourlyRate: 0,
+    status: 'Available',
+    about: '',
+    skills: [],
+    featuredProjects: [],
+  };
+};
+
+export default function FreelancerProfileScreen() {
   const router = useRouter();
-  const [showLogoutModal, setShowLogoutModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  const [userRole, setUserRole] = useState('Freelancer');
+  const [isEditing, setIsEditing] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [profile, setProfile] = useState<FreelancerProfileData>(getInitialProfile());
 
-  const [profile, setProfile] = useState<UserProfileData>(() => {
-    const saved = getSavedUserData() || getUserSession();
-    return {
-      id: saved?.userId || saved?.id || 1,
-      fullName: saved?.fullName || 'Chathuni Imalsha',
-      email: saved?.email || 'it23662278@my.sliit.lk',
-      location: saved?.location || 'Colombo, Sri Lanka',
-      company: saved?.company || 'FreelanceFlow Systems',
-      experience: saved?.experience || '3+ Years',
-      about: saved?.about || 'Passionate software engineer building full-stack web and mobile applications.',
-    };
-  });
+  // Edit form state
+  const [editName, setEditName] = useState(profile.name);
+  const [editTitle, setEditTitle] = useState(profile.title);
+  const [editCompleted, setEditCompleted] = useState(profile.completedProjects.toString());
+  const [editRate, setEditRate] = useState(profile.hourlyRate.toString());
+  const [editStatus, setEditStatus] = useState(profile.status);
+  const [editAbout, setEditAbout] = useState(profile.about);
+  const [editSkills, setEditSkills] = useState<string[]>([...profile.skills]);
+  const [newSkillText, setNewSkillText] = useState('');
+  const [saveToast, setSaveToast] = useState(false);
+  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
 
-  const [editForm, setEditForm] = useState<UserProfileData>({ ...profile });
+  // Fetch live profile from Spring Boot Backend on mount and focus
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchProfile();
+    }, [])
+  );
 
-  useEffect(() => {
-    const session = getUserSession();
-    if (session && session.role) {
-      const r = session.role.toUpperCase();
-      if (r === 'CLIENT') setUserRole('Client');
-      else if (r === 'ADMIN') setUserRole('Administrator');
-      else if (r === 'PAYMENT_STAFF') setUserRole('Payment Staff');
-      else setUserRole('Freelancer');
-    }
-    fetchUserProfile();
-  }, []);
-
-  const fetchUserProfile = async () => {
+  const fetchProfile = async () => {
     try {
-      const savedUser = getSavedUserData() || getUserSession();
-      const targetId = savedUser?.userId || savedUser?.id || profile.id;
-      const response = targetId 
-        ? await apiClient.get(`/profile/${targetId}`)
-        : (savedUser?.email ? await apiClient.get(`/profile/email/${savedUser.email}`) : await apiClient.get('/profile/1'));
-
-      if (response.data) {
-        setProfile((prev) => ({
-          ...prev,
-          ...response.data,
-          fullName: response.data.fullName || prev.fullName,
-          location: response.data.location || prev.location,
-          company: response.data.company || prev.company,
-          experience: response.data.experience || prev.experience,
-          about: response.data.about || prev.about,
-        }));
-        updateSavedUserData(response.data);
+      const currentUser = getCurrentUser();
+      const targetEmail = currentUser?.email;
+      const res = await apiClient.get('/freelancer/profile', {
+        params: targetEmail ? { email: targetEmail } : {},
+      });
+      if (res.data) {
+        const data = res.data;
+        const isChathuni =
+          data.email === 'chathuniimalsha.com' ||
+          (data.fullName && data.fullName.toLowerCase().includes('chathuni')) ||
+          (data.email && data.email.toLowerCase().includes('chathuni'));
+        const fallback = isChathuni ? DEFAULT_PROFILE : getInitialProfile();
+        const updatedProfile: FreelancerProfileData = {
+          name: data.fullName || fallback.name,
+          email: data.email || fallback.email,
+          title: data.title != null ? data.title : fallback.title,
+          avatarUri: data.avatarUrl || '',
+          rating: data.rating != null ? data.rating : fallback.rating,
+          reviewCount: data.reviewCount != null ? data.reviewCount : fallback.reviewCount,
+          completedProjects: data.completedProjects != null ? data.completedProjects : fallback.completedProjects,
+          hourlyRate: data.hourlyRate != null ? data.hourlyRate : fallback.hourlyRate,
+          status: (data.status as any) || fallback.status,
+          about: data.about != null ? data.about : fallback.about,
+          skills: Array.isArray(data.skills) ? data.skills : fallback.skills,
+          featuredProjects: Array.isArray(data.featuredProjects) ? data.featuredProjects : fallback.featuredProjects,
+        };
+        setProfile(updatedProfile);
+        if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+          try {
+            const k = `profile_cache_${currentUser?.email || currentUser?.fullName || 'default'}`;
+            localStorage.setItem(k, JSON.stringify(updatedProfile));
+          } catch (e) {}
+        }
       }
-    } catch {
-      // Fallback to local defaults if server unavailable
-    }
-  };
-
-  const handleOpenEdit = () => {
-    setEditForm({ ...profile });
-    setShowEditModal(true);
-  };
-
-  const handleSaveProfile = async () => {
-    if (!editForm.fullName.trim()) {
-      Alert.alert('Error', 'Full Name is required.');
-      return;
-    }
-
-    setIsSaving(true);
-    try {
-      const savedUser = getSavedUserData() || getUserSession();
-      const targetId = savedUser?.userId || savedUser?.id || profile.id;
-
-      const payload = {
-        fullName: editForm.fullName.trim(),
-        location: editForm.location.trim(),
-        company: editForm.company.trim(),
-        experience: editForm.experience.trim(),
-        about: editForm.about.trim(),
-      };
-
-      const response = await apiClient.put(`/profile/${targetId}`, payload);
-      if (response.data) {
-        setProfile((prev) => ({
-          ...prev,
-          ...response.data,
-        }));
-        updateSavedUserData(response.data);
-      } else {
-        setProfile({ ...editForm });
-        updateSavedUserData({ ...editForm });
-      }
-
-      setShowEditModal(false);
-      setStatusMessage('✓ Profile information updated in users table!');
-      setTimeout(() => setStatusMessage(null), 4000);
-    } catch {
-      setProfile({ ...editForm });
-      updateSavedUserData({ ...editForm });
-      setShowEditModal(false);
-      setStatusMessage('✓ Profile updated locally.');
-      setTimeout(() => setStatusMessage(null), 3000);
+    } catch (err) {
+      console.log('Using local fallback profile data:', err);
     } finally {
-      setIsSaving(false);
+      setLoading(false);
     }
   };
 
-  const handleSwitchRole = () => {
-    router.push('/select-role');
+  // Switch to Edit Mode
+  const handleStartEdit = () => {
+    setEditName(profile.name);
+    setEditTitle(profile.title);
+    setEditCompleted(profile.completedProjects.toString());
+    setEditRate(profile.hourlyRate.toString());
+    setEditStatus(profile.status);
+    setEditAbout(profile.about);
+    setEditSkills([...profile.skills]);
+    setIsEditing(true);
   };
 
-  const handleLogoutPress = () => {
-    setShowLogoutModal(true);
+  // Upload avatar image
+  const handlePickAvatar = () => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.onchange = async (e: any) => {
+        const file = e.target?.files?.[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = (uploadEvent) => {
+            const result = uploadEvent.target?.result as string;
+            setProfile((prev) => ({ ...prev, avatarUri: result }));
+          };
+          reader.readAsDataURL(file);
+
+          try {
+            const currentUser = getCurrentUser();
+            const targetEmail = profile.email || currentUser?.email || '';
+            const res = await FreelancerApiService.uploadProfileImage(file, targetEmail);
+            if (res && res.avatarUrl) {
+              setProfile((prev) => ({ ...prev, avatarUri: res.avatarUrl }));
+              setSaveToast(true);
+              setTimeout(() => setSaveToast(false), 3000);
+            }
+          } catch (err) {
+            console.warn('Profile image upload error', err);
+          }
+        }
+      };
+      input.click();
+    }
   };
 
-  const handleConfirmLogout = () => {
-    setShowLogoutModal(false);
-    clearUserSession();
-    performLogout(router);
+  // Save changes to backend
+  const handleSaveChanges = async () => {
+    const updatedName = editName.trim() || profile.name;
+    const updatedTitle = editTitle.trim() || profile.title;
+    const updatedCompleted = parseInt(editCompleted, 10) || 0;
+    const updatedRate = parseFloat(editRate) || 0;
+    const updatedStatus = editStatus;
+    const updatedAbout = editAbout.trim();
+    const updatedSkills = editSkills;
+
+    const newProfileState: FreelancerProfileData = {
+      ...profile,
+      name: updatedName,
+      title: updatedTitle,
+      completedProjects: updatedCompleted,
+      hourlyRate: updatedRate,
+      status: updatedStatus,
+      about: updatedAbout,
+      skills: updatedSkills,
+    };
+
+    setProfile(newProfileState);
+    setIsEditing(false);
+
+    try {
+      setSaving(true);
+      const currentUser = getCurrentUser();
+      const targetEmail = profile.email || currentUser?.email || 'chathuniimalsha.com';
+      await apiClient.put(
+        '/freelancer/profile',
+        {
+          email: targetEmail,
+          fullName: updatedName,
+          title: updatedTitle,
+          avatarUrl: profile.avatarUri,
+          completedProjects: updatedCompleted,
+          hourlyRate: updatedRate,
+          status: updatedStatus,
+          about: updatedAbout,
+          skills: updatedSkills,
+          featuredProjects: profile.featuredProjects,
+        },
+        { params: { email: targetEmail } }
+      );
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+        localStorage.setItem('auth_name', updatedName);
+        const k = `profile_cache_${currentUser?.email || currentUser?.fullName || 'default'}`;
+        localStorage.setItem(k, JSON.stringify(newProfileState));
+      }
+      setSaveToast(true);
+      setTimeout(() => setSaveToast(false), 3500);
+    } catch (err) {
+      console.warn('Backend profile update warning:', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAddSkill = () => {
+    if (newSkillText.trim() && !editSkills.includes(newSkillText.trim())) {
+      setEditSkills([...editSkills, newSkillText.trim()]);
+      setNewSkillText('');
+    }
+  };
+
+  const handleRemoveSkill = (skillToRemove: string) => {
+    setEditSkills(editSkills.filter((s) => s !== skillToRemove));
+  };
+
+  const handleBack = () => {
+    if (isEditing) {
+      setIsEditing(false);
+    } else {
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace('/(tabs)/dashboard');
+      }
+    }
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-      {/* Toast Notification Banner */}
-      {statusMessage && (
-        <View style={styles.toastBanner}>
-          <Text style={styles.toastText}>{statusMessage}</Text>
-        </View>
-      )}
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.container}>
+        {/* Header Bar */}
+        <View style={styles.topHeaderBar}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={handleBack}
+            activeOpacity={0.7}
+            accessibilityLabel="Back"
+          >
+            <Text style={styles.backArrowText}>‹</Text>
+          </TouchableOpacity>
 
-      {/* Profile Header Card */}
-      <View style={styles.profileHeaderCard}>
-        <View style={styles.avatarCircle}>
-          <Text style={styles.avatarText}>
-            {profile.fullName
-              ? profile.fullName
-                  .split(' ')
-                  .map((n) => n[0])
-                  .join('')
-                  .toUpperCase()
-                  .substring(0, 2)
-              : 'CI'}
+          <Text style={styles.headerTitleText}>
+            {isEditing ? 'Edit Profile' : 'Freelancer Profile'}
           </Text>
+
+          <TouchableOpacity
+            style={styles.logoutButton}
+            onPress={() => setLogoutModalVisible(true)}
+            activeOpacity={0.7}
+            accessibilityLabel="Logout"
+          >
+            <ExitLogoutIcon />
+          </TouchableOpacity>
         </View>
 
-        <Text style={styles.userName}>{profile.fullName}</Text>
-        <Text style={styles.userEmail}>{profile.email}</Text>
-        <Text style={styles.userMetaText}>📍 {profile.location || 'Colombo, Sri Lanka'} • {profile.company || 'FreelanceFlow'}</Text>
-
-        <View style={styles.roleBadgeContainer}>
-          <StatusBadge status="ACTIVE" />
-          <View style={styles.roleTag}>
-            <Text style={styles.roleTagText}>Role: {userRole}</Text>
+        {/* Success Toast Banner */}
+        {saveToast && (
+          <View style={styles.toastBanner}>
+            <Text style={styles.toastText}>✓ Profile updated and saved to system database!</Text>
           </View>
-        </View>
+        )}
 
-        <TouchableOpacity style={styles.headerEditBtn} onPress={handleOpenEdit} activeOpacity={0.8}>
-          <Text style={styles.headerEditBtnText}>✏️ Edit Profile Details</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Account Settings List */}
-      <Text style={styles.sectionHeader}>Account & Preferences</Text>
-      <View style={styles.menuCard}>
-        <TouchableOpacity style={styles.menuRow} onPress={handleOpenEdit} activeOpacity={0.7}>
-          <Text style={styles.menuIcon}>👤</Text>
-          <View style={styles.menuTextContent}>
-            <Text style={styles.menuTitle}>Edit Personal Information</Text>
-            <Text style={styles.menuSub}>Full Name, Location, Company & About Bio</Text>
+        {loading && !profile.name ? (
+          <View style={styles.loaderContainer}>
+            <ActivityIndicator size="large" color="#16A34A" />
+            <Text style={styles.loaderText}>Loading Freelancer Profile...</Text>
           </View>
-          <Text style={styles.menuChevron}>›</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.menuRow} onPress={handleSwitchRole} activeOpacity={0.7}>
-          <Text style={styles.menuIcon}>👥</Text>
-          <View style={styles.menuTextContent}>
-            <Text style={styles.menuTitle}>Switch User Role</Text>
-            <Text style={styles.menuSub}>Freelancer, Client, Admin, Payment Staff</Text>
-          </View>
-          <Text style={styles.menuChevron}>›</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.menuRow} onPress={() => router.push('/(tabs)/contracts')} activeOpacity={0.7}>
-          <Text style={styles.menuIcon}>📑</Text>
-          <View style={styles.menuTextContent}>
-            <Text style={styles.menuTitle}>Contract & Milestone Settings</Text>
-            <Text style={styles.menuSub}>Deliverable formats & auto-reminders</Text>
-          </View>
-          <Text style={styles.menuChevron}>›</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.menuRow} onPress={() => router.push('/(tabs)/escrow')} activeOpacity={0.7}>
-          <Text style={styles.menuIcon}>🛡️</Text>
-          <View style={styles.menuTextContent}>
-            <Text style={styles.menuTitle}>Escrow Payment Security</Text>
-            <Text style={styles.menuSub}>Bank payout methods & escrow protection</Text>
-          </View>
-          <Text style={styles.menuChevron}>›</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Logout Action Button */}
-      <TouchableOpacity style={styles.logoutBtn} onPress={handleLogoutPress} activeOpacity={0.8}>
-        <Text style={styles.logoutText}>Sign Out</Text>
-      </TouchableOpacity>
-
-      {/* Edit Profile Modal Form */}
-      <Modal
-        visible={showEditModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowEditModal(false)}
-      >
-        <SafeAreaView style={styles.modalSafeArea}>
-          <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalScrollContent}>
-            <View style={styles.editCard}>
-              <View style={styles.modalHeaderRow}>
-                <Text style={styles.modalHeaderTitle}>Edit Profile Information</Text>
-                <TouchableOpacity onPress={() => setShowEditModal(false)}>
-                  <Text style={{ fontSize: 20 }}>✕</Text>
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.modalSubtitle}>
-                Updates are persisted in the core users table in Neon PostgreSQL.
-              </Text>
-
-              {/* Full Name */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Full Name</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={editForm.fullName}
-                  onChangeText={(text) => setEditForm((prev) => ({ ...prev, fullName: text }))}
-                  placeholder="Full Name"
-                />
-              </View>
-
-              {/* Location */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Location</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={editForm.location}
-                  onChangeText={(text) => setEditForm((prev) => ({ ...prev, location: text }))}
-                  placeholder="e.g. Colombo, Sri Lanka"
-                />
-              </View>
-
-              {/* Company */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Company / Organization</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={editForm.company}
-                  onChangeText={(text) => setEditForm((prev) => ({ ...prev, company: text }))}
-                  placeholder="e.g. FreelanceFlow Systems"
-                />
-              </View>
-
-              {/* Experience */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Experience</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={editForm.experience}
-                  onChangeText={(text) => setEditForm((prev) => ({ ...prev, experience: text }))}
-                  placeholder="e.g. 3+ Years"
-                />
-              </View>
-
-              {/* About Bio */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>About Bio</Text>
-                <TextInput
-                  style={[styles.textInput, styles.textAreaInput]}
-                  value={editForm.about}
-                  onChangeText={(text) => setEditForm((prev) => ({ ...prev, about: text }))}
-                  placeholder="Tell us about your background..."
-                  multiline
-                  numberOfLines={4}
-                />
-              </View>
-
-              {/* Modal Buttons */}
-              <View style={styles.editModalActions}>
-                <TouchableOpacity
-                  style={styles.modalCancelBtn}
-                  onPress={() => setShowEditModal(false)}
-                  disabled={isSaving}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.modalCancelText}>Cancel</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.saveBtn, isSaving && { opacity: 0.6 }]}
-                  onPress={handleSaveProfile}
-                  disabled={isSaving}
-                  activeOpacity={0.85}
-                >
-                  {isSaving ? (
-                    <ActivityIndicator color="#FFF" size="small" />
+        ) : (
+          <ScrollView
+            style={styles.scrollArea}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Main Profile Info Card */}
+            <View style={styles.mainProfileCard}>
+              <TouchableOpacity
+                style={styles.avatarContainer}
+                onPress={handlePickAvatar}
+                activeOpacity={0.8}
+              >
+                <View style={styles.avatarWrapper}>
+                  {profile.avatarUri ? (
+                    <Image
+                      source={{ uri: resolveMediaUrl(profile.avatarUri) }}
+                      style={styles.avatarImage}
+                      resizeMode="cover"
+                    />
                   ) : (
-                    <Text style={styles.saveBtnText}>Save Profile</Text>
+                    <View style={[styles.avatarImage, styles.avatarPlaceholder]}>
+                      <Text style={styles.avatarInitials}>
+                        {profile.name ? profile.name.trim().charAt(0).toUpperCase() : '📷'}
+                      </Text>
+                    </View>
                   )}
-                </TouchableOpacity>
+                </View>
+                <View style={styles.cameraIconBadge}>
+                  <Text style={{ fontSize: 12 }}>📷</Text>
+                </View>
+              </TouchableOpacity>
+
+              {/* Name + Verified Badge */}
+              <View style={styles.nameRow}>
+                {isEditing ? (
+                  <TextInput
+                    style={styles.nameInput}
+                    value={editName}
+                    onChangeText={setEditName}
+                    placeholder="Full Name"
+                  />
+                ) : (
+                  <Text style={styles.profileName}>{profile.name}</Text>
+                )}
+                <VerifiedBadge size={20} />
               </View>
+
+              {/* Profession / Role Subtitle */}
+              {isEditing ? (
+                <TextInput
+                  style={styles.subtitleInput}
+                  value={editTitle}
+                  onChangeText={setEditTitle}
+                  placeholder="Profession / Role (e.g. UI/UX Designer)"
+                />
+              ) : (
+                <Text style={styles.professionSubtitle}>
+                  {profile.title || 'Freelancer (Set title in Edit Profile)'}
+                </Text>
+              )}
+
+              {/* Rating Row */}
+              <View style={styles.ratingRow}>
+                <StarIcon size={16} />
+                <Text style={styles.ratingScore}>{profile.rating.toFixed(1)}</Text>
+                <Text style={styles.reviewCount}>({profile.reviewCount} reviews)</Text>
+              </View>
+
+            </View>
+
+            {/* 3 Metric Stat Cards Row */}
+            <View style={styles.statCardsRow}>
+              {/* Card 1: COMPLETED */}
+              <View style={styles.statCard}>
+                <Text style={styles.statLabel}>COMPLETED</Text>
+                {isEditing ? (
+                  <TextInput
+                    style={styles.statInput}
+                    value={editCompleted}
+                    onChangeText={setEditCompleted}
+                    keyboardType="numeric"
+                  />
+                ) : (
+                  <Text style={styles.statValue}>{profile.completedProjects} Projects</Text>
+                )}
+                {isEditing && <Text style={styles.statPencil}>✎</Text>}
+              </View>
+
+              {/* Card 2: HOURLY RATE */}
+              <View style={styles.statCard}>
+                <Text style={styles.statLabel}>HOURLY RATE</Text>
+                {isEditing ? (
+                  <TextInput
+                    style={styles.statInput}
+                    value={editRate}
+                    onChangeText={setEditRate}
+                    keyboardType="numeric"
+                  />
+                ) : (
+                  <Text style={styles.statValue}>${profile.hourlyRate}/hr</Text>
+                )}
+                {isEditing && <Text style={styles.statPencil}>✎</Text>}
+              </View>
+
+              {/* Card 3: STATUS */}
+              <TouchableOpacity
+                style={[styles.statCard, styles.statusCardActive]}
+                activeOpacity={isEditing ? 0.7 : 1}
+                onPress={() => {
+                  if (isEditing) {
+                    setEditStatus((prev) =>
+                      prev === 'Available' ? 'Busy' : prev === 'Busy' ? 'On Leave' : 'Available'
+                    );
+                  }
+                }}
+              >
+                <Text style={styles.statusLabelGreen}>STATUS</Text>
+                <Text style={styles.statusValueGreen}>
+                  {isEditing ? editStatus : profile.status}
+                </Text>
+                {isEditing && <Text style={styles.statPencil}>✎</Text>}
+              </TouchableOpacity>
+            </View>
+
+            {/* About Section */}
+            <View style={styles.sectionBlock}>
+              <Text style={styles.sectionHeading}>About</Text>
+              <View style={styles.aboutCard}>
+                {isEditing ? (
+                  <TextInput
+                    style={styles.aboutInput}
+                    value={editAbout}
+                    onChangeText={setEditAbout}
+                    multiline
+                    numberOfLines={4}
+                    placeholder="Write your professional bio..."
+                  />
+                ) : (
+                  <Text style={profile.about ? styles.aboutText : styles.emptyNoticeText}>
+                    {profile.about || 'No bio provided yet. Click Edit Profile to add your bio and summary.'}
+                  </Text>
+                )}
+              </View>
+              {isEditing && <Text style={styles.sectionPencil}>✎</Text>}
+            </View>
+
+            {/* Skills Section */}
+            <View style={styles.sectionBlock}>
+              <Text style={styles.sectionHeading}>Skills</Text>
+              <View style={styles.skillsWrapper}>
+                {(isEditing ? editSkills : profile.skills).length > 0 ? (
+                  (isEditing ? editSkills : profile.skills).map((skill, index) => (
+                    <View key={index} style={styles.skillPill}>
+                      <Text style={styles.skillPillText}>{skill}</Text>
+                      {isEditing && (
+                        <TouchableOpacity
+                          onPress={() => handleRemoveSkill(skill)}
+                          style={styles.skillRemoveBtn}
+                        >
+                          <Text style={styles.skillRemoveText}>✕</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  ))
+                ) : (
+                  <Text style={styles.emptyNoticeText}>No skills added yet. Add your skills in Edit Profile.</Text>
+                )}
+              </View>
+
+              {/* Add Skill Input in Edit Mode */}
+              {isEditing && (
+                <View style={styles.addSkillRow}>
+                  <TextInput
+                    style={styles.addSkillInput}
+                    value={newSkillText}
+                    onChangeText={setNewSkillText}
+                    placeholder="Add skill (e.g., React Native)"
+                    onSubmitEditing={handleAddSkill}
+                  />
+                  <TouchableOpacity style={styles.addSkillButton} onPress={handleAddSkill}>
+                    <Text style={styles.addSkillButtonText}>+ Add</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+              {isEditing && <Text style={styles.sectionPencil}>✎</Text>}
+            </View>
+
+            {/* Featured Work Section */}
+            <View style={styles.sectionBlock}>
+              <Text style={styles.sectionHeading}>Featured Work</Text>
+              {profile.featuredProjects.length > 0 ? (
+                <View style={styles.featuredGrid}>
+                  {profile.featuredProjects.map((project) => (
+                    <View key={project.id} style={styles.projectCard}>
+                      <View style={styles.projectImageContainer}>
+                        <Image
+                          source={
+                            project.imageUri
+                              ? { uri: resolveMediaUrl(project.imageUri) }
+                              : project.id === 'p1'
+                                ? require('../../assets/saas_portal.jpg')
+                                : require('../../assets/fittrack_app.jpg')
+                          }
+                          style={styles.projectImage}
+                          resizeMode="cover"
+                        />
+                      </View>
+                      <View style={styles.projectInfo}>
+                        <Text style={styles.projectTitle}>{project.title}</Text>
+                        <Text style={styles.projectSubtitle}>
+                          {project.category} • {project.year}
+                        </Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <View style={styles.emptyCard}>
+                  <Text style={styles.emptyNoticeText}>No featured projects added yet. Showcase your work in Edit Profile.</Text>
+                </View>
+              )}
+              {isEditing && <Text style={styles.sectionPencil}>✎</Text>}
+            </View>
+
+            {/* Main Action Button (Edit Profile / Save Changes) */}
+            <View style={styles.actionBtnContainer}>
+              {isEditing ? (
+                <TouchableOpacity
+                  style={styles.saveChangesBtn}
+                  onPress={handleSaveChanges}
+                  activeOpacity={0.8}
+                  disabled={saving}
+                >
+                  <Text style={styles.saveChangesText}>
+                    {saving ? 'Saving to Database...' : 'Save Changes'}
+                  </Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={styles.editProfileBtn}
+                  onPress={() => router.push('/edit-profile')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.editProfileText}>Edit Profile</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </ScrollView>
-        </SafeAreaView>
-      </Modal>
+        )}
 
-      {/* Cross-Platform Logout Confirmation Modal */}
-      <Modal
-        visible={showLogoutModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowLogoutModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalBox}>
-            <Text style={styles.modalTitle}>Sign Out</Text>
-            <Text style={styles.modalSub}>
-              Are you sure you want to log out of FreelanceFlow?
-            </Text>
-            <View style={styles.modalActions}>
+        {/* Logout / Switch Role Confirmation Modal */}
+        <Modal
+          visible={logoutModalVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setLogoutModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Account Options</Text>
+              <Text style={styles.modalSub}>Manage your session or switch roles</Text>
+
+              <TouchableOpacity
+                style={styles.modalPrimaryBtn}
+                onPress={() => {
+                  setLogoutModalVisible(false);
+                  router.push('/select-role');
+                }}
+              >
+                <Text style={styles.modalPrimaryBtnText}>👥 Switch User Role</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.modalDestructiveBtn}
+                onPress={() => {
+                  setLogoutModalVisible(false);
+                  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+                    localStorage.removeItem('auth_user');
+                    localStorage.removeItem('auth_email');
+                    localStorage.removeItem('auth_name');
+                    localStorage.removeItem('auth_role');
+                    localStorage.removeItem('auth_token');
+                  }
+                  router.replace('/login');
+                }}
+              >
+                <Text style={styles.modalDestructiveBtnText}>🚪 Sign Out</Text>
+              </TouchableOpacity>
+
               <TouchableOpacity
                 style={styles.modalCancelBtn}
-                onPress={() => setShowLogoutModal(false)}
-                activeOpacity={0.7}
+                onPress={() => setLogoutModalVisible(false)}
               >
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalConfirmLogoutBtn}
-                onPress={handleConfirmLogout}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.modalConfirmLogoutText}>Sign Out</Text>
+                <Text style={styles.modalCancelBtnText}>Cancel</Text>
               </TouchableOpacity>
             </View>
           </View>
-        </View>
-      </Modal>
-    </ScrollView>
+        </Modal>
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: '#FFFFFF',
   },
-  contentContainer: {
-    padding: Theme.spacing.md,
-  },
-  toastBanner: {
-    backgroundColor: '#DCFCE7',
-    borderColor: '#166534',
-    borderWidth: 1,
-    padding: Theme.spacing.sm + 2,
-    borderRadius: Theme.borderRadius.md,
-    marginBottom: Theme.spacing.md,
-  },
-  toastText: {
-    color: '#166534',
-    fontSize: 13,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  profileHeaderCard: {
-    backgroundColor: Colors.dark,
-    padding: Theme.spacing.lg,
-    borderRadius: Theme.borderRadius.lg,
-    alignItems: 'center',
-    marginBottom: Theme.spacing.lg,
-    ...Theme.shadows.card,
-  },
-  avatarCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: Colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: Theme.spacing.sm,
-  },
-  avatarText: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: Colors.surface,
-  },
-  userName: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: Colors.surface,
-    marginBottom: 2,
-  },
-  userEmail: {
-    fontSize: 13,
-    color: Colors.neutralLight,
-    marginBottom: 4,
-  },
-  userMetaText: {
-    color: Colors.neutralLight,
-    fontSize: 12,
-    marginBottom: Theme.spacing.md,
-  },
-  roleBadgeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Theme.spacing.sm,
-    marginBottom: Theme.spacing.md,
-  },
-  roleTag: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    paddingHorizontal: Theme.spacing.sm + 2,
-    paddingVertical: 4,
-    borderRadius: Theme.borderRadius.full,
-  },
-  roleTagText: {
-    color: Colors.surface,
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  headerEditBtn: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: Theme.spacing.md,
-    paddingVertical: 8,
-    borderRadius: Theme.borderRadius.md,
-  },
-  headerEditBtnText: {
-    color: Colors.surface,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  sectionHeader: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.dark,
-    marginBottom: Theme.spacing.sm,
-  },
-  menuCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: Theme.borderRadius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    marginBottom: Theme.spacing.lg,
-    ...Theme.shadows.card,
-  },
-  menuRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: Theme.spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  menuIcon: {
-    fontSize: 20,
-    marginRight: Theme.spacing.md,
-  },
-  menuTextContent: {
+  loaderContainer: {
     flex: 1,
-  },
-  menuTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.dark,
-  },
-  menuSub: {
-    fontSize: 11,
-    color: Colors.neutralLight,
-    marginTop: 2,
-  },
-  menuChevron: {
-    fontSize: 18,
-    color: Colors.neutralLight,
-    fontWeight: '600',
-  },
-  logoutBtn: {
-    minHeight: 50,
-    backgroundColor: Colors.errorBg,
-    borderWidth: 1,
-    borderColor: Colors.error,
-    borderRadius: Theme.borderRadius.md,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: Theme.spacing.sm,
-  },
-  logoutText: {
-    color: Colors.errorText,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-
-  /* Edit Modal Styles */
-  modalSafeArea: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-  },
-  modalScroll: {
-    flex: 1,
-  },
-  modalScrollContent: {
-    padding: Theme.spacing.md,
-    justifyContent: 'center',
-  },
-  editCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: Theme.borderRadius.lg,
-    padding: Theme.spacing.lg,
-    ...Theme.shadows.card,
-  },
-  modalHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  modalHeaderTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: Colors.dark,
-  },
-  modalSubtitle: {
-    fontSize: 12,
-    color: Colors.neutralMedium,
-    marginBottom: Theme.spacing.md,
-  },
-  inputGroup: {
-    marginBottom: Theme.spacing.sm + 4,
-  },
-  inputLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.dark,
-    marginBottom: 4,
-  },
-  textInput: {
-    height: 44,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: Theme.borderRadius.md,
-    paddingHorizontal: Theme.spacing.sm + 4,
-    backgroundColor: Colors.background,
-    fontSize: 14,
-    color: Colors.dark,
-  },
-  textAreaInput: {
-    height: 90,
-    textAlignVertical: 'top',
-    paddingTop: Theme.spacing.sm,
-  },
-  editModalActions: {
-    flexDirection: 'row',
-    gap: Theme.spacing.sm,
-    marginTop: Theme.spacing.md,
-  },
-  saveBtn: {
-    flex: 1,
-    height: 44,
-    backgroundColor: Colors.primary,
-    borderRadius: Theme.borderRadius.md,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  saveBtnText: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-
-  /* Logout Modal Styles */
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
   },
-  modalBox: {
+  loaderText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '600',
+  },
+  topHeaderBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'android' ? 14 : 10,
+    paddingBottom: 14,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+  },
+  backArrowText: {
+    fontSize: 32,
+    fontWeight: '300',
+    color: '#111827',
+    lineHeight: 34,
+  },
+  headerTitleText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+    textAlign: 'center',
+  },
+  logoutButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+  },
+  toastBanner: {
+    backgroundColor: '#ECFDF5',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#A7F3D0',
+    alignItems: 'center',
+  },
+  toastText: {
+    color: '#065F46',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  scrollArea: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 32,
+  },
+  mainProfileCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    paddingVertical: 24,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    marginBottom: 16,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 10,
+      },
+      android: {
+        elevation: 2,
+      },
+      web: {
+        boxShadow: '0 2px 10px rgba(0, 0, 0, 0.04)',
+      },
+    }),
+  },
+  avatarContainer: {
+    position: 'relative',
+    marginBottom: 14,
+  },
+  avatarWrapper: {
+    width: 104,
+    height: 104,
+    borderRadius: 52,
+    overflow: 'hidden',
+    backgroundColor: '#F3F4F6',
+    borderWidth: 2,
+    borderColor: '#E2E8F0',
+  },
+  cameraIconBadge: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    backgroundColor: '#10B981',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    elevation: 3,
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  avatarPlaceholder: {
+    backgroundColor: '#E2E8F0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarInitials: {
+    fontSize: 38,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  emptyNoticeText: {
+    fontSize: 13,
+    color: '#94A3B8',
+    fontStyle: 'italic',
+    paddingVertical: 4,
+  },
+  emptyCard: {
+    padding: 16,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    width: '100%',
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  profileName: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#111827',
+    letterSpacing: -0.3,
+  },
+  nameInput: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#111827',
+    borderBottomWidth: 1.5,
+    borderBottomColor: '#10B981',
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    textAlign: 'center',
+  },
+  professionSubtitle: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#6B7280',
+    marginBottom: 10,
+  },
+  subtitleInput: {
+    fontSize: 14,
+    color: '#4B5563',
+    borderBottomWidth: 1,
+    borderBottomColor: '#D1D5DB',
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    textAlign: 'center',
+    marginBottom: 10,
+    minWidth: 180,
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  ratingScore: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#111827',
+    marginRight: 4,
+  },
+  reviewCount: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#6B7280',
+  },
+  topEditProfileBtn: {
+    marginTop: 14,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#10B981',
+    paddingVertical: 7,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+  },
+  topEditProfileBtnText: {
+    color: '#059669',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  pencilIndicatorRow: {
+    marginTop: 8,
+  },
+  pencilSymbol: {
+    fontSize: 13,
+    color: '#1F2937',
+    opacity: 0.8,
+  },
+  statCardsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 24,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 74,
+  },
+  statusCardActive: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#DCFCE7',
+  },
+  statLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#6B7280',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+    textTransform: 'uppercase',
+  },
+  statValue: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#111827',
+    textAlign: 'center',
+  },
+  statInput: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#111827',
+    textAlign: 'center',
+    paddingVertical: 0,
+    minWidth: 40,
+  },
+  statusLabelGreen: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#16A34A',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+    textTransform: 'uppercase',
+  },
+  statusValueGreen: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#15803D',
+    textAlign: 'center',
+  },
+  statPencil: {
+    fontSize: 10,
+    color: '#4B5563',
+    marginTop: 2,
+  },
+  sectionBlock: {
+    marginBottom: 24,
+  },
+  sectionHeading: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#111827',
+    marginBottom: 10,
+  },
+  aboutCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    padding: 14,
+  },
+  aboutText: {
+    fontSize: 14,
+    lineHeight: 22,
+    color: '#374151',
+    fontWeight: '400',
+  },
+  aboutInput: {
+    fontSize: 14,
+    lineHeight: 22,
+    color: '#111827',
+    minHeight: 80,
+    padding: 0,
+  },
+  sectionPencil: {
+    fontSize: 12,
+    color: '#4B5563',
+    marginTop: 6,
+  },
+  skillsWrapper: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  skillPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  skillPillText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  skillRemoveBtn: {
+    marginLeft: 6,
+    padding: 2,
+  },
+  skillRemoveText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#EF4444',
+  },
+  addSkillRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 10,
+  },
+  addSkillInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 13,
+    backgroundColor: '#FAFAFA',
+  },
+  addSkillButton: {
+    backgroundColor: '#10B981',
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addSkillButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  featuredGrid: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  projectCard: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.04,
+        shadowRadius: 6,
+      },
+      android: {
+        elevation: 1,
+      },
+      web: {
+        boxShadow: '0 1px 6px rgba(0, 0, 0, 0.03)',
+      },
+    }),
+  },
+  projectImageContainer: {
+    width: '100%',
+    height: 100,
+    backgroundColor: '#F3F4F6',
+  },
+  projectImage: {
+    width: '100%',
+    height: '100%',
+  },
+  projectInfo: {
+    padding: 10,
+  },
+  projectTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 2,
+  },
+  projectSubtitle: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#6B7280',
+  },
+  actionBtnContainer: {
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  editProfileBtn: {
+    width: '100%',
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#10B981',
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#10B981',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.25,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 3,
+      },
+      web: {
+        boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)',
+      },
+    }),
+  },
+  editProfileText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  saveChangesBtn: {
+    width: '100%',
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1.5,
+    borderColor: '#111827',
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  saveChangesText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalCard: {
     width: '100%',
     maxWidth: 340,
-    backgroundColor: Colors.surface,
-    borderRadius: Theme.borderRadius.lg,
-    padding: Theme.spacing.lg,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 24,
     alignItems: 'center',
-    ...Theme.shadows.card,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '800',
-    color: Colors.dark,
-    marginBottom: 8,
+    color: '#111827',
+    marginBottom: 4,
   },
   modalSub: {
-    fontSize: 14,
-    color: Colors.neutralMedium,
-    textAlign: 'center',
+    fontSize: 13,
+    color: '#6B7280',
     marginBottom: 20,
-    lineHeight: 20,
+    textAlign: 'center',
   },
-  modalActions: {
-    flexDirection: 'row',
-    gap: 12,
+  modalPrimaryBtn: {
     width: '100%',
-  },
-  modalCancelBtn: {
-    flex: 1,
     height: 44,
-    borderRadius: Theme.borderRadius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderRadius: 12,
+    backgroundColor: '#F3F4F6',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
+    marginBottom: 10,
   },
-  modalCancelText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.dark,
-  },
-  modalConfirmLogoutBtn: {
-    flex: 1,
-    height: 44,
-    borderRadius: Theme.borderRadius.md,
-    backgroundColor: Colors.error,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalConfirmLogoutText: {
+  modalPrimaryBtnText: {
     fontSize: 14,
     fontWeight: '700',
-    color: Colors.surface,
+    color: '#111827',
+  },
+  modalDestructiveBtn: {
+    width: '100%',
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#FEE2E2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  modalDestructiveBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#991B1B',
+  },
+  modalCancelBtn: {
+    width: '100%',
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCancelBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6B7280',
   },
 });

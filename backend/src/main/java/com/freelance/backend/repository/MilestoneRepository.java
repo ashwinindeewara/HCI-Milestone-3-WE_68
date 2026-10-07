@@ -7,5 +7,6 @@ import java.util.List;
 
 public interface MilestoneRepository extends JpaRepository<Milestone, String> {
     List<Milestone> findByContractId(String contractId);
+    List<Milestone> findByContractIdIn(List<String> contractIds);
     List<Milestone> findByStatus(String status);
 }

@@ -21,6 +21,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, String
     Long countByStatusIgnoreCase(String status);
 
     List<Transaction> findByContractId(String contractId);
-
     Optional<Transaction> findByReferenceNo(String referenceNo);
+
+    List<Transaction> findByContractIdIn(List<String> contractIds);
 }
