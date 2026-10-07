@@ -20,6 +20,9 @@ public class ReconciliationRecord {
     @Column(nullable = false)
     private Double amount;
 
+    private Double receivedAmount;
+    private Double difference;
+
     @Column(nullable = false)
     private String status; // MATCHED, UNMATCHED, DISCREPANCY
 
@@ -35,6 +38,19 @@ public class ReconciliationRecord {
         this.referenceNo = referenceNo;
         this.batchId = batchId;
         this.amount = amount;
+        this.receivedAmount = amount;
+        this.difference = 0.0;
+        this.status = status;
+        this.transactionDate = transactionDate;
+        this.notes = notes;
+    }
+
+    public ReconciliationRecord(String referenceNo, String batchId, Double expectedAmount, Double receivedAmount, String status, String transactionDate, String notes) {
+        this.referenceNo = referenceNo;
+        this.batchId = batchId;
+        this.amount = expectedAmount;
+        this.receivedAmount = receivedAmount;
+        this.difference = (expectedAmount != null && receivedAmount != null) ? expectedAmount - receivedAmount : 0.0;
         this.status = status;
         this.transactionDate = transactionDate;
         this.notes = notes;
@@ -70,6 +86,30 @@ public class ReconciliationRecord {
 
     public void setAmount(Double amount) {
         this.amount = amount;
+    }
+
+    public Double getExpectedAmount() {
+        return amount;
+    }
+
+    public void setExpectedAmount(Double expectedAmount) {
+        this.amount = expectedAmount;
+    }
+
+    public Double getReceivedAmount() {
+        return receivedAmount;
+    }
+
+    public void setReceivedAmount(Double receivedAmount) {
+        this.receivedAmount = receivedAmount;
+    }
+
+    public Double getDifference() {
+        return difference;
+    }
+
+    public void setDifference(Double difference) {
+        this.difference = difference;
     }
 
     public String getStatus() {
