@@ -1,14 +1,31 @@
 package com.freelance.backend.dto;
 
 import com.freelance.backend.entity.UserRole;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
 
 public class RegisterRequest {
+
+    @NotBlank(message = "Full name is required.")
     private String fullName;
+
+    @NotBlank(message = "Email address is required.")
+    @Email(message = "Please provide a valid email address.")
     private String email;
+
+    @NotBlank(message = "Password is required.")
     private String password;
+
     private UserRole role;
 
     public RegisterRequest() {}
+
+    public RegisterRequest(String fullName, String email, String password, UserRole role) {
+        this.fullName = fullName;
+        this.email = email;
+        this.password = password;
+        this.role = role;
+    }
 
     public String getFullName() {
         return fullName;

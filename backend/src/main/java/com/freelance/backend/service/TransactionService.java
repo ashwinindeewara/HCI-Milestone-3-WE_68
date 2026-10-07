@@ -5,7 +5,6 @@ import com.freelance.backend.entity.Transaction;
 import com.freelance.backend.exception.ResourceNotFoundException;
 import com.freelance.backend.repository.TransactionRepository;
 import jakarta.annotation.PostConstruct;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

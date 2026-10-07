@@ -42,7 +42,8 @@ public class GlobalExceptionHandler {
         logger.warn("[400 BAD REQUEST] Validation Exception: Details -> {}", validationErrors);
         ErrorResponse error = new ErrorResponse(
                 HttpStatus.BAD_REQUEST.value(),
-                validationErrors.isEmpty() ? "Validation failed for request fields." : validationErrors);
+                validationErrors.isEmpty() ? "Validation failed for request fields." : validationErrors
+        );
         return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
     }
 
@@ -51,7 +52,8 @@ public class GlobalExceptionHandler {
         logger.warn("[400 BAD REQUEST] HttpMessageNotReadableException (Malformed JSON body): {}", ex.getMessage());
         ErrorResponse error = new ErrorResponse(
                 HttpStatus.BAD_REQUEST.value(),
-                "Malformed JSON request payload or missing required request body.");
+                "Malformed JSON request payload or missing required request body."
+        );
         return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
     }
 
@@ -60,7 +62,8 @@ public class GlobalExceptionHandler {
         logger.error("[500 INTERNAL SERVER ERROR] Unhandled Exception: ", ex);
         ErrorResponse error = new ErrorResponse(
                 HttpStatus.INTERNAL_SERVER_ERROR.value(),
-                ex.getMessage() != null ? ex.getMessage() : "An unexpected server error occurred.");
+                ex.getMessage() != null ? ex.getMessage() : "An unexpected server error occurred."
+        );
         return new ResponseEntity<>(error, HttpStatus.INTERNAL_SERVER_ERROR);
     }
 }

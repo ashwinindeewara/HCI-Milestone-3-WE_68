@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Optional;
 
 public interface TransactionRepository extends JpaRepository<Transaction, String> {
+    
     List<Transaction> findByType(String type);
 
     List<Transaction> findByStatus(String status);
