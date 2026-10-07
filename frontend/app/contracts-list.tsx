@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import Colors from '../src/constants/colors';
-import apiClient from '../src/services/api';
+import { apiClient, getCurrentUser } from '../src/services/api';
 import {
   HomeIcon,
   ProjectsIcon,
@@ -63,40 +63,74 @@ const DEFAULT_CONTRACTS: ContractItem[] = [
 
 export default function ContractsListScreen() {
   const router = useRouter();
-  const [contracts, setContracts] = useState<ContractItem[]>(DEFAULT_CONTRACTS);
+  const currentUser = getCurrentUser();
+  const isChathuni =
+    currentUser?.email === 'chathuniimalsha.com' ||
+    (currentUser?.fullName && currentUser.fullName.toLowerCase().includes('chathuni')) ||
+    (currentUser?.email && currentUser.email.toLowerCase().includes('chathuni'));
+
+  const [contracts, setContracts] = useState<ContractItem[]>(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const u = getCurrentUser();
+        const k = `contracts_full_list_${u?.email || u?.fullName || 'default'}`;
+        const s = localStorage.getItem(k);
+        if (s) {
+          const p = JSON.parse(s);
+          if (Array.isArray(p)) return p;
+        }
+      } catch (e) {}
+    }
+    return isChathuni ? DEFAULT_CONTRACTS : [];
+  });
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchContracts = async () => {
     try {
-      const res = await apiClient.get('/contracts');
-      if (res.data && Array.isArray(res.data) && res.data.length > 0) {
-        const mapped: ContractItem[] = res.data.map((c: any) => {
-          let statusText = 'New';
-          let bType = 'new';
-          if (c.status === 'COMPLETED') {
-            statusText = 'Completed';
-            bType = 'completed';
-          } else if (c.status === 'PENDING' || c.status === 'UNDER_REVIEW') {
-            statusText = 'Pending';
-            bType = 'pending';
-          } else if (c.status === 'ACTIVE' || c.status === 'IN_PROGRESS') {
-            statusText = 'Active';
-            bType = 'new';
-          }
+      const activeName = currentUser?.fullName || (isChathuni ? 'Chathuni Imalsha' : '');
+      const res = await apiClient.get('/contracts', {
+        params: activeName ? { freelancerName: activeName } : {},
+      });
+      if (res.data && Array.isArray(res.data)) {
+        if (res.data.length > 0) {
+          const mapped: ContractItem[] = res.data.map((c: any) => {
+            let statusText = 'New';
+            let bType = 'new';
+            if (c.status === 'COMPLETED') {
+              statusText = 'Completed';
+              bType = 'completed';
+            } else if (c.status === 'PENDING' || c.status === 'UNDER_REVIEW') {
+              statusText = 'Pending';
+              bType = 'pending';
+            } else if (c.status === 'ACTIVE' || c.status === 'IN_PROGRESS') {
+              statusText = 'Active';
+              bType = 'new';
+            }
 
-          const val = c.totalBudget != null ? '$' + c.totalBudget.toLocaleString() : '$8,000';
-          return {
-            id: c.id,
-            title: c.title,
-            clientName: c.clientName,
-            status: statusText,
-            badgeType: bType,
-            contractValue: val,
-            timeline: c.timeline || (c.startDate && c.endDate ? `${c.startDate} - ${c.endDate}` : 'Sep 01 - Nov 30, 2024'),
-          };
-        });
-        setContracts(mapped);
+            const val = c.totalBudget != null ? '$' + c.totalBudget.toLocaleString() : '$8,000';
+            return {
+              id: c.id,
+              title: c.title,
+              clientName: c.clientName,
+              status: statusText,
+              badgeType: bType,
+              contractValue: val,
+              timeline: c.timeline || (c.startDate && c.endDate ? `${c.startDate} - ${c.endDate}` : 'Sep 01 - Nov 30, 2024'),
+            };
+          });
+          setContracts(mapped);
+          if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+            const k = `contracts_full_list_${currentUser?.email || currentUser?.fullName || 'default'}`;
+            localStorage.setItem(k, JSON.stringify(mapped));
+          }
+        } else {
+          setContracts([]);
+          if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+            const k = `contracts_full_list_${currentUser?.email || currentUser?.fullName || 'default'}`;
+            localStorage.setItem(k, JSON.stringify([]));
+          }
+        }
       }
     } catch {
       // Offline fallback
@@ -108,7 +142,7 @@ export default function ContractsListScreen() {
 
   useEffect(() => {
     fetchContracts();
-  }, []);
+  }, [currentUser?.email, currentUser?.fullName]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -143,9 +177,20 @@ export default function ContractsListScreen() {
             <View style={{ width: 36 }} />
           </View>
 
-          {/* Contracts List Cards (Matching Image 1) */}
+          {/* Contracts List Cards */}
           <View style={styles.listContainer}>
-            {contracts.map((item) => {
+            {contracts.length === 0 ? (
+              <View style={{ backgroundColor: '#FFFFFF', borderRadius: 16, padding: 32, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E2E8F0', marginTop: 12 }}>
+                <Text style={{ fontSize: 36, marginBottom: 12 }}>📋</Text>
+                <Text style={{ fontSize: 16, fontWeight: '700', color: Colors.text.primary, marginBottom: 6 }}>
+                  No Contracts Found
+                </Text>
+                <Text style={{ fontSize: 13, color: Colors.text.secondary, textAlign: 'center', lineHeight: 20 }}>
+                  You do not have any active or previous contracts yet. When clients create contracts, they will appear here.
+                </Text>
+              </View>
+            ) : (
+              contracts.map((item) => {
               const isNew = item.status === 'New' || item.badgeType === 'new';
               const isPending = item.status === 'Pending' || item.badgeType === 'pending';
               const isCompleted = item.status === 'Completed' || item.badgeType === 'completed';
@@ -199,7 +244,7 @@ export default function ContractsListScreen() {
                   </View>
                 </TouchableOpacity>
               );
-            })}
+            }))}
           </View>
         </ScrollView>
 

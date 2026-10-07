@@ -13,7 +13,7 @@ import {
 import { useRouter } from 'expo-router';
 import Colors from '../../src/constants/colors';
 import Theme from '../../src/constants/theme';
-import { FreelancerApiService } from '../../src/services/api';
+import { FreelancerApiService, getCurrentUser } from '../../src/services/api';
 
 interface ProjectDisplayItem {
   id: string;
@@ -65,10 +65,29 @@ const DEFAULT_PROJECTS: ProjectDisplayItem[] = [
 
 export default function ContractsScreen() {
   const router = useRouter();
+  const currentUser = getCurrentUser();
+  const isChathuni =
+    currentUser?.email === 'chathuniimalsha.com' ||
+    (currentUser?.fullName && currentUser.fullName.toLowerCase().includes('chathuni')) ||
+    (currentUser?.email && currentUser.email.toLowerCase().includes('chathuni'));
+
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState('All');
-  const [projects, setProjects] = useState<ProjectDisplayItem[]>(DEFAULT_PROJECTS);
-  const [loading, setLoading] = useState(true);
+  const [projects, setProjects] = useState<ProjectDisplayItem[]>(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const u = getCurrentUser();
+        const k = `contracts_list_${u?.email || u?.fullName || 'default'}`;
+        const s = localStorage.getItem(k);
+        if (s) {
+          const p = JSON.parse(s);
+          if (Array.isArray(p)) return p;
+        }
+      } catch (e) {}
+    }
+    return isChathuni ? DEFAULT_PROJECTS : [];
+  });
+  const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const applyStoredProgressToProjects = (projectList: ProjectDisplayItem[]): ProjectDisplayItem[] => {
@@ -93,34 +112,59 @@ export default function ContractsScreen() {
 
   const fetchProjects = async () => {
     try {
-      const res = await FreelancerApiService.getProjects();
-      if (res.data && Array.isArray(res.data) && res.data.length > 0) {
-        const formatted: ProjectDisplayItem[] = res.data.map((p: any) => {
-          const isCompleted = p.status === 'COMPLETED' || (p.completionPercentage ?? 0) >= 100;
-          const escrowText = isCompleted
-            ? 'Completed & Paid'
-            : p.inEscrowAmount
-              ? `$${p.inEscrowAmount.toLocaleString()} In Escrow`
-              : '$0 In Escrow';
+      const activeUser = getCurrentUser();
+      const activeName = activeUser?.fullName || '';
+      const isTargetChathuni =
+        activeUser?.email === 'chathuniimalsha.com' ||
+        (activeName && activeName.toLowerCase().includes('chathuni'));
 
-          return {
-            id: p.id,
-            contractId: p.contractId || p.id,
-            title: p.title,
-            client: p.clientName,
-            milestone: p.statusBadge || (isCompleted ? 'Final Delivery' : 'In Progress'),
-            progress: p.completionPercentage ?? (isCompleted ? 100 : 50),
-            escrowTag: escrowText,
-            dueDate: p.dueDate || 'Due soon',
-            status: isCompleted ? 'Completed' : 'Active',
-          };
-        });
-        setProjects(applyStoredProgressToProjects(formatted));
-      } else {
-        setProjects((prev) => applyStoredProgressToProjects(prev));
+      const res = await FreelancerApiService.getFreelancerProjects(activeName);
+      if (res.data && Array.isArray(res.data)) {
+        if (res.data.length > 0) {
+          const formatted: ProjectDisplayItem[] = res.data.map((p: any) => {
+            const isCompleted = p.status === 'COMPLETED' || (p.completionPercentage ?? 0) >= 100;
+            const escrowText = isCompleted
+              ? 'Completed & Paid'
+              : p.inEscrowAmount
+                ? `$${p.inEscrowAmount.toLocaleString()} In Escrow`
+                : '$0 In Escrow';
+
+            return {
+              id: p.id,
+              contractId: p.contractId || p.id,
+              title: p.title,
+              client: p.clientName,
+              milestone: p.statusBadge || (isCompleted ? 'Final Delivery' : 'In Progress'),
+              progress: p.completionPercentage ?? (isCompleted ? 100 : 50),
+              escrowTag: escrowText,
+              dueDate: p.dueDate || 'Due soon',
+              status: isCompleted ? 'Completed' : 'Active',
+            };
+          });
+          const withProgress = applyStoredProgressToProjects(formatted);
+          setProjects(withProgress);
+          if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+            const k = `contracts_list_${activeUser?.email || activeName || 'default'}`;
+            localStorage.setItem(k, JSON.stringify(withProgress));
+          }
+        } else if (!isTargetChathuni) {
+          setProjects([]);
+          if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+            const k = `contracts_list_${activeUser?.email || activeName || 'default'}`;
+            localStorage.setItem(k, JSON.stringify([]));
+          }
+        }
+      } else if (!isTargetChathuni) {
+        setProjects([]);
+        if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+          const k = `contracts_list_${activeUser?.email || activeName || 'default'}`;
+          localStorage.setItem(k, JSON.stringify([]));
+        }
       }
     } catch {
-      setProjects((prev) => applyStoredProgressToProjects(prev));
+      if (!isChathuni) {
+        setProjects([]);
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -231,7 +275,7 @@ export default function ContractsScreen() {
         </ScrollView>
 
         {/* Project Cards List */}
-        {loading ? (
+        {loading && projects.length === 0 ? (
           <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 40 }} />
         ) : (
           <View style={styles.projectList}>

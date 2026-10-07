@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import Colors from '../src/constants/colors';
-import { FreelancerApiService, API_BASE_URL, resolveMediaUrl, apiClient } from '../src/services/api';
+import { FreelancerApiService, API_BASE_URL, resolveMediaUrl, apiClient, getCurrentUser } from '../src/services/api';
 
 interface MilestoneItem {
   id: string;
@@ -51,6 +51,19 @@ interface DeliverableItem {
   uploadedAt?: string;
   status: string;
   feedback?: string;
+}
+
+interface ProjectData {
+  id: string;
+  contractId: string;
+  title: string;
+  clientName: string;
+  timeline: string;
+  totalBudget: number;
+  completionPercentage: number;
+  statusBadge: string;
+  status: string;
+  description: string;
 }
 
 export default function ProjectDetailsScreen() {
@@ -103,73 +116,157 @@ export default function ProjectDetailsScreen() {
     }
   };
 
+  const currentUser = getCurrentUser();
+  const isChathuni =
+    currentUser?.email === 'chathuniimalsha.com' ||
+    (currentUser?.fullName && currentUser.fullName.toLowerCase().includes('chathuni')) ||
+    (currentUser?.email && currentUser.email.toLowerCase().includes('chathuni'));
+  const activeFreelancer = currentUser?.fullName || (isChathuni ? 'Chathuni Imalsha' : 'Freelancer');
+  const isDemoProject = isChathuni && (cleanId === 'C-101' || cleanId === 'C-102');
   const defaultInitialProgress = isMobileAppContract ? 30 : 65;
 
-  const [project, setProject] = useState({
-    id: projectId,
-    contractId: projectId,
-    title: isMobileAppContract ? 'Mobile App Contract' : 'E-Commerce Redesign',
-    clientName: isMobileAppContract ? 'Global Retail Corp' : 'TechVentures Inc.',
-    timeline: isMobileAppContract ? 'Oct 15 - Jan 15' : 'Sep 01 - Nov 30, 2024',
-    totalBudget: isMobileAppContract ? 12500.0 : 8000.0,
-    completionPercentage: defaultInitialProgress,
-    statusBadge: 'On Track',
-    status: 'ACTIVE',
-    description: isMobileAppContract
-      ? 'End-to-end mobile app development and cross-platform UI implementation with secure backend REST API integration.'
-      : 'This project focuses on rebuilding the entire frontend buyer experience of the flagship TechVentures e-commerce application. Focus points include visual brand alignment, mobile optimization, and interactive prototype delivery.',
+  const [project, setProject] = useState<ProjectData>(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const saved = localStorage.getItem(`project_cache_${cleanId}`);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed && parsed.title) return parsed;
+        }
+      } catch (e) {}
+    }
+    if (isDemoProject) {
+      return {
+        id: projectId,
+        contractId: projectId,
+        title: isMobileAppContract ? 'Mobile App Contract' : 'E-Commerce Redesign',
+        clientName: isMobileAppContract ? 'Global Retail Corp' : 'TechVentures Inc.',
+        timeline: isMobileAppContract ? 'Oct 15 - Jan 15' : 'Sep 01 - Nov 30, 2024',
+        totalBudget: isMobileAppContract ? 12500.0 : 8000.0,
+        completionPercentage: defaultInitialProgress,
+        statusBadge: 'On Track',
+        status: 'ACTIVE',
+        description: isMobileAppContract
+          ? 'End-to-end mobile app development and cross-platform UI implementation with secure backend REST API integration.'
+          : 'This project focuses on rebuilding the entire frontend buyer experience of the flagship TechVentures e-commerce application. Focus points include visual brand alignment, mobile optimization, and interactive prototype delivery.',
+      };
+    }
+    return {
+      id: projectId,
+      contractId: cleanId,
+      title: 'Project Details',
+      clientName: '',
+      timeline: '',
+      totalBudget: 0,
+      completionPercentage: 0,
+      statusBadge: 'Active',
+      status: 'ACTIVE',
+      description: '',
+    };
   });
 
-  const [milestones, setMilestones] = useState<MilestoneItem[]>(
-    isMobileAppContract
-      ? [
-        { id: 'M-4', title: '1. Architecture & Wireframes', amount: 3500, status: 'COMPLETED', dueDate: 'Oct 25, 2024' },
-        { id: 'M-5', title: '2. API & Payment Integration', amount: 4500, status: 'FUNDED', dueDate: 'Nov 20, 2024' },
-        { id: 'M-6', title: '3. Store Deployment & Launch', amount: 4500, status: 'PENDING', dueDate: 'Jan 15, 2025' },
-      ]
-      : [
-        { id: 'M-1', title: '1. Wireframes approved', amount: 2000, status: 'COMPLETED', dueDate: 'Sep 15, 2024' },
-        { id: 'M-2', title: '2. Design system finalized', amount: 3000, status: 'FUNDED', dueDate: 'Oct 15, 2024' },
-        { id: 'M-3', title: '3. High-fidelity handover', amount: 3000, status: 'PENDING', dueDate: 'Nov 30, 2024' },
-      ]
-  );
+  const [milestones, setMilestones] = useState<MilestoneItem[]>(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const saved = localStorage.getItem(`project_milestones_${cleanId}`);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) return parsed;
+        }
+      } catch (e) {}
+    }
+    if (isDemoProject) {
+      return isMobileAppContract
+        ? [
+            { id: 'M-4', title: '1. Architecture & Wireframes', amount: 3500, status: 'COMPLETED', dueDate: 'Oct 25, 2024' },
+            { id: 'M-5', title: '2. API & Payment Integration', amount: 4500, status: 'FUNDED', dueDate: 'Nov 20, 2024' },
+            { id: 'M-6', title: '3. Store Deployment & Launch', amount: 4500, status: 'PENDING', dueDate: 'Jan 15, 2025' },
+          ]
+        : [
+            { id: 'M-1', title: '1. Wireframes approved', amount: 2000, status: 'COMPLETED', dueDate: 'Sep 15, 2024' },
+            { id: 'M-2', title: '2. Design system finalized', amount: 3000, status: 'FUNDED', dueDate: 'Oct 15, 2024' },
+            { id: 'M-3', title: '3. High-fidelity handover', amount: 3000, status: 'PENDING', dueDate: 'Nov 30, 2024' },
+          ];
+    }
+    return [];
+  });
 
-  const [activities, setActivities] = useState<ActivityItem[]>([
-    { id: 1, type: 'CONTRACT_ACCEPTED', description: 'Contract accepted by Chathuni Imalsha', performedBy: 'Chathuni', createdAt: 'Sep 01, 2024' },
-    { id: 2, type: 'MILESTONE_DELIVERED', description: 'Wireframes submitted for Milestone 1', performedBy: 'Chathuni', createdAt: 'Sep 14, 2024' },
-    { id: 3, type: 'DELIVERABLE_APPROVED', description: 'Wireframes approved and funds released', performedBy: 'TechVentures Inc.', createdAt: 'Sep 15, 2024' },
-  ]);
+  const [activities, setActivities] = useState<ActivityItem[]>(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const saved = localStorage.getItem(`project_activities_${cleanId}`);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) return parsed;
+        }
+      } catch (e) {}
+    }
+    if (isDemoProject) {
+      return [
+        { id: 1, type: 'CONTRACT_ACCEPTED', description: `Contract accepted by ${activeFreelancer}`, performedBy: activeFreelancer, createdAt: 'Sep 01, 2024' },
+        { id: 2, type: 'MILESTONE_DELIVERED', description: 'Wireframes submitted for Milestone 1', performedBy: activeFreelancer, createdAt: 'Sep 14, 2024' },
+        { id: 3, type: 'DELIVERABLE_APPROVED', description: 'Wireframes approved and funds released', performedBy: 'TechVentures Inc.', createdAt: 'Sep 15, 2024' },
+      ];
+    }
+    return [];
+  });
 
-  const [files, setFiles] = useState<FileItem[]>([
-    { id: 'f1', originalFileName: 'wireframe-flows-v2.fig', fileSizeFormatted: '8.4 MB', uploadedBy: 'Chathuni', fileUrl: '', createdAt: 'Sep 10, 2024' },
-    { id: 'f2', originalFileName: 'brand-guidelines-final.pdf', fileSizeFormatted: '3.1 MB', uploadedBy: 'TechVentures', fileUrl: '', createdAt: 'Sep 12, 2024' },
-  ]);
+  const [files, setFiles] = useState<FileItem[]>(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const saved = localStorage.getItem(`project_files_${cleanId}`);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) return parsed;
+        }
+      } catch (e) {}
+    }
+    if (isDemoProject) {
+      return [
+        { id: 'f1', originalFileName: 'wireframe-flows-v2.fig', fileSizeFormatted: '8.4 MB', uploadedBy: activeFreelancer, fileUrl: '', createdAt: 'Sep 10, 2024' },
+        { id: 'f2', originalFileName: 'brand-guidelines-final.pdf', fileSizeFormatted: '3.1 MB', uploadedBy: 'TechVentures', fileUrl: '', createdAt: 'Sep 12, 2024' },
+      ];
+    }
+    return [];
+  });
 
-  const [deliverables, setDeliverables] = useState<DeliverableItem[]>(
-    isMobileAppContract
-      ? [
-        {
-          id: 'd-m4',
-          milestoneId: 'M-4',
-          fileName: 'architecture-and-specs.pdf',
-          fileSize: '4.8 MB',
-          notes: 'System architecture document and core wireframes',
-          uploadedAt: 'Oct 20, 2024',
-          status: 'APPROVED',
-        },
-      ]
-      : [
-        {
-          id: 'd1',
-          milestoneId: 'M-1',
-          fileName: 'wireframes-v1.zip',
-          fileSize: '12.4 MB',
-          notes: 'Initial wireframe flows and UX research',
-          uploadedAt: 'Sep 14, 2024',
-          status: 'APPROVED',
-        },
-      ]
-  );
+  const [deliverables, setDeliverables] = useState<DeliverableItem[]>(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const saved = localStorage.getItem(`project_deliverables_${cleanId}`);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) return parsed;
+        }
+      } catch (e) {}
+    }
+    if (isDemoProject) {
+      return isMobileAppContract
+        ? [
+            {
+              id: 'd-m4',
+              milestoneId: 'M-4',
+              fileName: 'architecture-and-specs.pdf',
+              fileSize: '4.8 MB',
+              notes: 'System architecture document and core wireframes',
+              uploadedAt: 'Oct 20, 2024',
+              status: 'APPROVED',
+            },
+          ]
+        : [
+            {
+              id: 'd1',
+              milestoneId: 'M-1',
+              fileName: 'wireframes-v1.zip',
+              fileSize: '12.4 MB',
+              notes: 'Initial wireframe flows and UX research',
+              uploadedAt: 'Sep 14, 2024',
+              status: 'APPROVED',
+            },
+          ];
+    }
+    return [];
+  });
 
   // Modal State for Deliverable Submission
   const [submitModalVisible, setSubmitModalVisible] = useState(false);
@@ -226,44 +323,57 @@ export default function ProjectDetailsScreen() {
 
       if (cResResult.status === 'fulfilled' && cResResult.value.data) {
         const d = cResResult.value.data;
-        setProject((prev) => ({
-          ...prev,
+        const updatedProject = {
           id: d.id,
           contractId: d.id,
-          title: d.title || prev.title,
-          clientName: d.clientName || prev.clientName,
-          timeline: d.timeline || (d.startDate + ' - ' + d.endDate),
-          totalBudget: d.totalBudget || prev.totalBudget,
+          title: d.title || (isDemoProject ? 'E-Commerce Redesign' : 'Project Details'),
+          clientName: d.clientName || (isDemoProject ? 'TechVentures Inc.' : 'Client'),
+          timeline: d.timeline || (d.startDate && d.endDate ? `${d.startDate} - ${d.endDate}` : ''),
+          totalBudget: d.totalBudget || 0,
           completionPercentage:
-            storedProgress !== null ? storedProgress : (d.completionPercentage ?? prev.completionPercentage),
+            storedProgress !== null ? storedProgress : (d.completionPercentage ?? (isDemoProject ? defaultInitialProgress : 0)),
           statusBadge: d.activeStatusBadge || (d.status === 'COMPLETED' ? 'Completed & Paid' : 'On Track'),
           status: d.status || 'ACTIVE',
-          description: d.description || prev.description,
-        }));
+          description: d.description || '',
+        };
+        setProject(updatedProject);
+        if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+          localStorage.setItem(`project_cache_${cleanId}`, JSON.stringify(updatedProject));
+        }
 
         if (d.milestones && d.milestones.length > 0) {
           if (typeof window !== 'undefined' && !localStorage.getItem(`project_milestones_${cleanId}`)) {
-            setMilestones(
-              d.milestones.map((m: any) => ({
-                id: m.id,
-                title: m.title,
-                amount: m.amount || 2000,
-                dueDate: m.dueDate || 'Nov 15, 2024',
-                status: m.status || 'PENDING',
-              }))
-            );
+            const mappedM = d.milestones.map((m: any) => ({
+              id: m.id,
+              title: m.title,
+              amount: m.amount || 2000,
+              dueDate: m.dueDate || 'Nov 15, 2024',
+              status: m.status || 'PENDING',
+            }));
+            setMilestones(mappedM);
+            localStorage.setItem(`project_milestones_${cleanId}`, JSON.stringify(mappedM));
           }
         }
       } else if (storedProgress !== null) {
-        setProject((prev) => ({ ...prev, completionPercentage: storedProgress! }));
+        setProject((prev: ProjectData) => ({ ...prev, completionPercentage: storedProgress! }));
       }
 
       if (actResResult.status === 'fulfilled' && actResResult.value.data && actResResult.value.data.length > 0) {
         setActivities(actResResult.value.data);
+        if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+          localStorage.setItem(`project_activities_${cleanId}`, JSON.stringify(actResResult.value.data));
+        }
+      } else if (!isDemoProject) {
+        setActivities([]);
       }
 
       if (fileResResult.status === 'fulfilled' && fileResResult.value.data && fileResResult.value.data.length > 0) {
         setFiles(fileResResult.value.data);
+        if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+          localStorage.setItem(`project_files_${cleanId}`, JSON.stringify(fileResResult.value.data));
+        }
+      } else if (!isDemoProject) {
+        setFiles([]);
       }
     } finally {
       setLoading(false);
@@ -386,7 +496,7 @@ Integrity Checksum: SHA256-${Math.random().toString(36).substring(2, 10).toUpper
                 id: 'f-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
                 originalFileName: f.name,
                 fileSizeFormatted: `${(f.size / (1024 * 1024)).toFixed(1)} MB`,
-                uploadedBy: 'Chathuni Imalsha',
+                uploadedBy: activeFreelancer,
                 fileUrl: Platform.OS === 'web' ? (window as any).URL.createObjectURL(f) : '',
                 createdAt: 'Just now',
               };
@@ -398,7 +508,7 @@ Integrity Checksum: SHA256-${Math.random().toString(36).substring(2, 10).toUpper
                 formData.append('file', f);
                 formData.append('relatedEntityType', 'PROJECT');
                 formData.append('relatedEntityId', projectId);
-                formData.append('uploadedBy', 'Chathuni Imalsha');
+                formData.append('uploadedBy', activeFreelancer);
 
                 fetch(`${API_BASE_URL}/files/upload`, {
                   method: 'POST',
@@ -442,7 +552,7 @@ Integrity Checksum: SHA256-${Math.random().toString(36).substring(2, 10).toUpper
 
       setMilestones(updatedMilestones);
       setDeliverables(updatedDeliverables);
-      setProject((prev) => ({
+      setProject((prev: ProjectData) => ({
         ...prev,
         completionPercentage: newProgress,
         statusBadge: newProgress === 100 ? 'Completed & Paid' : 'On Track',
@@ -489,7 +599,7 @@ Integrity Checksum: SHA256-${Math.random().toString(36).substring(2, 10).toUpper
       const newProgress = Math.round(baseProg + (fullProg - baseProg) * ratio);
 
       setDeliverables(updatedDeliverables);
-      setProject((prev) => ({
+      setProject((prev: ProjectData) => ({
         ...prev,
         completionPercentage: newProgress,
         statusBadge: newProgress === 100 ? 'Completed & Paid' : 'On Track',
@@ -516,7 +626,7 @@ Integrity Checksum: SHA256-${Math.random().toString(36).substring(2, 10).toUpper
 
         setMilestones(updatedMilestones);
         setDeliverables(updatedDeliverables);
-        setProject((prev) => ({
+        setProject((prev: ProjectData) => ({
           ...prev,
           completionPercentage: newProgress,
           statusBadge: newProgress === 100 ? 'Completed & Paid' : 'On Track',
@@ -561,7 +671,7 @@ Integrity Checksum: SHA256-${Math.random().toString(36).substring(2, 10).toUpper
 
       setMilestones(updatedMilestones);
       setDeliverables(updatedDeliverables);
-      setProject((prev) => ({
+      setProject((prev: ProjectData) => ({
         ...prev,
         completionPercentage: newProgress,
         statusBadge: newProgress === 100 ? 'Completed & Paid' : 'On Track',
@@ -599,7 +709,7 @@ Integrity Checksum: SHA256-${Math.random().toString(36).substring(2, 10).toUpper
 
       setDeliverables(updatedDeliverables);
       setMilestones(updatedMilestones);
-      setProject((prev) => ({
+      setProject((prev: ProjectData) => ({
         ...prev,
         completionPercentage: newProgress,
         statusBadge: newProgress === 100 ? 'Completed & Paid' : 'On Track',
@@ -639,7 +749,7 @@ Integrity Checksum: SHA256-${Math.random().toString(36).substring(2, 10).toUpper
 
     setDeliverables(remainingDeliverables);
     setMilestones(updatedMilestones);
-    setProject((prev) => ({
+    setProject((prev: ProjectData) => ({
       ...prev,
       completionPercentage: newProgress,
       statusBadge: newProgress === 100 ? 'Completed & Paid' : 'On Track',
@@ -660,7 +770,7 @@ Integrity Checksum: SHA256-${Math.random().toString(36).substring(2, 10).toUpper
       );
       const newProgress = calculateProgressFromMilestones(updatedMilestones);
       setMilestones(updatedMilestones);
-      setProject((prev) => ({
+      setProject((prev: ProjectData) => ({
         ...prev,
         completionPercentage: newProgress,
         statusBadge: newProgress === 100 ? 'Completed & Paid' : 'On Track',
@@ -795,7 +905,12 @@ Integrity Checksum: SHA256-${Math.random().toString(36).substring(2, 10).toUpper
               </View>
 
               <View style={styles.milestoneList}>
-                {milestones.map((m) => {
+                {milestones.length === 0 ? (
+                  <View style={styles.emptyCard}>
+                    <Text style={styles.emptyText}>No milestones configured for this project yet.</Text>
+                  </View>
+                ) : (
+                  milestones.map((m) => {
                   const isReleased = m.status === 'RELEASED' || m.status === 'COMPLETED' || m.status === 'APPROVED';
                   const isSubmitted = m.status === 'SUBMITTED' || m.status === 'DELIVERED';
                   const isFunded = m.status === 'FUNDED' || m.status === 'IN_PROGRESS';
@@ -872,8 +987,9 @@ Integrity Checksum: SHA256-${Math.random().toString(36).substring(2, 10).toUpper
                       </View>
                     </View>
                   );
-                })}
-              </View>
+                })
+              )}
+            </View>
             </View>
           )}
 
@@ -968,7 +1084,7 @@ Integrity Checksum: SHA256-${Math.random().toString(36).substring(2, 10).toUpper
                             id: d.id,
                             originalFileName: d.fileName,
                             fileSizeFormatted: d.fileSize || '3.5 MB',
-                            uploadedBy: 'Chathuni Imalsha',
+                            uploadedBy: activeFreelancer,
                             fileUrl: '',
                             createdAt: d.uploadedAt || 'Recently',
                           })
@@ -1089,17 +1205,23 @@ Integrity Checksum: SHA256-${Math.random().toString(36).substring(2, 10).toUpper
             <View style={styles.tabContent}>
               <Text style={styles.descHeading}>Project Activity Log</Text>
               <View style={styles.activityList}>
-                {activities.map((act) => (
-                  <View key={act.id} style={styles.activityItem}>
-                    <View style={styles.activityDot} />
-                    <View style={styles.activityContent}>
-                      <Text style={styles.activityText}>{act.description}</Text>
-                      <Text style={styles.activityMeta}>
-                        {act.performedBy} • {act.createdAt}
-                      </Text>
-                    </View>
+                {activities.length === 0 ? (
+                  <View style={styles.emptyCard}>
+                    <Text style={styles.emptyText}>No recent activity logged for this project yet.</Text>
                   </View>
-                ))}
+                ) : (
+                  activities.map((act) => (
+                    <View key={act.id} style={styles.activityItem}>
+                      <View style={styles.activityDot} />
+                      <View style={styles.activityContent}>
+                        <Text style={styles.activityText}>{act.description}</Text>
+                        <Text style={styles.activityMeta}>
+                          {act.performedBy} • {act.createdAt}
+                        </Text>
+                      </View>
+                    </View>
+                  ))
+                )}
               </View>
             </View>
           )}

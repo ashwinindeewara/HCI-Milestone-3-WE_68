@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import Colors from '../src/constants/colors';
-import apiClient from '../src/services/api';
+import { apiClient, getCurrentUser } from '../src/services/api';
 import {
   HomeIcon,
   ProjectsIcon,
@@ -21,35 +21,88 @@ import {
   ProfileIcon,
 } from '../src/components/Icons';
 
+interface MilestoneItem {
+  id: string;
+  title: string;
+  amount: string;
+}
+
+interface ContractDetailData {
+  id: string;
+  title: string;
+  clientName: string;
+  paymentTerms: string;
+  totalBudget: number;
+  deliverables: string[];
+  milestones: MilestoneItem[];
+  signatoryName: string;
+  signedDate: string;
+  isSigned: boolean;
+  status: string;
+}
+
 export default function ContractDetailsScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const currentUser = getCurrentUser();
+  const isChathuni =
+    currentUser?.email === 'chathuniimalsha.com' ||
+    (currentUser?.fullName && currentUser.fullName.toLowerCase().includes('chathuni'));
+  const activeFreelancerName = currentUser?.fullName || (isChathuni ? 'Chathuni Imalsha' : 'Freelancer');
 
   const [loading, setLoading] = useState(false);
   const [signing, setSigning] = useState(false);
   const [signedSuccess, setSignedSuccess] = useState(false);
-  const [freelancerSignature, setFreelancerSignature] = useState('Chathuni Imalsha');
+  const [freelancerSignature, setFreelancerSignature] = useState(currentUser?.fullName || (isChathuni ? 'Chathuni Imalsha' : ''));
 
-  const [contract, setContract] = useState({
-    id: id || 'C-101',
-    title: 'E-Commerce Redesign',
-    clientName: 'TechVentures Inc.',
-    paymentTerms: 'Milestone-based (Escrow Protection)',
-    totalBudget: 8000.0,
-    deliverables: [
-      'Full UX Research and interactive wireframes',
-      'Figma Design System setup & component library',
-      '24 High-fidelity viewport layouts (desktop & mobile)',
-    ],
-    milestones: [
-      { id: '1', title: '1. Wireframes approved', amount: '$2,000' },
-      { id: '2', title: '2. Design system finalized', amount: '$3,000' },
-      { id: '3', title: '3. High-fidelity handover', amount: '$3,000' },
-    ],
-    signatoryName: 'Sarah Chen',
-    signedDate: 'Signed Oct 05, 2024',
-    isSigned: false,
-    status: 'PENDING',
+  const isChathuniDemo = isChathuni && (!id || id === 'C-101');
+
+  const [contract, setContract] = useState<ContractDetailData>(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const s = localStorage.getItem(`contract_details_cache_${id}`);
+        if (s) {
+          const p = JSON.parse(s);
+          if (p && p.title) return p;
+        }
+      } catch (e) {}
+    }
+    if (isChathuniDemo) {
+      return {
+        id: id || 'C-101',
+        title: 'E-Commerce Redesign',
+        clientName: 'TechVentures Inc.',
+        paymentTerms: 'Milestone-based (Escrow Protection)',
+        totalBudget: 8000.0,
+        deliverables: [
+          'Full UX Research and interactive wireframes',
+          'Figma Design System setup & component library',
+          '24 High-fidelity viewport layouts (desktop & mobile)',
+        ],
+        milestones: [
+          { id: '1', title: '1. Wireframes approved', amount: '$2,000' },
+          { id: '2', title: '2. Design system finalized', amount: '$3,000' },
+          { id: '3', title: '3. High-fidelity handover', amount: '$3,000' },
+        ],
+        signatoryName: 'Sarah Chen',
+        signedDate: 'Signed Oct 05, 2024',
+        isSigned: false,
+        status: 'PENDING',
+      };
+    }
+    return {
+      id: id || '',
+      title: '',
+      clientName: '',
+      paymentTerms: 'Milestone-based (Escrow Protection)',
+      totalBudget: 0,
+      deliverables: [],
+      milestones: [],
+      signatoryName: '',
+      signedDate: '',
+      isSigned: false,
+      status: 'OFFERED',
+    };
   });
 
   useEffect(() => {
@@ -59,21 +112,37 @@ export default function ContractDetailsScreen() {
         .then((res) => {
           if (res.data) {
             const d = res.data;
-            setContract((prev) => ({
-              ...prev,
-              title: d.title || prev.title,
-              clientName: d.clientName || prev.clientName,
-              paymentTerms: d.paymentTerms || prev.paymentTerms,
-              totalBudget: d.totalBudget || prev.totalBudget,
-              signatoryName: d.signatoryName || prev.signatoryName,
-              signedDate: d.signedDate || prev.signedDate,
-              isSigned: d.isSigned ?? prev.isSigned,
-              status: d.status || prev.status,
-            }));
+            const updated = {
+              id: d.id || id,
+              title: d.title || '',
+              clientName: d.clientName || '',
+              paymentTerms: d.paymentTerms || 'Milestone-based (Escrow Protection)',
+              totalBudget: d.totalBudget || 0,
+              deliverables: Array.isArray(d.deliverables)
+                ? d.deliverables
+                : (d.keyDeliverables ? d.keyDeliverables.split('\n') : []),
+              milestones: Array.isArray(d.milestones) && d.milestones.length > 0
+                ? d.milestones.map((m: any) => ({
+                    id: m.id,
+                    title: m.title,
+                    amount: typeof m.amount === 'number' ? `$${m.amount.toLocaleString()}` : (m.amount || '$0'),
+                  }))
+                : [],
+              signatoryName: d.signatoryName || '',
+              signedDate: d.signedDate || '',
+              isSigned: d.isSigned ?? false,
+              status: d.status || 'PENDING',
+            };
+            setContract(updated);
+            if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+              try {
+                localStorage.setItem(`contract_details_cache_${id}`, JSON.stringify(updated));
+              } catch (e) {}
+            }
           }
         })
         .catch(() => {
-          // Use default state
+          // Keep current state
         });
     }
   }, [id]);
@@ -84,13 +153,14 @@ export default function ContractDetailsScreen() {
   const handleSignContract = async () => {
     setSigning(true);
     try {
-      await apiClient.post(`/contracts/${contract.id}/accept?signerName=Chathuni%20Imalsha`);
+      const signerParam = encodeURIComponent(freelancerSignature.trim() || activeFreelancerName);
+      await apiClient.post(`/contracts/${contract.id}/accept?signerName=${signerParam}`);
       setSignedSuccess(true);
-      setContract((prev) => ({ ...prev, isSigned: true, status: 'ACCEPTED' }));
+      setContract((prev: ContractDetailData) => ({ ...prev, isSigned: true, status: 'ACCEPTED' }));
     } catch {
       // In offline mode, still succeed
       setSignedSuccess(true);
-      setContract((prev) => ({ ...prev, isSigned: true, status: 'ACCEPTED' }));
+      setContract((prev: ContractDetailData) => ({ ...prev, isSigned: true, status: 'ACCEPTED' }));
     } finally {
       setSigning(false);
     }
@@ -101,10 +171,10 @@ export default function ContractDetailsScreen() {
     try {
       await apiClient.post(`/contracts/${contract.id}/reject?reason=Scope%20and%20terms%20declined`);
       setRejectedSuccess(true);
-      setContract((prev) => ({ ...prev, isSigned: false, status: 'REJECTED' }));
+      setContract((prev: ContractDetailData) => ({ ...prev, isSigned: false, status: 'REJECTED' }));
     } catch {
       setRejectedSuccess(true);
-      setContract((prev) => ({ ...prev, isSigned: false, status: 'REJECTED' }));
+      setContract((prev: ContractDetailData) => ({ ...prev, isSigned: false, status: 'REJECTED' }));
     } finally {
       setRejecting(false);
     }
@@ -162,7 +232,7 @@ export default function ContractDetailsScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionHeading}>Key Deliverables</Text>
             <View style={styles.bulletList}>
-              {contract.deliverables.map((item, idx) => (
+              {contract.deliverables.map((item: string, idx: number) => (
                 <View key={idx} style={styles.bulletRow}>
                   <Text style={styles.bulletDot}>•</Text>
                   <Text style={styles.bulletText}>{item}</Text>
@@ -177,7 +247,7 @@ export default function ContractDetailsScreen() {
               Milestones ({contract.milestones.length})
             </Text>
             <View style={styles.milestonesList}>
-              {contract.milestones.map((m) => (
+              {contract.milestones.map((m: MilestoneItem) => (
                 <View key={m.id} style={styles.milestoneRowCard}>
                   <Text style={styles.milestoneRowTitle}>{m.title}</Text>
                   <Text style={styles.milestoneRowAmount}>{m.amount}</Text>
@@ -201,7 +271,7 @@ export default function ContractDetailsScreen() {
                   </View>
                 </View>
                 <View style={styles.signatureDivider} />
-                <Text style={styles.signerDate}>• {contract.signedDate} • TechVentures Inc.</Text>
+                <Text style={styles.signerDate}>• {contract.signedDate} • {contract.clientName || 'Client'}</Text>
               </View>
             </View>
 
@@ -254,10 +324,10 @@ export default function ContractDetailsScreen() {
                 <View style={styles.signHereActionsRow}>
                   <TouchableOpacity
                     style={styles.sigAutoFillBtn}
-                    onPress={() => setFreelancerSignature('Chathuni Imalsha')}
+                    onPress={() => setFreelancerSignature(activeFreelancerName)}
                     activeOpacity={0.8}
                   >
-                    <Text style={styles.sigAutoFillBtnText}>✍️ Auto-Fill "Chathuni Imalsha"</Text>
+                    <Text style={styles.sigAutoFillBtnText}>✍️ Auto-Fill "{activeFreelancerName}"</Text>
                   </TouchableOpacity>
 
                   {freelancerSignature ? (
@@ -266,7 +336,7 @@ export default function ContractDetailsScreen() {
                       onPress={() => {
                         setFreelancerSignature('');
                         setSignedSuccess(false);
-                        setContract((prev) => ({ ...prev, isSigned: false }));
+                        setContract((prev: ContractDetailData) => ({ ...prev, isSigned: false }));
                       }}
                       activeOpacity={0.8}
                     >
@@ -310,7 +380,7 @@ export default function ContractDetailsScreen() {
                   style={styles.btnReSign}
                   onPress={() => {
                     setSignedSuccess(false);
-                    setContract((prev) => ({ ...prev, isSigned: false }));
+                    setContract((prev: ContractDetailData) => ({ ...prev, isSigned: false }));
                     setFreelancerSignature('');
                   }}
                   activeOpacity={0.85}
