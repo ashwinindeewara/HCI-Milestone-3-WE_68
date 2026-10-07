@@ -19,6 +19,7 @@ import AdminToast, { ToastType } from '../src/components/AdminToast';
 import SkeletonCard from '../src/components/SkeletonCard';
 import { useQuery } from '@tanstack/react-query';
 import apiClient, { API_BASE_URL } from '../src/services/api';
+import { formatAdminMoney } from '../src/services/moneyFormat';
 import { getUserSession, saveUserSession, clearUserSession } from '../src/services/storage';
 import {
   AdminIcon,
@@ -392,7 +393,7 @@ export default function AdminDashboardScreen() {
                     <Text style={styles.rowSub} numberOfLines={1}>{txn.title}</Text>
                   </View>
                   <View style={styles.rowRight}>
-                    <Text style={styles.amount}>{txn.amount}</Text>
+                    <Text style={styles.amount}>{formatAdminMoney(txn.amount)}</Text>
                     <StatusPill label={txn.status} tone={txn.status === 'Escrow' ? 'success' : 'info'} />
                   </View>
                 </TouchableOpacity>
