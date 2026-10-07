@@ -23,7 +23,7 @@ public class ContractController {
 
     @GetMapping("/freelancer")
     public ResponseEntity<List<Contract>> getFreelancerContracts(
-            @RequestParam(required = false, defaultValue = "Chathuni Imalsha") String freelancerName
+            @RequestParam(required = false) String freelancerName
     ) {
         return ResponseEntity.ok(contractService.getFreelancerContracts(freelancerName));
     }
@@ -46,7 +46,7 @@ public class ContractController {
     @PostMapping("/{id}/sign")
     public ResponseEntity<Contract> signContract(
             @PathVariable String id,
-            @RequestParam(required = false, defaultValue = "Chathuni Imalsha") String signerName
+            @RequestParam(required = false) String signerName
     ) {
         return ResponseEntity.ok(contractService.signContract(id, signerName));
     }
@@ -54,7 +54,7 @@ public class ContractController {
     @PostMapping("/{id}/accept")
     public ResponseEntity<Contract> acceptContract(
             @PathVariable String id,
-            @RequestParam(required = false, defaultValue = "Chathuni Imalsha") String signerName
+            @RequestParam(required = false) String signerName
     ) {
         return ResponseEntity.ok(contractService.acceptContract(id, signerName));
     }
@@ -102,5 +102,11 @@ public class ContractController {
                 .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"Contract_" + contract.getId() + "_Agreement.pdf\"")
                 .header(org.springframework.http.HttpHeaders.CONTENT_TYPE, "application/pdf")
                 .body(bytes);
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteContract(@PathVariable String id) {
+        contractService.deleteContract(id);
+        return ResponseEntity.noContent().build();
     }
 }

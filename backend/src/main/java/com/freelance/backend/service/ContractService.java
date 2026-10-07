@@ -39,11 +39,14 @@ public class ContractService {
                 ? "$" + String.format("%,.0f", saved.getTotalBudget())
                 : "$8,500";
 
+        String freelancer = saved.getFreelancerName();
         String client = saved.getClientName() != null && !saved.getClientName().isBlank()
                 ? saved.getClientName()
                 : "TechVentures Inc.";
 
         Notification notif = new Notification(
+                freelancer,
+                client,
                 saved.getTitle() != null ? saved.getTitle() : "New Project Contract",
                 "New contract offer from " + client + " • Signature Required",
                 "New Contract",
@@ -56,7 +59,7 @@ public class ContractService {
                 "Just now",
                 "CONTRACT_RECEIVED",
                 saved.getId(),
-                "Client " + client + " has sent you a new contract proposal for '" + saved.getTitle() + "' with total budget of " + amountFormatted + ". Review milestones and sign to start work."
+                "Client " + client + " has selected you and sent a contract offer for '" + saved.getTitle() + "' with total budget of " + amountFormatted + ". Review milestones and sign to start work."
         );
         notificationRepository.save(notif);
 
@@ -69,6 +72,8 @@ public class ContractService {
 
         if ("ACTIVE".equalsIgnoreCase(status) || "IN_PROGRESS".equalsIgnoreCase(status)) {
             Notification notif = new Notification(
+                    contract.getFreelancerName(),
+                    contract.getClientName(),
                     contract.getTitle(),
                     "Contract activated with " + contract.getClientName() + " • Escrow Funded",
                     "Contract Active",
@@ -91,11 +96,9 @@ public class ContractService {
 
     public List<Contract> getFreelancerContracts(String freelancerName) {
         if (freelancerName != null && !freelancerName.isBlank()) {
-            return contractRepository.findAll().stream()
-                    .filter(c -> freelancerName.equalsIgnoreCase(c.getFreelancerName()))
-                    .toList();
+            return contractRepository.findByFreelancerNameIgnoreCase(freelancerName.trim());
         }
-        return contractRepository.findAll();
+        return List.of();
     }
 
     public Contract acceptContract(String id, String signerName) {
@@ -118,6 +121,8 @@ public class ContractService {
 
         // Freelancer confirmation notification
         Notification notifFreelancer = new Notification(
+                contract.getFreelancerName(),
+                contract.getClientName(),
                 contract.getTitle(),
                 "Contract accepted & project activated for " + contract.getClientName(),
                 "Contract Active",
@@ -136,6 +141,8 @@ public class ContractService {
 
         // Client notification
         Notification notifClient = new Notification(
+                contract.getClientName(),
+                contract.getFreelancerName(),
                 "Contract Signed by " + contract.getFreelancerName(),
                 contract.getFreelancerName() + " has signed the contract for " + contract.getTitle() + ". Project is now active.",
                 "Contract Signed",
@@ -164,6 +171,8 @@ public class ContractService {
         String rejectionReason = (reason != null && !reason.isBlank()) ? reason : "Terms not accepted";
 
         Notification notifClient = new Notification(
+                contract.getClientName(),
+                contract.getFreelancerName(),
                 "Contract Declined by " + contract.getFreelancerName(),
                 contract.getFreelancerName() + " declined the contract for " + contract.getTitle() + ". Reason: " + rejectionReason,
                 "Contract Rejected",
@@ -181,5 +190,9 @@ public class ContractService {
         notificationRepository.save(notifClient);
 
         return saved;
+    }
+
+    public void deleteContract(String id) {
+        contractRepository.deleteById(id);
     }
 }
