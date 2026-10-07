@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, DimensionValue } from 'react-native';
+import { Animated, StyleSheet, DimensionValue, Platform } from 'react-native';
 import Colors from '../constants/colors';
 import Theme from '../constants/theme';
 
@@ -19,12 +19,12 @@ export default function SkeletonCard({ width = '100%', height = 80, borderRadius
         Animated.timing(pulseAnim, {
           toValue: 0.7,
           duration: 800,
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== 'web',
         }),
         Animated.timing(pulseAnim, {
           toValue: 0.3,
           duration: 800,
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== 'web',
         }),
       ])
     ).start();
@@ -43,7 +43,7 @@ export default function SkeletonCard({ width = '100%', height = 80, borderRadius
 
 const styles = StyleSheet.create({
   skeleton: {
-    backgroundColor: Colors.neutralLight,
+    backgroundColor: Colors.border,
     marginBottom: Theme.spacing.md,
   },
 });
