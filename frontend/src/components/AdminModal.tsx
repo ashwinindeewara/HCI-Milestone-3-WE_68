@@ -10,6 +10,8 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  StyleProp,
+  ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Colors from '../constants/colors';
@@ -182,8 +184,16 @@ export function AdminSectionTitle({ children }: { children: React.ReactNode }) {
   return <Text style={styles.sectionTitle}>{children}</Text>;
 }
 
-export function AdminTag({ label, tone = 'neutral' }: { label: string; tone?: Tone }) {
-  return <StatusPill label={label} tone={tone} />;
+export function AdminTag({
+  label,
+  tone = 'neutral',
+  style,
+}: {
+  label: string;
+  tone?: Tone;
+  style?: StyleProp<ViewStyle>;
+}) {
+  return <StatusPill label={label} tone={tone} style={style} />;
 }
 
 const NOTICE_ICON: Record<Tone, AdminIconName> = {
