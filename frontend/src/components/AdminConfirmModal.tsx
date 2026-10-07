@@ -1,7 +1,7 @@
 import React from 'react';
 import { Modal, View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import Colors from '../constants/colors';
-import Theme from '../constants/theme';
+import { adminRadius, adminSpace, adminShadow } from '../constants/adminTheme';
 
 interface AdminConfirmModalProps {
   visible: boolean;
@@ -52,52 +52,55 @@ export default function AdminConfirmModal({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(16, 24, 39, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: Theme.spacing.lg,
+    padding: adminSpace.xl,
   },
   modalBox: {
     width: '100%',
     maxWidth: 400,
     backgroundColor: Colors.surface,
-    borderRadius: Theme.borderRadius.lg,
-    padding: Theme.spacing.lg,
-    ...Theme.shadows.card,
+    borderRadius: adminRadius.lg + 4,
+    padding: adminSpace.xl,
+    ...adminShadow.raised,
   },
   title: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '800',
     color: Colors.dark,
-    marginBottom: Theme.spacing.sm,
+    marginBottom: adminSpace.sm,
   },
   message: {
     fontSize: 14,
     color: Colors.neutralMedium,
-    marginBottom: Theme.spacing.xl,
-    lineHeight: 20,
+    marginBottom: adminSpace.xl,
+    lineHeight: 21,
   },
   buttonRow: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    gap: Theme.spacing.md,
+    gap: adminSpace.sm,
   },
   cancelBtn: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: Theme.borderRadius.md,
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: adminSpace.lg,
+    borderRadius: adminRadius.md,
     borderWidth: 1,
     borderColor: Colors.border,
+    backgroundColor: Colors.surface,
   },
   cancelText: {
-    color: Colors.neutralMedium,
-    fontWeight: '600',
+    color: Colors.dark,
+    fontWeight: '700',
   },
   confirmBtn: {
     backgroundColor: Colors.primary,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: Theme.borderRadius.md,
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: adminSpace.lg,
+    borderRadius: adminRadius.md,
     minWidth: 100,
     alignItems: 'center',
   },
