@@ -17,16 +17,22 @@ public class ReconciliationRecord {
     @Column(nullable = false)
     private String batchId;
 
-    @Column(nullable = false)
-    private Double amount;
+    @Column(name = "expected_amount")
+    private Double expectedAmount;
 
+    @Column(name = "received_amount")
     private Double receivedAmount;
+
     private Double difference;
 
+    private Double amount;
+
     @Column(nullable = false)
-    private String status; // MATCHED, UNMATCHED, DISCREPANCY
+    private String status; // MATCHED, UNMATCHED, PENDING, DISCREPANCY
 
     private String transactionDate;
+
+    @Column(columnDefinition = "TEXT")
     private String notes;
 
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -34,23 +40,27 @@ public class ReconciliationRecord {
 
     public ReconciliationRecord() {}
 
-    public ReconciliationRecord(String referenceNo, String batchId, Double amount, String status, String transactionDate, String notes) {
+    // Fully loaded constructor
+    public ReconciliationRecord(String referenceNo, String batchId, Double expectedAmount, Double receivedAmount, String status, String transactionDate, String notes) {
         this.referenceNo = referenceNo;
         this.batchId = batchId;
-        this.amount = amount;
-        this.receivedAmount = amount;
-        this.difference = 0.0;
+        this.expectedAmount = expectedAmount;
+        this.receivedAmount = receivedAmount;
+        this.amount = expectedAmount;
+        this.difference = (receivedAmount != null && expectedAmount != null) ? receivedAmount - expectedAmount : 0.0;
         this.status = status;
         this.transactionDate = transactionDate;
         this.notes = notes;
     }
 
-    public ReconciliationRecord(String referenceNo, String batchId, Double expectedAmount, Double receivedAmount, String status, String transactionDate, String notes) {
+    // Simplified constructor
+    public ReconciliationRecord(String referenceNo, String batchId, Double expectedAmount, String status, String transactionDate, String notes) {
         this.referenceNo = referenceNo;
         this.batchId = batchId;
+        this.expectedAmount = expectedAmount;
+        this.receivedAmount = expectedAmount;
         this.amount = expectedAmount;
-        this.receivedAmount = receivedAmount;
-        this.difference = (expectedAmount != null && receivedAmount != null) ? expectedAmount - receivedAmount : 0.0;
+        this.difference = 0.0;
         this.status = status;
         this.transactionDate = transactionDate;
         this.notes = notes;
@@ -81,7 +91,7 @@ public class ReconciliationRecord {
     }
 
     public Double getAmount() {
-        return amount;
+        return amount != null ? amount : expectedAmount;
     }
 
     public void setAmount(Double amount) {
@@ -89,27 +99,41 @@ public class ReconciliationRecord {
     }
 
     public Double getExpectedAmount() {
-        return amount;
+        if (expectedAmount != null) return expectedAmount;
+        return amount != null ? amount : 0.0;
     }
 
     public void setExpectedAmount(Double expectedAmount) {
+        this.expectedAmount = expectedAmount;
         this.amount = expectedAmount;
+        recalculateDifference();
     }
 
     public Double getReceivedAmount() {
-        return receivedAmount;
+        if (receivedAmount != null) return receivedAmount;
+        return getExpectedAmount();
     }
 
     public void setReceivedAmount(Double receivedAmount) {
         this.receivedAmount = receivedAmount;
+        recalculateDifference();
     }
 
     public Double getDifference() {
-        return difference;
+        if (difference != null) return difference;
+        Double rec = getReceivedAmount();
+        Double exp = getExpectedAmount();
+        return (rec != null && exp != null) ? rec - exp : 0.0;
     }
 
     public void setDifference(Double difference) {
         this.difference = difference;
+    }
+
+    private void recalculateDifference() {
+        Double rec = getReceivedAmount();
+        Double exp = getExpectedAmount();
+        this.difference = (rec != null && exp != null) ? rec - exp : 0.0;
     }
 
     public String getStatus() {

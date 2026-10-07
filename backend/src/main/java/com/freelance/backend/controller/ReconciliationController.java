@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping({ "/api/v1/reconciliation", "/api/reconciliation", "/api/v1/staff/reconcile", "/api/staff/reconcile" })
+@RequestMapping({"/api/v1/reconciliation", "/api/reconciliation", "/api/v1/staff/reconcile", "/api/staff/reconcile"})
 @CrossOrigin(origins = "*")
 public class ReconciliationController {
 
@@ -23,8 +23,7 @@ public class ReconciliationController {
     }
 
     @GetMapping
-    public ResponseEntity<List<ReconciliationRecord>> getReconciliationRecords(
-            @RequestParam(required = false) String status) {
+    public ResponseEntity<List<ReconciliationRecord>> getReconciliationRecords(@RequestParam(required = false) String status) {
         return ResponseEntity.ok(reconciliationService.getReconciliationRecords(status));
     }
 

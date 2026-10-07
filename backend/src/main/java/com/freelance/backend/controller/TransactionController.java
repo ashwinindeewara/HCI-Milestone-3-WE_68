@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping({ "/api/v1/transactions", "/api/transactions" })
+@RequestMapping({"/api/v1/transactions", "/api/transactions"})
 @CrossOrigin(origins = "*")
 public class TransactionController {
 

@@ -179,6 +179,7 @@ public class DataInitializer implements CommandLineRunner {
                         "REFUNDED", "Oct 10, 2024"),
                 new Transaction("TXN-2841", "FTX-90130", "C-107", "M-1", "Database Migration Project Escrow", 2400.0,
                         "FUND", "PENDING", "Oct 09, 2024"));
+        
         for (Transaction tx : initialTxns) {
             if (!transactionRepository.existsById(tx.getId())) {
                 transactionRepository.save(tx);
@@ -216,6 +217,7 @@ public class DataInitializer implements CommandLineRunner {
                     "MATCHED", "2026-10-05", "Direct deposit matched"));
         }
     }
+
 
     private void seedSecurityLogs() {
         if (securityLogRepository.count() == 0) {
