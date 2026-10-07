@@ -15,29 +15,32 @@ import java.util.stream.Collectors;
 @Service
 public class AdminService {
 
-    @Autowired
-    private UserRepository userRepository;
+    private final UserRepository userRepository;
+    private final TransactionRepository transactionRepository;
+    private final DisputeRepository disputeRepository;
+    private final SecurityLogRepository securityLogRepository;
+    private final BlockedIpRepository blockedIpRepository;
+    private final AdminAuditLogRepository adminAuditLogRepository;
+    private final MilestoneRepository milestoneRepository;
+    private final ReconciliationRepository reconciliationRepository;
 
-    @Autowired
-    private TransactionRepository transactionRepository;
-
-    @Autowired
-    private DisputeRepository disputeRepository;
-
-    @Autowired
-    private SecurityLogRepository securityLogRepository;
-
-    @Autowired
-    private BlockedIpRepository blockedIpRepository;
-
-    @Autowired
-    private AdminAuditLogRepository adminAuditLogRepository;
-
-    @Autowired
-    private MilestoneRepository milestoneRepository;
-
-    @Autowired
-    private ReconciliationRepository reconciliationRepository;
+    public AdminService(UserRepository userRepository,
+                        TransactionRepository transactionRepository,
+                        DisputeRepository disputeRepository,
+                        SecurityLogRepository securityLogRepository,
+                        BlockedIpRepository blockedIpRepository,
+                        AdminAuditLogRepository adminAuditLogRepository,
+                        MilestoneRepository milestoneRepository,
+                        ReconciliationRepository reconciliationRepository) {
+        this.userRepository = userRepository;
+        this.transactionRepository = transactionRepository;
+        this.disputeRepository = disputeRepository;
+        this.securityLogRepository = securityLogRepository;
+        this.blockedIpRepository = blockedIpRepository;
+        this.adminAuditLogRepository = adminAuditLogRepository;
+        this.milestoneRepository = milestoneRepository;
+        this.reconciliationRepository = reconciliationRepository;
+    }
 
     private void logAdminAudit(String actionType, String targetId, String details) {
         try {

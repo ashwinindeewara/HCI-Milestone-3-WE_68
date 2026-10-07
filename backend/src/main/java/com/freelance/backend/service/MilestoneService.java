@@ -16,11 +16,13 @@ import java.util.UUID;
 @Service
 public class MilestoneService {
 
-    @Autowired
-    private MilestoneRepository milestoneRepository;
+    private final MilestoneRepository milestoneRepository;
+    private final DeliverableRepository deliverableRepository;
 
-    @Autowired
-    private DeliverableRepository deliverableRepository;
+    public MilestoneService(MilestoneRepository milestoneRepository, DeliverableRepository deliverableRepository) {
+        this.milestoneRepository = milestoneRepository;
+        this.deliverableRepository = deliverableRepository;
+    }
 
     public List<Milestone> getMilestonesByContract(String contractId) {
         return milestoneRepository.findByContractId(contractId);
