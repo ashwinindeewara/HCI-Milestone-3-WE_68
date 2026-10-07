@@ -9,6 +9,9 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
 import java.util.stream.Collectors;
 
@@ -54,6 +57,20 @@ public class GlobalExceptionHandler {
                 HttpStatus.BAD_REQUEST.value(),
                 "Malformed JSON request payload or missing required request body."
         );
+        return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ErrorResponse> handleMaxUploadSize(MaxUploadSizeExceededException ex) {
+        logger.warn("[400 BAD REQUEST] Upload exceeds the configured size limit: {}", ex.getMessage());
+        ErrorResponse error = new ErrorResponse(HttpStatus.BAD_REQUEST.value(), "File is too large. Maximum size is 5 MB.");
+        return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler({MissingServletRequestPartException.class, MissingServletRequestParameterException.class})
+    public ResponseEntity<ErrorResponse> handleMissingRequestData(Exception ex) {
+        logger.warn("[400 BAD REQUEST] Missing request data: {}", ex.getMessage());
+        ErrorResponse error = new ErrorResponse(HttpStatus.BAD_REQUEST.value(), ex.getMessage());
         return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
     }
 
