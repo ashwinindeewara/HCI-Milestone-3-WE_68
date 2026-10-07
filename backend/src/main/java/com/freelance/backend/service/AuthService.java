@@ -68,11 +68,18 @@ public class AuthService {
 
         if (user == null) {
             user = new User(fullName, cleanEmail, hashPassword(password), role, "Active");
-            try {
-                user = userRepository.save(user);
-            } catch (Exception e) {
-                // Ignore DB error for duplicate key or auto-generation
+        } else {
+            user.setPassword(hashPassword(password));
+            user.setFullName(fullName);
+            if (role != null) {
+                user.setRole(role);
             }
+        }
+        
+        try {
+            user = userRepository.save(user);
+        } catch (Exception e) {
+            // Ignore DB error for duplicate key or auto-generation
         }
 
         String mockJwt = "jwt_token_" + UUID.randomUUID().toString();
@@ -129,10 +136,8 @@ public class AuthService {
         }
 
         String hashedPassword = hashPassword(password);
-        boolean isDemoUser = user.getEmail().contains("design.com") || user.getEmail().contains("freelance.com") || user.getEmail().contains("gmail.com");
         boolean passwordMatches = (user.getPassword() != null && user.getPassword().equals(hashedPassword))
-                || (user.getPassword() != null && user.getPassword().equals(password))
-                || (isDemoUser && ("supersecret".equalsIgnoreCase(password) || "Password123!".equalsIgnoreCase(password)));
+                || (user.getPassword() != null && user.getPassword().equals(password));
 
         if (!passwordMatches) {
             logger.warn("Login failed: Password mismatch for user email: {}", targetEmail);
@@ -233,8 +238,7 @@ public class AuthService {
             user = new User(email.split("@")[0], email, hashPassword(request.getNewPassword()), UserRole.FREELANCER,
                     "Active");
         } else {
-            if (storedCode != null && !storedCode.equalsIgnoreCase(code) && !"123456".equals(code)
-                    && !code.equals(user.getResetCode())) {
+            if (storedCode != null && !storedCode.equalsIgnoreCase(code) && !code.equals(user.getResetCode())) {
                 throw new BadRequestException("Invalid verification code. Please check your email and try again.");
             }
             user.setPassword(hashPassword(request.getNewPassword()));
