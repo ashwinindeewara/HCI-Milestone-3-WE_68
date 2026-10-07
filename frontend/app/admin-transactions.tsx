@@ -67,17 +67,8 @@ export default function AdminTransactionsScreen() {
         };
       } catch (error) {
         console.warn('[AdminTransactions] Transactions endpoint connection error:', error);
+        throw error;
       }
-      return {
-        platformEscrowValue: 16950,
-        trend: '+33% settled',
-        transactions: [
-          { id: 'TXN-2845', date: 'Yesterday', project: 'Illustrations & Branding Release', client: 'Client (ID: C-103)', freelancer: 'Freelancer', amount: '$4800.00', rawAmount: 4800, status: 'DISPUTED', risk: 'Risk: High', riskLevel: 'high' },
-          { id: 'TXN-2846', date: 'Today, 11:15 AM', project: 'API Integration Escrow Fund', client: 'Client (ID: C-102)', freelancer: 'Freelancer', amount: '$1200.00', rawAmount: 1200, status: 'COMPLETED', risk: 'Risk: Low', riskLevel: 'low' },
-          { id: 'TXN-2844', date: 'Oct 12, 2024', project: 'React Landing Page Gateway Deposit', client: 'Client (ID: C-104)', freelancer: 'Freelancer', amount: '$950.00', rawAmount: 950, status: 'COMPLETED', risk: 'Risk: Low', riskLevel: 'low' },
-          { id: 'TXN-2843', date: 'Oct 11, 2024', project: 'Mobile App UI Audit Settlement', client: 'Client (ID: C-105)', freelancer: 'Freelancer', amount: '$1500.00', rawAmount: 1500, status: 'COMPLETED', risk: 'Risk: Low', riskLevel: 'low' }
-        ]
-      };
     },
     retry: 2,
     retryDelay: 1000,
