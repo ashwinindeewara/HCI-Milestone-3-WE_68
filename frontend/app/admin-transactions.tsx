@@ -7,6 +7,7 @@ import AdminTabBar from '../src/components/AdminTabBar';
 import AdminToast, { ToastType } from '../src/components/AdminToast';
 import apiClient from '../src/services/api';
 import { formatAdminDateTime } from '../src/services/dateFormat';
+import { formatAdminMoney } from '../src/services/moneyFormat';
 import {
   AdminIcon,
   AdminCard,
@@ -374,11 +375,11 @@ export default function AdminTransactionsScreen() {
                     </View>
                   </View>
 
-                  <Text style={styles.txnAmount}>{txn.amount}</Text>
+                  <Text style={styles.txnAmount}>{formatAdminMoney(txn.amount)}</Text>
 
                   <View style={styles.txnMeta}>
-                    <StatusPill label={txn.status} tone={statusTone(txn.status)} />
-                    <AdminTag label={txn.risk} tone={riskTone(txn.riskLevel)} />
+                    <StatusPill label={txn.status} tone={statusTone(txn.status)} style={styles.metaPill} />
+                    <AdminTag label={txn.risk} tone={riskTone(txn.riskLevel)} style={styles.metaTag} />
                     <AdminButton
                       label="Inspect"
                       icon="search-outline"
@@ -421,7 +422,7 @@ export default function AdminTransactionsScreen() {
           <>
             <View style={styles.summary}>
               <Text style={styles.summaryProject}>{selectedTxn.project}</Text>
-              <Text style={styles.summaryAmount}>{selectedTxn.amount}</Text>
+              <Text style={styles.summaryAmount}>{formatAdminMoney(selectedTxn.amount)}</Text>
               <StatusPill label={selectedTxn.status} tone={statusTone(selectedTxn.status)} />
             </View>
 
@@ -498,7 +499,7 @@ export default function AdminTransactionsScreen() {
         {selectedTxn && (
           <>
             <AdminNotice tone="warning">
-              Refunding <Text style={styles.noticeStrong}>{selectedTxn.amount}</Text> for milestone:{' '}
+              Refunding <Text style={styles.noticeStrong}>{formatAdminMoney(selectedTxn.amount)}</Text> for milestone:{' '}
               <Text style={styles.noticeStrong}>{selectedTxn.project}</Text>
             </AdminNotice>
 
@@ -640,6 +641,10 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
     minWidth: 110,
   },
+  // Centered with the Inspect button (the pill's own top-alignment would float it up) and given a
+  // fixed minimum width so amounts and buttons line up in a column across rows
+  metaPill: { alignSelf: 'center', minWidth: 112, justifyContent: 'center' },
+  metaTag: { alignSelf: 'center', minWidth: 92, justifyContent: 'center' },
   txnMeta: {
     flexDirection: 'row',
     flexWrap: 'wrap',
