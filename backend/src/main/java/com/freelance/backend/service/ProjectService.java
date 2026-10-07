@@ -37,9 +37,9 @@ public class ProjectService {
 
     public List<Project> getFreelancerProjects(String freelancerName) {
         if (freelancerName != null && !freelancerName.isBlank()) {
-            return projectRepository.findByFreelancerNameIgnoreCase(freelancerName);
+            return projectRepository.findByFreelancerNameIgnoreCase(freelancerName.trim());
         }
-        return projectRepository.findAllByOrderByCreatedAtDesc();
+        return List.of();
     }
 
     public Project getProjectById(String id) {

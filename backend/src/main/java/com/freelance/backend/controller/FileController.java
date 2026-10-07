@@ -23,12 +23,17 @@ public class FileController {
     @Autowired
     private FileStorageService fileStorageService;
 
+    @GetMapping
+    public ResponseEntity<List<FileAttachment>> getAllFiles() {
+        return ResponseEntity.ok(fileStorageService.getAllFiles());
+    }
+
     @PostMapping("/upload")
     public ResponseEntity<FileAttachment> uploadFile(
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "relatedEntityType", required = false, defaultValue = "PROJECT") String relatedEntityType,
             @RequestParam(value = "relatedEntityId", required = false, defaultValue = "GENERAL") String relatedEntityId,
-            @RequestParam(value = "uploadedBy", required = false, defaultValue = "Chathuni Imalsha") String uploadedBy
+            @RequestParam(value = "uploadedBy", required = false, defaultValue = "Freelancer") String uploadedBy
     ) {
         FileAttachment saved = fileStorageService.storeFile(file, relatedEntityType, relatedEntityId, uploadedBy);
         return ResponseEntity.ok(saved);

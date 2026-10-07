@@ -16,10 +16,10 @@ public class FileAttachment {
     @Column(nullable = false)
     private String storedFileName;
 
-    @Column(nullable = false, length = 1024)
+    @Column(name = "file_path", nullable = false, columnDefinition = "TEXT")
     private String filePath;
 
-    @Column(length = 1024)
+    @Column(name = "file_url", columnDefinition = "TEXT")
     private String fileUrl;
 
     private String mimeType;

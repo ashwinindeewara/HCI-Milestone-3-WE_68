@@ -30,7 +30,7 @@ public class ProjectController {
 
     @GetMapping("/api/freelancer/projects")
     public ResponseEntity<List<Project>> getFreelancerProjects(
-            @RequestParam(required = false, defaultValue = "Chathuni Imalsha") String freelancerName
+            @RequestParam(required = false) String freelancerName
     ) {
         return ResponseEntity.ok(projectService.getFreelancerProjects(freelancerName));
     }
@@ -59,7 +59,7 @@ public class ProjectController {
     public ResponseEntity<FileAttachment> uploadProjectFile(
             @PathVariable String id,
             @RequestParam("file") MultipartFile file,
-            @RequestParam(required = false, defaultValue = "Chathuni Imalsha") String uploadedBy
+            @RequestParam(required = false, defaultValue = "Freelancer") String uploadedBy
     ) {
         FileAttachment attachment = fileStorageService.storeFile(file, "PROJECT", id, uploadedBy);
         projectService.logActivity(id, id, "FILE_UPLOADED", "Uploaded file: " + attachment.getOriginalFileName(), uploadedBy);

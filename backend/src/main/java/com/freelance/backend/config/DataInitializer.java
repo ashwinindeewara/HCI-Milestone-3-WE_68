@@ -82,15 +82,26 @@ public class DataInitializer implements CommandLineRunner {
         seedNotifications();
     }
 
-    private void seedUsers() {
-        if (userRepository.count() == 0) {
-            userRepository.save(new User("Chathuni Imalsha", "chathuniimalsha.com", hashPassword("Password123!"), UserRole.FREELANCER, "Active"));
-            userRepository.save(new User("Ruwan Sadeepa", "ruwansadeepa67@gmail.com", hashPassword("Password123!"), UserRole.CLIENT, "Active"));
-            userRepository.save(new User("Amaya Perera", "amayaperera2003@gmail.com", hashPassword("Password123!"), UserRole.FREELANCER, "Suspended"));
-            userRepository.save(new User("Akila Deshan", "akiladesh99@gmail.com", hashPassword("Password123!"), UserRole.CLIENT, "Active"));
-            userRepository.save(new User("System Admin", "admin@freelance.com", hashPassword("Admin123!"), UserRole.ADMIN, "Active"));
-            userRepository.save(new User("Payment Staff", "staff@freelance.com", hashPassword("Staff123!"), UserRole.PAYMENT_STAFF, "Active"));
+    private void seedUser(String fullName, String email, String password, UserRole role, String status) {
+        User user = userRepository.findByEmailIgnoreCase(email).orElse(null);
+        if (user == null) {
+            userRepository.save(new User(fullName, email, hashPassword(password), role, status));
+        } else {
+            user.setPassword(hashPassword(password));
+            user.setStatus("Active");
+            userRepository.save(user);
         }
+    }
+
+    private void seedUsers() {
+        seedUser("Chathuni Imalsha", "chathuniimalsha.com", "Password123!", UserRole.FREELANCER, "Active");
+        seedUser("Chathuni Imalsha", "chathuniimalsha@gmail.com", "Password123!", UserRole.FREELANCER, "Active");
+        seedUser("Chathuni Imalsha", "chathuni@example.com", "Password123!", UserRole.FREELANCER, "Active");
+        seedUser("Ruwan Sadeepa", "ruwansadeepa67@gmail.com", "Password123!", UserRole.CLIENT, "Active");
+        seedUser("Amaya Perera", "amayaperera2003@gmail.com", "Password123!", UserRole.FREELANCER, "Suspended");
+        seedUser("Akila Deshan", "akiladesh99@gmail.com", "Password123!", UserRole.CLIENT, "Active");
+        seedUser("System Admin", "admin@freelance.com", "Admin123!", UserRole.ADMIN, "Active");
+        seedUser("Payment Staff", "staff@freelance.com", "Staff123!", UserRole.PAYMENT_STAFF, "Active");
     }
 
     private void seedFreelancerProfiles() {
@@ -107,6 +118,10 @@ public class DataInitializer implements CommandLineRunner {
                     "Available",
                     "Productive UI/UX designer with 4+ years of expertise. Specializing in high-fidelity design systems, mobile workflows, and interactive prototyping."
             );
+            profile.setLocation("Colombo, Sri Lanka");
+            profile.setPhone("+94 77 123 4567");
+            profile.setExperience("4+ years of professional UX/UI design & product development");
+            profile.setEducation("B.Sc. in Software Engineering, SLIIT");
 
             profile.setSkills(new ArrayList<>(Arrays.asList(
                     "Figma", "UI Design", "UX Research", "Prototyping", "Design Systems"

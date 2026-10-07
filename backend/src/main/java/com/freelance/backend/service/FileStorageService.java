@@ -86,7 +86,7 @@ public class FileStorageService {
         boolean isImage = mimeType.startsWith("image/") || "PROFILE".equalsIgnoreCase(relatedEntityType) || "IMAGE".equalsIgnoreCase(relatedEntityType);
         String fileUrl = "/api/files/" + fileId + (isImage ? "/preview" : "/download");
         String formattedSize = formatFileSize(file.getSize());
-        String uploader = (uploadedBy != null && !uploadedBy.isBlank()) ? uploadedBy : "Chathuni Imalsha";
+        String uploader = (uploadedBy != null && !uploadedBy.isBlank()) ? uploadedBy : "Freelancer";
 
         FileAttachment attachment = new FileAttachment(
                 fileId,
@@ -135,6 +135,10 @@ public class FileStorageService {
 
     public List<FileAttachment> getFilesByEntityId(String relatedEntityId) {
         return fileAttachmentRepository.findByRelatedEntityIdOrderByCreatedAtDesc(relatedEntityId);
+    }
+
+    public List<FileAttachment> getAllFiles() {
+        return fileAttachmentRepository.findAll();
     }
 
     public void deleteFile(String fileId) {

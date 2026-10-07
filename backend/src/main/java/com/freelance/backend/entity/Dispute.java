@@ -24,6 +24,7 @@ public class Dispute {
     @Column(columnDefinition = "TEXT")
     private String description;
 
+    @Column(name = "evidence_file", columnDefinition = "TEXT")
     private String evidenceFile;
     private Double amount;
 
@@ -31,6 +32,7 @@ public class Dispute {
     private String status; // Open, Under Review, Waiting for Client, Waiting for Freelancer, Resolved, Rejected, Closed
 
     private String statusType; // open, review, resolved
+    @Column(name = "resolution_note", columnDefinition = "TEXT")
     private String resolutionNote;
 
     private String filedDate;

@@ -31,21 +31,25 @@ public class DisputeService {
     private NotificationRepository notificationRepository;
 
     public List<Dispute> getAllDisputes() {
-        List<Dispute> disputes = disputeRepository.findAll();
-        for (Dispute d : disputes) {
-            enrichDispute(d);
-        }
-        return disputes;
+        return disputeRepository.findAll();
     }
 
     public List<Dispute> getFreelancerDisputes(String freelancerName) {
         List<Dispute> disputes = getAllDisputes();
         if (freelancerName != null && !freelancerName.isBlank()) {
+            String lower = freelancerName.trim().toLowerCase();
+            boolean isChathuni = lower.contains("chathuni");
             return disputes.stream()
-                    .filter(d -> d.getFreelancerName() == null ||
-                            freelancerName.equalsIgnoreCase(d.getFreelancerName()) ||
-                            (d.getParties() != null && d.getParties().toLowerCase().contains(freelancerName.toLowerCase())) ||
-                            (d.getParties() != null && d.getParties().toLowerCase().contains("chathuni")))
+                    .filter(d -> {
+                        String fName = d.getFreelancerName() != null ? d.getFreelancerName().trim().toLowerCase() : "";
+                        String parties = d.getParties() != null ? d.getParties().trim().toLowerCase() : "";
+                        if (isChathuni) {
+                            return fName.contains("chathuni") || parties.contains("chathuni");
+                        }
+                        boolean matchFreelancer = !fName.isEmpty() && (fName.contains(lower) || lower.contains(fName));
+                        boolean matchParties = !parties.isEmpty() && parties.contains(lower);
+                        return matchFreelancer || matchParties;
+                    })
                     .toList();
         }
         return disputes;
@@ -68,7 +72,7 @@ public class DisputeService {
         String id = "DSP-" + (410 + new Random().nextInt(90));
         Double amount = request.getAmount() != null ? request.getAmount() : 2400.0;
         String freelancer = (request.getFreelancerName() != null && !request.getFreelancerName().isBlank())
-                ? request.getFreelancerName() : "Chathuni Imalsha";
+                ? request.getFreelancerName() : "Freelancer";
         String client = (request.getClientName() != null && !request.getClientName().isBlank())
                 ? request.getClientName() : "TechVentures Inc.";
         String parties = request.getParties() != null ? request.getParties() : (client + " vs. " + freelancer);
@@ -147,7 +151,7 @@ public class DisputeService {
         String currentTime = LocalDateTime.now().format(timeFmt);
 
         String senderName = request.getSenderName() != null && !request.getSenderName().isBlank()
-                ? request.getSenderName() : "Chathuni Imalsha";
+                ? request.getSenderName() : "Freelancer";
         String senderRole = request.getSenderRole() != null && !request.getSenderRole().isBlank()
                 ? request.getSenderRole() : "FREELANCER";
 
