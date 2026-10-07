@@ -21,6 +21,18 @@ public class StaffDashboardMetricsDTO {
 
     public StaffDashboardMetricsDTO() {}
 
+    public StaffDashboardMetricsDTO(Double totalEscrowHold, Double totalProcessed,
+                                    long pendingTransactionsCount, long failedPaymentsCount,
+                                    long refunds30dCount, List<Transaction> recentActivity) {
+        this.totalEscrowHold = totalEscrowHold;
+        this.totalProcessed = totalProcessed;
+        this.pendingTransactionsCount = pendingTransactionsCount;
+        this.pendingHoldCount = pendingTransactionsCount;
+        this.failedPaymentsCount = failedPaymentsCount;
+        this.refunds30dCount = refunds30dCount;
+        this.recentActivity = recentActivity;
+    }
+
     // Constructor combining everything for maximum compatibility
     public StaffDashboardMetricsDTO(Double totalEscrowHold, Double totalProcessed, 
                                     long pendingTransactionsCount, long heldTransactionsCount, 

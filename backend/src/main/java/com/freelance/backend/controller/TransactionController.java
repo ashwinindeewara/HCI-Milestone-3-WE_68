@@ -23,14 +23,17 @@ public class TransactionController {
     @GetMapping
     public ResponseEntity<List<Transaction>> getTransactions(
             @RequestParam(required = false) String status,
-            @RequestParam(required = false) String type) {
-        return ResponseEntity.ok(transactionService.getAllTransactions(status, type));
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) String freelancerName
+    ) {
+        return ResponseEntity.ok(transactionService.getAllTransactions(status, type, freelancerName));
     }
 
     @GetMapping("/metrics")
     public ResponseEntity<StaffDashboardMetricsDTO> getStaffDashboardMetrics() {
         return ResponseEntity.ok(transactionService.getStaffDashboardMetrics());
     }
+
 
     @GetMapping("/{id}")
     public ResponseEntity<Transaction> getTransactionById(@PathVariable String id) {

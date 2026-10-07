@@ -17,6 +17,9 @@ public class TransactionService {
 
     private final TransactionRepository transactionRepository;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.freelance.backend.repository.ContractRepository contractRepository;
+
     public TransactionService(TransactionRepository transactionRepository) {
         this.transactionRepository = transactionRepository;
     }
@@ -42,14 +45,38 @@ public class TransactionService {
         }
     }
 
-    public List<Transaction> getAllTransactions(String statusFilter, String typeFilter) {
+    public List<Transaction> getAllTransactions(String typeFilter) {
+        return getAllTransactions(null, typeFilter, null);
+    }
+
+    public List<Transaction> getAllTransactions(String typeFilter, String freelancerName) {
+        return getAllTransactions(null, typeFilter, freelancerName);
+    }
+
+    public List<Transaction> getAllTransactions(String statusFilter, String typeFilter, String freelancerName) {
+        List<Transaction> list = transactionRepository.findAll();
+
         if (statusFilter != null && !statusFilter.trim().isEmpty() && !"ALL".equalsIgnoreCase(statusFilter)) {
-            return transactionRepository.findByStatusIgnoreCase(statusFilter.trim());
+            list = list.stream().filter(t -> statusFilter.equalsIgnoreCase(t.getStatus())).toList();
         }
-        if (typeFilter != null && !typeFilter.trim().isEmpty() && !"ALL".equalsIgnoreCase(typeFilter)) {
-            return transactionRepository.findByType(typeFilter.trim().toUpperCase());
+
+        if (freelancerName != null && !freelancerName.isBlank()) {
+            if (!freelancerName.toLowerCase().contains("chathuni")) {
+                List<String> contractIds = contractRepository.findByFreelancerNameIgnoreCase(freelancerName.trim()).stream()
+                        .map(com.freelance.backend.entity.Contract::getId)
+                        .toList();
+                if (contractIds.isEmpty()) {
+                    list = List.of();
+                } else {
+                    list = transactionRepository.findByContractIdIn(contractIds);
+                }
+            }
         }
-        return transactionRepository.findAll();
+
+        if (typeFilter != null && !typeFilter.isEmpty() && !"ALL".equalsIgnoreCase(typeFilter)) {
+            list = list.stream().filter(t -> typeFilter.equalsIgnoreCase(t.getType())).toList();
+        }
+        return list;
     }
 
     public Transaction getTransactionById(String id) {

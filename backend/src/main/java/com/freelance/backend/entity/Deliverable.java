@@ -30,7 +30,12 @@ public class Deliverable {
     private String uploadedAt;
 
     @Column(nullable = false)
-    private String status; // PENDING_REVIEW, APPROVED, REVISION_REQUESTED
+    private String status; // PENDING_REVIEW, SUBMITTED, APPROVED, REJECTED, REVISION_REQUESTED
+
+    @Column(columnDefinition = "TEXT")
+    private String feedback;
+
+    private String fileUrl;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
@@ -109,6 +114,22 @@ public class Deliverable {
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    public String getFeedback() {
+        return feedback;
+    }
+
+    public void setFeedback(String feedback) {
+        this.feedback = feedback;
+    }
+
+    public String getFileUrl() {
+        return fileUrl;
+    }
+
+    public void setFileUrl(String fileUrl) {
+        this.fileUrl = fileUrl;
     }
 
     public LocalDateTime getCreatedAt() {
