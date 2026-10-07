@@ -10,10 +10,10 @@ import {
   ActivityIndicator,
   Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import Colors from '../../src/constants/colors';
 import Theme from '../../src/constants/theme';
-import { apiClient } from '../../src/services/api';
+import { apiClient, FreelancerApiService, getCurrentUser } from '../../src/services/api';
 
 interface HistoryItem {
   id: string;
@@ -42,11 +42,131 @@ interface LinkedAccount {
   accountType?: 'Checking' | 'Savings';
 }
 
+const DEFAULT_LINKED_ACCOUNTS: LinkedAccount[] = [
+  {
+    id: 'acc-1',
+    name: 'Chase Checking',
+    type: 'Direct Deposit ACH',
+    detail: 'Account ending in 4192',
+    badge: 'Default',
+    isDefault: true,
+    icon: '🏦',
+    bankName: 'Chase',
+    accountHolder: 'Chathuni Imalsha',
+    accountNumber: '4192',
+    routingNumber: '021000021',
+    paymentType: 'Direct Deposit (ACH)',
+    accountType: 'Checking',
+  },
+  {
+    id: 'acc-2',
+    name: 'PayPal Wallet',
+    type: 'Instant Transfer',
+    detail: 'ruwansadeepa67@gmail.com',
+    badge: 'Verified',
+    isDefault: false,
+    icon: '🅿️',
+    bankName: 'PayPal Wallet',
+    accountHolder: 'Chathuni Imalsha',
+    accountNumber: 'ruwansadeepa67@gmail.com',
+    paymentType: 'Electronic Wallet',
+    accountType: 'Checking',
+  },
+  {
+    id: 'acc-3',
+    name: 'Visa Business Debit',
+    type: 'Instant Card Payout',
+    detail: 'Card ending in 8821 • Exp 08/28',
+    badge: 'Active',
+    isDefault: false,
+    icon: '💳',
+    bankName: 'Visa Business',
+    accountHolder: 'Chathuni Imalsha',
+    accountNumber: '8821',
+    paymentType: 'Instant Debit Card',
+    accountType: 'Checking',
+  },
+];
+
+const DEFAULT_HISTORY: HistoryItem[] = [
+  {
+    id: 'tx-1',
+    title: 'E-Commerce Redesign',
+    sub: 'UI Design Phase Milestone',
+    date: 'Oct 12, 2024',
+    amount: 3150,
+    formattedAmount: '$3,150.00',
+    status: 'In Escrow',
+  },
+  {
+    id: 'tx-2',
+    title: 'Mobile App Contract',
+    sub: 'API Specifications Milestone',
+    date: 'Oct 01, 2024',
+    amount: 4000,
+    formattedAmount: '$4,000.00',
+    status: 'Released',
+  },
+  {
+    id: 'tx-3',
+    title: 'E-Commerce Redesign',
+    sub: 'UX Wireframes & User Journey',
+    date: 'Sep 28, 2024',
+    amount: 1260,
+    formattedAmount: '$1,260.00',
+    status: 'Released',
+  },
+  {
+    id: 'tx-4',
+    title: 'Marketing Brand Strategy',
+    sub: 'Initial Brand Audit & Assets',
+    date: 'Sep 15, 2024',
+    amount: 4540,
+    formattedAmount: '$4,540.00',
+    status: 'Released',
+  },
+  {
+    id: 'tx-5',
+    title: 'Mobile App Contract',
+    sub: 'Architecture & System Design',
+    date: 'Sep 10, 2024',
+    amount: 2250,
+    formattedAmount: '$2,250.00',
+    status: 'In Escrow',
+  },
+];
+
 export default function EscrowScreen() {
   const router = useRouter();
+  const currentUser = getCurrentUser();
+  const isChathuni =
+    currentUser?.email === 'chathuniimalsha.com' ||
+    (currentUser?.fullName && currentUser.fullName.toLowerCase().includes('chathuni')) ||
+    (currentUser?.email && currentUser.email.toLowerCase().includes('chathuni'));
+
   const [activeFilter, setActiveFilter] = useState<'ALL' | 'RELEASED' | 'ESCROW' | 'WITHDRAWN'>('ALL');
-  const [availableBalance, setAvailableBalance] = useState<number>(9800);
-  const [inEscrowBalance, setInEscrowBalance] = useState<number>(5400);
+  const [availableBalance, setAvailableBalance] = useState<number>(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const u = getCurrentUser();
+        const k = `escrow_avail_${u?.email || u?.fullName || 'default'}`;
+        const s = localStorage.getItem(k);
+        if (s) return parseFloat(s);
+      } catch (e) {}
+    }
+    return isChathuni ? 9800 : 0;
+  });
+  const [inEscrowBalance, setInEscrowBalance] = useState<number>(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const u = getCurrentUser();
+        const k = `escrow_balance_${u?.email || u?.fullName || 'default'}`;
+        const s = localStorage.getItem(k);
+        if (s) return parseFloat(s);
+      } catch (e) {}
+    }
+    return isChathuni ? 5400 : 0;
+  });
   const [totalWithdrawn, setTotalWithdrawn] = useState<number>(0);
 
   // Withdraw Modal State
@@ -59,56 +179,27 @@ export default function EscrowScreen() {
   // Linked Accounts Modal State
   const [accountsModalVisible, setAccountsModalVisible] = useState(false);
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
-  const [linkedAccounts, setLinkedAccounts] = useState<LinkedAccount[]>([
-    {
-      id: 'acc-1',
-      name: 'Chase Checking',
-      type: 'Direct Deposit ACH',
-      detail: 'Account ending in 4192',
-      badge: 'Default',
-      isDefault: true,
-      icon: '🏦',
-      bankName: 'Chase',
-      accountHolder: 'Chathuni Imalsha',
-      accountNumber: '4192',
-      routingNumber: '021000021',
-      paymentType: 'Direct Deposit (ACH)',
-      accountType: 'Checking',
-    },
-    {
-      id: 'acc-2',
-      name: 'PayPal Wallet',
-      type: 'Instant Transfer',
-      detail: 'ruwansadeepa67@gmail.com',
-      badge: 'Verified',
-      isDefault: false,
-      icon: '🅿️',
-      bankName: 'PayPal Wallet',
-      accountHolder: 'Chathuni Imalsha',
-      accountNumber: 'ruwansadeepa67@gmail.com',
-      paymentType: 'Electronic Wallet',
-      accountType: 'Checking',
-    },
-    {
-      id: 'acc-3',
-      name: 'Visa Business Debit',
-      type: 'Instant Card Payout',
-      detail: 'Card ending in 8821 • Exp 08/28',
-      badge: 'Active',
-      isDefault: false,
-      icon: '💳',
-      bankName: 'Visa Business',
-      accountHolder: 'Chathuni Imalsha',
-      accountNumber: '8821',
-      paymentType: 'Instant Debit Card',
-      accountType: 'Checking',
-    },
-  ]);
+  const [linkedAccounts, setLinkedAccounts] = useState<LinkedAccount[]>(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const u = getCurrentUser();
+        const k = `payout_accounts_${u?.email || u?.fullName || 'default'}`;
+        const s = localStorage.getItem(k);
+        if (s) {
+          const p = JSON.parse(s);
+          if (Array.isArray(p)) return p;
+        }
+      } catch (e) {}
+    }
+    return isChathuni ? DEFAULT_LINKED_ACCOUNTS : [];
+  });
 
   // Add Bank Account Form State
   const [showAddBankForm, setShowAddBankForm] = useState(false);
   const [newBankName, setNewBankName] = useState('');
-  const [newAccountHolder, setNewAccountHolder] = useState('');
+  const [newAccountHolder, setNewAccountHolder] = useState(
+    currentUser?.fullName || (isChathuni ? 'Chathuni Imalsha' : '')
+  );
   const [newAccountNumber, setNewAccountNumber] = useState('');
   const [newRoutingNumber, setNewRoutingNumber] = useState('');
   const [newAccountType, setNewAccountType] = useState<'Checking' | 'Savings'>('Checking');
@@ -122,74 +213,133 @@ export default function EscrowScreen() {
   // Toast State
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const [history, setHistory] = useState<HistoryItem[]>([
-    {
-      id: 'tx-1',
-      title: 'E-Commerce Redesign',
-      sub: 'UI Design Phase Milestone',
-      date: 'Oct 12, 2024',
-      amount: 3150,
-      formattedAmount: '$3,150.00',
-      status: 'In Escrow',
-    },
-    {
-      id: 'tx-2',
-      title: 'Mobile App Contract',
-      sub: 'API Specifications Milestone',
-      date: 'Oct 01, 2024',
-      amount: 4000,
-      formattedAmount: '$4,000.00',
-      status: 'Released',
-    },
-    {
-      id: 'tx-3',
-      title: 'E-Commerce Redesign',
-      sub: 'UX Wireframes & User Journey',
-      date: 'Sep 28, 2024',
-      amount: 1260,
-      formattedAmount: '$1,260.00',
-      status: 'Released',
-    },
-    {
-      id: 'tx-4',
-      title: 'Marketing Brand Strategy',
-      sub: 'Initial Brand Audit & Assets',
-      date: 'Sep 15, 2024',
-      amount: 4540,
-      formattedAmount: '$4,540.00',
-      status: 'Released',
-    },
-    {
-      id: 'tx-5',
-      title: 'Mobile App Contract',
-      sub: 'Architecture & System Design',
-      date: 'Sep 10, 2024',
-      amount: 2250,
-      formattedAmount: '$2,250.00',
-      status: 'In Escrow',
-    },
-  ]);
+  const [history, setHistory] = useState<HistoryItem[]>(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const u = getCurrentUser();
+        const k = `escrow_history_${u?.email || u?.fullName || 'default'}`;
+        const s = localStorage.getItem(k);
+        if (s) {
+          const p = JSON.parse(s);
+          if (Array.isArray(p)) return p;
+        }
+      } catch (e) {}
+    }
+    return isChathuni ? DEFAULT_HISTORY : [];
+  });
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // Fetch real summary from backend if online
+  const loadLinkedAccounts = async () => {
+    const activeEmail = currentUser?.email || '';
+    const activeName = currentUser?.fullName || '';
+    const storageKey = `payout_accounts_${activeEmail || activeName || 'default'}`;
+
+    try {
+      const res = await FreelancerApiService.getPayoutAccounts(activeEmail, activeName);
+      const data = Array.isArray(res) ? res : (res?.data || []);
+      if (Array.isArray(data) && data.length > 0) {
+        setLinkedAccounts(data);
+        if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+          localStorage.setItem(storageKey, JSON.stringify(data));
+        }
+        return;
+      }
+
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+        const stored = localStorage.getItem(storageKey);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setLinkedAccounts(parsed);
+            return;
+          }
+        }
+      }
+
+      if (isChathuni) {
+        setLinkedAccounts(DEFAULT_LINKED_ACCOUNTS);
+      } else {
+        setLinkedAccounts([]);
+      }
+    } catch {
+      // Local fallback
+    }
+  };
+
+  // Fetch real summary & transactions from backend
   useEffect(() => {
     const fetchEscrowSummary = async () => {
       try {
-        const res = await apiClient.get('/escrow/summary');
+        const activeName = currentUser?.fullName || (isChathuni ? 'Chathuni Imalsha' : '');
+        const res = await apiClient.get('/escrow/summary', {
+          params: activeName ? { freelancerName: activeName } : {},
+        });
         if (res.data) {
-          if (res.data.totalInEscrow != null) setInEscrowBalance(res.data.totalInEscrow);
-          if (res.data.releasedAmount != null) setAvailableBalance(res.data.releasedAmount);
+          if (res.data.totalInEscrow != null) {
+            setInEscrowBalance(res.data.totalInEscrow);
+            if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+              const k = `escrow_balance_${currentUser?.email || currentUser?.fullName || 'default'}`;
+              localStorage.setItem(k, String(res.data.totalInEscrow));
+            }
+          }
+          if (res.data.releasedAmount != null) {
+            setAvailableBalance(res.data.releasedAmount);
+            if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+              const k = `escrow_avail_${currentUser?.email || currentUser?.fullName || 'default'}`;
+              localStorage.setItem(k, String(res.data.releasedAmount));
+            }
+          }
         }
       } catch (err) {
         // Fallback to local default state
       }
     };
-    fetchEscrowSummary();
-  }, []);
+
+    const fetchTransactions = async () => {
+      try {
+        const activeName = currentUser?.fullName || (isChathuni ? 'Chathuni Imalsha' : '');
+        const txs = await FreelancerApiService.getTransactions(activeName);
+        if (Array.isArray(txs) && txs.length > 0) {
+          const mapped: HistoryItem[] = txs.map((t: any) => ({
+            id: String(t.id),
+            title: t.projectTitle || t.description || 'Escrow Transaction',
+            sub: t.description || 'Milestone Payment',
+            date: t.date || 'Recent',
+            amount: t.amount || 0,
+            formattedAmount: t.amount != null ? `$${t.amount.toLocaleString()}` : '$0.00',
+            status: t.status === 'WITHDRAWN' ? 'Withdrawn' : t.status === 'RELEASED' ? 'Released' : 'In Escrow',
+          }));
+          setHistory(mapped);
+          if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+            const k = `escrow_history_${currentUser?.email || currentUser?.fullName || 'default'}`;
+            localStorage.setItem(k, JSON.stringify(mapped));
+          }
+        } else if (!isChathuni) {
+          setHistory([]);
+        }
+      } catch {
+        if (!isChathuni) {
+          setHistory([]);
+        }
+      }
+    };
+
+    Promise.allSettled([
+      fetchEscrowSummary(),
+      fetchTransactions(),
+      loadLinkedAccounts(),
+    ]);
+  }, [currentUser?.email, currentUser?.fullName]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      loadLinkedAccounts();
+    }, [currentUser?.email, currentUser?.fullName])
+  );
 
   // Handle clicking on an item in ledger
   const handleItemPress = (item: HistoryItem) => {
@@ -212,32 +362,43 @@ export default function EscrowScreen() {
 
   // Set default account in linked accounts modal
   const handleSetDefaultAccount = (id: string, name: string) => {
-    setLinkedAccounts((prev) =>
-      prev.map((acc) => ({
-        ...acc,
-        isDefault: acc.id === id,
-        badge: acc.id === id ? 'Default' : 'Active',
-      }))
+    const activeEmail = currentUser?.email || '';
+    const activeName = currentUser?.fullName || '';
+    const storageKey = `payout_accounts_${activeEmail || activeName || 'default'}`;
+
+    const updated = linkedAccounts.map((acc) => ({
+      ...acc,
+      isDefault: acc.id === id,
+      badge: acc.id === id ? 'Default' : 'Active',
+    }));
+    setLinkedAccounts(updated);
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+      localStorage.setItem(storageKey, JSON.stringify(updated));
+    }
+    FreelancerApiService.setDefaultPayoutAccount(id, activeEmail).catch((e) =>
+      console.warn('Backend payout set default note:', e)
     );
     showToast(`✓ Set ${name} as default payout account`);
   };
 
   // Remove linked account using cross icon
   const handleRemoveAccount = (id: string, name: string) => {
-    if (linkedAccounts.length <= 1) {
-      showToast('You must keep at least one payout account linked.');
-      return;
-    }
+    const activeEmail = currentUser?.email || '';
+    const activeName = currentUser?.fullName || '';
+    const storageKey = `payout_accounts_${activeEmail || activeName || 'default'}`;
 
-    setLinkedAccounts((prev) => {
-      const remaining = prev.filter((acc) => acc.id !== id);
-      const wasDefault = prev.find((acc) => acc.id === id)?.isDefault;
-      if (wasDefault && remaining.length > 0) {
-        remaining[0].isDefault = true;
-        remaining[0].badge = 'Default';
-      }
-      return remaining;
-    });
+    const remaining = linkedAccounts.filter((acc) => acc.id !== id);
+    if (remaining.length > 0 && !remaining.some((acc) => acc.isDefault)) {
+      remaining[0].isDefault = true;
+      remaining[0].badge = 'Default';
+    }
+    setLinkedAccounts(remaining);
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+      localStorage.setItem(storageKey, JSON.stringify(remaining));
+    }
+    FreelancerApiService.deletePayoutAccount(id).catch((e) =>
+      console.warn('Backend payout delete note:', e)
+    );
 
     showToast(`✓ Removed ${name}`);
   };
@@ -286,28 +447,42 @@ export default function EscrowScreen() {
     else if (newPaymentType.includes('Wallet') || newPaymentType.includes('PayPal')) accountIcon = '🅿️';
     else if (newPaymentType.includes('Wire')) accountIcon = '🌐';
 
+    const activeEmail = currentUser?.email || '';
+    const activeName = currentUser?.fullName || '';
+    const storageKey = `payout_accounts_${activeEmail || activeName || 'default'}`;
+
+    let updatedList: LinkedAccount[] = [];
+
     if (editingAccountId) {
-      setLinkedAccounts((prev) =>
-        prev.map((acc) => {
-          if (acc.id === editingAccountId) {
-            return {
-              ...acc,
-              name: newBankName.trim() + ' (' + newAccountType + ')',
-              type: `${newPaymentType} • ${newAccountType}${newRoutingNumber.trim() ? ` • Routing: ${newRoutingNumber.trim()}` : ''}`,
-              detail: `Account ending in ${last4}${newAccountHolder ? ' • ' + newAccountHolder.trim() : ''}`,
-              icon: accountIcon,
-              bankName: newBankName.trim(),
-              accountHolder: newAccountHolder.trim(),
-              accountNumber: newAccountNumber.trim(),
-              routingNumber: newRoutingNumber.trim(),
-              paymentType: newPaymentType,
-              accountType: newAccountType,
-            };
-          }
-          return acc;
-        })
-      );
+      updatedList = linkedAccounts.map((acc) => {
+        if (acc.id === editingAccountId) {
+          return {
+            ...acc,
+            name: newBankName.trim() + ' (' + newAccountType + ')',
+            type: `${newPaymentType} • ${newAccountType}${newRoutingNumber.trim() ? ` • Routing: ${newRoutingNumber.trim()}` : ''}`,
+            detail: `Account ending in ${last4}${newAccountHolder ? ' • ' + newAccountHolder.trim() : ''}`,
+            icon: accountIcon,
+            bankName: newBankName.trim(),
+            accountHolder: newAccountHolder.trim(),
+            accountNumber: newAccountNumber.trim(),
+            routingNumber: newRoutingNumber.trim(),
+            paymentType: newPaymentType,
+            accountType: newAccountType,
+          };
+        }
+        return acc;
+      });
+      setLinkedAccounts(updatedList);
       showToast(`✓ Updated ${newBankName.trim()} details successfully!`);
+
+      const updatedAcc = updatedList.find((a) => a.id === editingAccountId);
+      if (updatedAcc) {
+        FreelancerApiService.updatePayoutAccount(editingAccountId, {
+          ...updatedAcc,
+          userEmail: activeEmail,
+          freelancerName: activeName,
+        }).catch((e) => console.warn('Backend payout update note:', e));
+      }
     } else {
       const newId = 'acc-' + Date.now();
       const newAcc: LinkedAccount = {
@@ -325,8 +500,19 @@ export default function EscrowScreen() {
         paymentType: newPaymentType,
         accountType: newAccountType,
       };
-      setLinkedAccounts((prev) => [...prev, newAcc]);
+      updatedList = [...linkedAccounts, newAcc];
+      setLinkedAccounts(updatedList);
       showToast(`✓ Linked ${newAcc.name} (${newPaymentType}) successfully!`);
+
+      FreelancerApiService.createPayoutAccount({
+        ...newAcc,
+        userEmail: activeEmail,
+        freelancerName: activeName,
+      }).catch((e) => console.warn('Backend payout create note:', e));
+    }
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+      localStorage.setItem(storageKey, JSON.stringify(updatedList));
     }
 
     setEditingAccountId(null);
@@ -360,10 +546,10 @@ export default function EscrowScreen() {
       const defaultAcc = linkedAccounts.find((a) => a.isDefault) || linkedAccounts[0];
       const destinationLabel =
         selectedMethod === 'BANK'
-          ? defaultAcc.name + ' (' + defaultAcc.detail + ')'
+          ? (defaultAcc ? defaultAcc.name + ' (' + defaultAcc.detail + ')' : 'Direct Deposit')
           : selectedMethod === 'PAYPAL'
-            ? 'PayPal (ruwansadeepa67@gmail.com)'
-            : 'Visa Card •••• 8821';
+            ? 'PayPal'
+            : 'Debit Card';
 
       // Deduct from available balance
       setAvailableBalance((prev) => Math.max(0, prev - amountVal));
@@ -536,7 +722,20 @@ export default function EscrowScreen() {
 
         {/* History Item Cards */}
         <View style={styles.historyList}>
-          {filteredHistory.map((item) => {
+          {filteredHistory.length === 0 ? (
+            <View style={{ backgroundColor: '#FFFFFF', borderRadius: 16, padding: 32, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E2E8F0', marginTop: 8 }}>
+              <Text style={{ fontSize: 36, marginBottom: 12 }}>💳</Text>
+              <Text style={{ fontSize: 16, fontWeight: '700', color: Colors.text.primary, marginBottom: 6 }}>
+                No Escrow Transactions
+              </Text>
+              <Text style={{ fontSize: 13, color: Colors.text.secondary, textAlign: 'center', lineHeight: 20 }}>
+                {activeFilter === 'ALL'
+                  ? 'No transaction activity or milestone payments recorded yet.'
+                  : `No transactions found under "${activeFilter.toLowerCase()}".`}
+              </Text>
+            </View>
+          ) : (
+            filteredHistory.map((item) => {
             const isEscrow = item.status === 'In Escrow';
             const isWithdrawn = item.status === 'Withdrawn';
 
@@ -599,7 +798,7 @@ export default function EscrowScreen() {
                 </View>
               </TouchableOpacity>
             );
-          })}
+          }))}
         </View>
       </ScrollView>
 
@@ -630,7 +829,18 @@ export default function EscrowScreen() {
             </View>
 
             <ScrollView style={styles.accountsScrollList} showsVerticalScrollIndicator={false}>
-              {linkedAccounts.map((acc) => (
+              {linkedAccounts.length === 0 ? (
+                <View style={{ paddingVertical: 28, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 32, marginBottom: 8 }}>🏦</Text>
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: Colors.text.primary, marginBottom: 4 }}>
+                    No Linked Payout Accounts
+                  </Text>
+                  <Text style={{ fontSize: 13, color: Colors.text.secondary, textAlign: 'center', marginBottom: 12 }}>
+                    Add a bank account or payment method below to withdraw funds.
+                  </Text>
+                </View>
+              ) : (
+                linkedAccounts.map((acc) => (
                 <View
                   key={acc.id}
                   style={[
@@ -690,7 +900,7 @@ export default function EscrowScreen() {
                     </TouchableOpacity>
                   </View>
                 </View>
-              ))}
+              )))}
 
               {/* Add / Edit Bank Account Details Fields Section */}
               {showAddBankForm ? (
@@ -730,7 +940,7 @@ export default function EscrowScreen() {
                   <Text style={styles.formLabel}>Account Holder Name</Text>
                   <TextInput
                     style={styles.formInput}
-                    placeholder="e.g. Chathuni Imalsha"
+                    placeholder={currentUser?.fullName ? `e.g. ${currentUser.fullName}` : 'e.g. Alex Morgan'}
                     placeholderTextColor="#94A3B8"
                     value={newAccountHolder}
                     onChangeText={setNewAccountHolder}

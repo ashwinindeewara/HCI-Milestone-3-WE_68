@@ -14,7 +14,7 @@ import {
 import { useRouter, useFocusEffect } from 'expo-router';
 import Colors from '../../src/constants/colors';
 import Theme from '../../src/constants/theme';
-import { FreelancerApiService, resolveMediaUrl, apiClient } from '../../src/services/api';
+import { FreelancerApiService, resolveMediaUrl, apiClient, getCurrentUser } from '../../src/services/api';
 
 interface ProjectItem {
   id: string;
@@ -30,14 +30,20 @@ interface ProjectItem {
 
 export default function DashboardScreen() {
   const router = useRouter();
+  const currentUser = getCurrentUser();
+  const isChathuni =
+    currentUser?.email === 'chathuniimalsha.com' ||
+    (currentUser?.fullName && currentUser.fullName.toLowerCase().includes('chathuni')) ||
+    (currentUser?.email && currentUser.email.toLowerCase().includes('chathuni'));
+
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [unreadNotifications, setUnreadNotifications] = useState(3);
+  const [unreadNotifications, setUnreadNotifications] = useState(isChathuni ? 3 : 0);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [downloadToast, setDownloadToast] = useState<string | null>(null);
   const [userProfile, setUserProfile] = useState({
-    name: 'Chathuni Imalsha',
-    avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
+    name: currentUser?.fullName || (isChathuni ? 'Chathuni Imalsha' : 'Freelancer'),
+    avatar: isChathuni ? 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80' : '',
   });
 
   const handleDownloadContract = async (e: any, item: ProjectItem) => {
@@ -131,55 +137,63 @@ Executed on:                    ${new Date().toLocaleDateString('en-US', { year:
   };
 
   const [metrics, setMetrics] = useState({
-    totalEarnings: 12450,
-    activeProjects: 2,
-    pendingMilestones: 2,
-    pendingEscrow: 6200,
+    totalEarnings: isChathuni ? 12450 : 0,
+    activeProjects: isChathuni ? 2 : 0,
+    pendingMilestones: isChathuni ? 2 : 0,
+    pendingEscrow: isChathuni ? 6200 : 0,
   });
 
-  const [projects, setProjects] = useState<ProjectItem[]>([
-    {
-      id: 'PRJ-C-101',
-      contractId: 'C-101',
-      title: 'E-Commerce Redesign',
-      clientName: 'TechVentures Inc.',
-      inEscrowAmount: 2400,
-      completionPercentage: 65,
-      dueDate: 'Due Oct 15, 2024',
-      statusBadge: 'On Track',
-      status: 'ACTIVE',
-    },
-    {
-      id: 'PRJ-C-102',
-      contractId: 'C-102',
-      title: 'Mobile App Contract',
-      clientName: 'Global Retail Corp',
-      inEscrowAmount: 3800,
-      completionPercentage: 30,
-      dueDate: 'Due Nov 01, 2024',
-      statusBadge: 'On Track',
-      status: 'ACTIVE',
-    },
-  ]);
+  const [projects, setProjects] = useState<ProjectItem[]>(
+    isChathuni
+      ? [
+          {
+            id: 'PRJ-C-101',
+            contractId: 'C-101',
+            title: 'E-Commerce Redesign',
+            clientName: 'TechVentures Inc.',
+            inEscrowAmount: 2400,
+            completionPercentage: 65,
+            dueDate: 'Due Oct 15, 2024',
+            statusBadge: 'On Track',
+            status: 'ACTIVE',
+          },
+          {
+            id: 'PRJ-C-102',
+            contractId: 'C-102',
+            title: 'Mobile App Contract',
+            clientName: 'Global Retail Corp',
+            inEscrowAmount: 3800,
+            completionPercentage: 30,
+            dueDate: 'Due Nov 01, 2024',
+            statusBadge: 'On Track',
+            status: 'ACTIVE',
+          },
+        ]
+      : []
+  );
 
-  const [dashboardContracts, setDashboardContracts] = useState([
-    {
-      id: 'C-101',
-      title: 'E-Commerce Redesign',
-      clientName: 'TechVentures Inc.',
-      status: 'New',
-      contractValue: '$8,000',
-      timeline: 'Sep 01 - Nov 30, 2024',
-    },
-    {
-      id: 'C-102',
-      title: 'Mobile App Contract',
-      clientName: 'Global Retail Corp',
-      status: 'Pending',
-      contractValue: '$12,500',
-      timeline: 'Oct 15 - Jan 15',
-    },
-  ]);
+  const [dashboardContracts, setDashboardContracts] = useState(
+    isChathuni
+      ? [
+          {
+            id: 'C-101',
+            title: 'E-Commerce Redesign',
+            clientName: 'TechVentures Inc.',
+            status: 'New',
+            contractValue: '$8,000',
+            timeline: 'Sep 01 - Nov 30, 2024',
+          },
+          {
+            id: 'C-102',
+            title: 'Mobile App Contract',
+            clientName: 'Global Retail Corp',
+            status: 'Pending',
+            contractValue: '$12,500',
+            timeline: 'Oct 15 - Jan 15',
+          },
+        ]
+      : []
+  );
 
   const applyStoredProgressToProjects = (projectList: ProjectItem[]): ProjectItem[] => {
     if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
@@ -215,29 +229,40 @@ Executed on:                    ${new Date().toLocaleDateString('en-US', { year:
 
   const loadDashboardData = async () => {
     try {
+      const activeUser = getCurrentUser();
+      const activeName = activeUser?.fullName || '';
+      const activeEmail = activeUser?.email || '';
+      const isTargetChathuni =
+        activeEmail === 'chathuniimalsha.com' ||
+        (activeName && activeName.toLowerCase().includes('chathuni'));
+
       const [pRes, notifRes, prjRes, cRes] = await Promise.allSettled([
-        FreelancerApiService.getProfile(),
-        FreelancerApiService.getNotifications(),
-        FreelancerApiService.getProjects(),
-        apiClient.get('/contracts'),
+        FreelancerApiService.getProfile(activeEmail),
+        FreelancerApiService.getNotifications(activeName, activeEmail),
+        FreelancerApiService.getFreelancerProjects(activeName),
+        FreelancerApiService.getFreelancerContracts(activeName),
       ]);
 
       // 1. Profile
       if (pRes.status === 'fulfilled' && pRes.value.data) {
         setUserProfile({
-          name: pRes.value.data.fullName || 'Chathuni Imalsha',
-          avatar: pRes.value.data.avatarUrl || userProfile.avatar,
+          name: pRes.value.data.fullName || activeName || 'Freelancer',
+          avatar: pRes.value.data.avatarUrl || '',
         });
+      } else if (activeName) {
+        setUserProfile((prev) => ({ ...prev, name: activeName }));
       }
 
       // 2. Notifications
       if (notifRes.status === 'fulfilled' && Array.isArray(notifRes.value.data)) {
         const unreadCount = notifRes.value.data.filter((n: any) => n.unread).length;
         setUnreadNotifications(unreadCount);
+      } else if (!isTargetChathuni) {
+        setUnreadNotifications(0);
       }
 
       // 3. Projects
-      if (prjRes.status === 'fulfilled' && Array.isArray(prjRes.value.data) && prjRes.value.data.length > 0) {
+      if (prjRes.status === 'fulfilled' && Array.isArray(prjRes.value.data)) {
         const syncedProjects = applyStoredProgressToProjects(prjRes.value.data);
         setProjects(syncedProjects);
 
@@ -246,22 +271,27 @@ Executed on:                    ${new Date().toLocaleDateString('en-US', { year:
 
         setMetrics((prev) => ({
           ...prev,
-          activeProjects: activeCount || syncedProjects.length,
-          pendingEscrow: totalEscrow > 0 ? totalEscrow : prev.pendingEscrow,
+          activeProjects: activeCount,
+          pendingEscrow: totalEscrow,
         }));
+      } else if (!isTargetChathuni) {
+        setProjects([]);
+        setMetrics({ totalEarnings: 0, activeProjects: 0, pendingMilestones: 0, pendingEscrow: 0 });
       }
 
       // 4. Contracts
-      if (cRes.status === 'fulfilled' && Array.isArray(cRes.value.data) && cRes.value.data.length > 0) {
+      if (cRes.status === 'fulfilled' && Array.isArray(cRes.value.data)) {
         const mapped = cRes.value.data.slice(0, 2).map((c: any) => ({
           id: c.id,
           title: c.title,
           clientName: c.clientName,
           status: c.status === 'COMPLETED' ? 'Completed' : c.status === 'PENDING' || c.status === 'UNDER_REVIEW' ? 'Pending' : 'New',
-          contractValue: c.totalBudget != null ? '$' + c.totalBudget.toLocaleString() : '$8,000',
-          timeline: c.timeline || (c.startDate && c.endDate ? `${c.startDate} - ${c.endDate}` : 'Sep 01 - Nov 30, 2024'),
+          contractValue: c.totalBudget != null ? '$' + c.totalBudget.toLocaleString() : '$0',
+          timeline: c.timeline || (c.startDate && c.endDate ? `${c.startDate} - ${c.endDate}` : 'Active'),
         }));
         setDashboardContracts(mapped);
+      } else if (!isTargetChathuni) {
+        setDashboardContracts([]);
       }
     } catch {
       // Keep state intact
@@ -297,14 +327,18 @@ Executed on:                    ${new Date().toLocaleDateString('en-US', { year:
           onPress={() => router.push('/(tabs)/profile')}
           activeOpacity={0.8}
         >
-          <Image
-            source={
-              userProfile.avatar
-                ? { uri: resolveMediaUrl(userProfile.avatar) }
-                : require('../../assets/freelancer_avatar.jpg')
-            }
-            style={styles.avatarImg}
-          />
+          {userProfile.avatar ? (
+            <Image
+              source={{ uri: resolveMediaUrl(userProfile.avatar) }}
+              style={styles.avatarImg}
+            />
+          ) : (
+            <View style={[styles.avatarImg, styles.avatarPlaceholder]}>
+              <Text style={styles.avatarInitials}>
+                {userProfile.name ? userProfile.name.trim().charAt(0).toUpperCase() : '👤'}
+              </Text>
+            </View>
+          )}
           <View>
             <Text style={styles.greetingSub}>Good morning,</Text>
             <Text style={styles.userName}>{userProfile.name}</Text>
@@ -390,49 +424,55 @@ Executed on:                    ${new Date().toLocaleDateString('en-US', { year:
       </View>
 
       {/* Real Project Cards */}
-      {projects.map((item) => {
-        const targetId = item.contractId || item.id;
-        const progress = item.completionPercentage || 0;
-        const escrowFormatted = item.inEscrowAmount
-          ? `$${item.inEscrowAmount.toLocaleString()} In Escrow`
-          : 'Escrow Secured';
+      {projects.length > 0 ? (
+        projects.map((item) => {
+          const targetId = item.contractId || item.id;
+          const progress = item.completionPercentage || 0;
+          const escrowFormatted = item.inEscrowAmount
+            ? `$${item.inEscrowAmount.toLocaleString()} In Escrow`
+            : 'Escrow Secured';
 
-        return (
-          <TouchableOpacity
-            key={item.id}
-            style={styles.projectCard}
-            onPress={() => router.push(`/project-details?id=${targetId}`)}
-            activeOpacity={0.85}
-          >
-            <View style={styles.projectCardHeader}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.projectTitle}>{item.title}</Text>
-                <Text style={styles.clientName}>{item.clientName}</Text>
+          return (
+            <TouchableOpacity
+              key={item.id}
+              style={styles.projectCard}
+              onPress={() => router.push(`/project-details?id=${targetId}`)}
+              activeOpacity={0.85}
+            >
+              <View style={styles.projectCardHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.projectTitle}>{item.title}</Text>
+                  <Text style={styles.clientName}>{item.clientName}</Text>
+                </View>
+                <View style={styles.escrowTag}>
+                  <Text style={styles.escrowTagText}>{escrowFormatted}</Text>
+                </View>
               </View>
-              <View style={styles.escrowTag}>
-                <Text style={styles.escrowTagText}>{escrowFormatted}</Text>
+
+              <View style={styles.milestoneProgressRow}>
+                <Text style={styles.milestoneLabel}>Progress</Text>
+                <Text style={styles.progressPercent}>{progress}%</Text>
               </View>
-            </View>
 
-            <View style={styles.milestoneProgressRow}>
-              <Text style={styles.milestoneLabel}>Progress</Text>
-              <Text style={styles.progressPercent}>{progress}%</Text>
-            </View>
+              {/* Green Progress Bar */}
+              <View style={styles.progressBarTrack}>
+                <View style={[styles.progressBarFill, { width: `${progress}%` }]} />
+              </View>
 
-            {/* Green Progress Bar */}
-            <View style={styles.progressBarTrack}>
-              <View style={[styles.progressBarFill, { width: `${progress}%` }]} />
-            </View>
+              <View style={styles.projectCardFooter}>
+                <Text style={styles.dueDateText}>📅 {item.dueDate || 'Ongoing'}</Text>
+                <Text style={styles.viewDetailsText}>View Details ›</Text>
+              </View>
+            </TouchableOpacity>
+          );
+        })
+      ) : (
+        <View style={styles.emptyNoticeCard}>
+          <Text style={styles.emptyNoticeText}>No active projects yet. Signed contracts will appear here.</Text>
+        </View>
+      )}
 
-            <View style={styles.projectCardFooter}>
-              <Text style={styles.dueDateText}>📅 {item.dueDate || 'Ongoing'}</Text>
-              <Text style={styles.viewDetailsText}>View Details ›</Text>
-            </View>
-          </TouchableOpacity>
-        );
-      })}
-
-      {/* Contracts Section (2 Contracts matching Image 1) */}
+      {/* Contracts Section */}
       <View style={[styles.sectionHeaderRow, { marginTop: 22 }]}>
         <Text style={styles.sectionTitle}>Contracts</Text>
         <TouchableOpacity onPress={() => router.push('/contracts-list')}>
@@ -441,61 +481,67 @@ Executed on:                    ${new Date().toLocaleDateString('en-US', { year:
       </View>
 
       <View style={{ marginBottom: 16, gap: 14 }}>
-        {dashboardContracts.map((item) => {
-          const isNew = item.status === 'New';
-          const isPending = item.status === 'Pending';
-          const isCompleted = item.status === 'Completed';
+        {dashboardContracts.length > 0 ? (
+          dashboardContracts.map((item) => {
+            const isNew = item.status === 'New';
+            const isPending = item.status === 'Pending';
+            const isCompleted = item.status === 'Completed';
 
-          return (
-            <TouchableOpacity
-              key={`dash-contract-${item.id}`}
-              style={styles.contractCard}
-              onPress={() => router.push(`/contract-details?id=${item.id}`)}
-              activeOpacity={0.85}
-            >
-              <View style={styles.cardHeader}>
-                <Text style={styles.contractTitle} numberOfLines={1}>
-                  {item.title}
-                </Text>
-                <View
-                  style={[
-                    styles.badge,
-                    isNew ? styles.badgeNew : isPending ? styles.badgePending : styles.badgeCompleted,
-                  ]}
-                >
-                  <Text
+            return (
+              <TouchableOpacity
+                key={`dash-contract-${item.id}`}
+                style={styles.contractCard}
+                onPress={() => router.push(`/contract-details?id=${item.id}`)}
+                activeOpacity={0.85}
+              >
+                <View style={styles.cardHeader}>
+                  <Text style={styles.contractTitle} numberOfLines={1}>
+                    {item.title}
+                  </Text>
+                  <View
                     style={[
-                      styles.contractBadgeText,
-                      isNew
-                        ? styles.badgeTextNew
-                        : isPending
-                          ? styles.badgeTextPending
-                          : styles.badgeTextCompleted,
+                      styles.badge,
+                      isNew ? styles.badgeNew : isPending ? styles.badgePending : styles.badgeCompleted,
                     ]}
                   >
-                    {item.status}
-                  </Text>
+                    <Text
+                      style={[
+                        styles.contractBadgeText,
+                        isNew
+                          ? styles.badgeTextNew
+                          : isPending
+                            ? styles.badgeTextPending
+                            : styles.badgeTextCompleted,
+                      ]}
+                    >
+                      {item.status}
+                    </Text>
+                  </View>
                 </View>
-              </View>
 
-              <Text style={styles.contractClientName}>{item.clientName}</Text>
+                <Text style={styles.contractClientName}>{item.clientName}</Text>
 
-              <View style={styles.cardDivider} />
+                <View style={styles.cardDivider} />
 
-              <View style={styles.cardFooter}>
-                <View>
-                  <Text style={styles.metaLabel}>Contract Value</Text>
-                  <Text style={styles.valueAmount}>{item.contractValue}</Text>
+                <View style={styles.cardFooter}>
+                  <View>
+                    <Text style={styles.metaLabel}>Contract Value</Text>
+                    <Text style={styles.valueAmount}>{item.contractValue}</Text>
+                  </View>
+
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={styles.metaLabel}>Timeline</Text>
+                    <Text style={styles.timelineValue}>{item.timeline}</Text>
+                  </View>
                 </View>
-
-                <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={styles.metaLabel}>Timeline</Text>
-                  <Text style={styles.timelineValue}>{item.timeline}</Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-          );
-        })}
+              </TouchableOpacity>
+            );
+          })
+        ) : (
+          <View style={styles.emptyNoticeCard}>
+            <Text style={styles.emptyNoticeText}>No contracts found for this account.</Text>
+          </View>
+        )}
       </View>
 
       {/* Upcoming Deadlines Section */}
@@ -503,18 +549,43 @@ Executed on:                    ${new Date().toLocaleDateString('en-US', { year:
         <Text style={styles.sectionTitle}>Upcoming Deadlines</Text>
       </View>
 
-      <View style={styles.deadlineCard}>
-        <View style={styles.deadlineLeft}>
-          <Text style={styles.deadlineIcon}>⏰</Text>
-          <View>
-            <Text style={styles.deadlineTitle}>UI Design Phase Handover</Text>
-            <Text style={styles.deadlineSub}>E-Commerce Redesign • TechVentures</Text>
+      {projects.length > 0 ? (
+        <View style={styles.deadlineCard}>
+          <View style={styles.deadlineLeft}>
+            <Text style={styles.deadlineIcon}>⏰</Text>
+            <View>
+              <Text style={styles.deadlineTitle}>
+                {projects[0].statusBadge || 'Project Milestone'} Handover
+              </Text>
+              <Text style={styles.deadlineSub}>
+                {projects[0].title} • {projects[0].clientName}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.daysLeftBadge}>
+            <Text style={styles.daysLeftText}>{projects[0].dueDate || 'Upcoming'}</Text>
           </View>
         </View>
-        <View style={styles.daysLeftBadge}>
-          <Text style={styles.daysLeftText}>3 days left</Text>
+      ) : isChathuni ? (
+        <View style={styles.deadlineCard}>
+          <View style={styles.deadlineLeft}>
+            <Text style={styles.deadlineIcon}>⏰</Text>
+            <View>
+              <Text style={styles.deadlineTitle}>UI Design Phase Handover</Text>
+              <Text style={styles.deadlineSub}>E-Commerce Redesign • TechVentures</Text>
+            </View>
+          </View>
+          <View style={styles.daysLeftBadge}>
+            <Text style={styles.daysLeftText}>3 days left</Text>
+          </View>
         </View>
-      </View>
+      ) : (
+        <View style={[styles.deadlineCard, { justifyContent: 'center', paddingVertical: 14 }]}>
+          <Text style={{ color: '#94A3B8', fontSize: 13, textAlign: 'center' }}>
+            No upcoming deadlines scheduled
+          </Text>
+        </View>
+      )}
 
       {/* Toast Notification */}
       {downloadToast && (
@@ -558,6 +629,31 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     marginRight: 12,
     backgroundColor: '#E5E7EB',
+  },
+  avatarPlaceholder: {
+    backgroundColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInitials: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  emptyNoticeCard: {
+    padding: 16,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    marginVertical: 4,
+  },
+  emptyNoticeText: {
+    fontSize: 13,
+    color: '#94A3B8',
+    fontStyle: 'italic',
   },
   greetingSub: {
     fontSize: 13,
