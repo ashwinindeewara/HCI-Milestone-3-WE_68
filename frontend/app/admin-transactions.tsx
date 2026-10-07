@@ -1,22 +1,39 @@
 import React, { useState, useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TextInput,
-  TouchableOpacity,
-  SafeAreaView,
-  Modal,
-  ActivityIndicator,
-} from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import SkeletonCard from '../src/components/SkeletonCard';
 import Colors from '../src/constants/colors';
 import AdminTabBar from '../src/components/AdminTabBar';
 import AdminToast, { ToastType } from '../src/components/AdminToast';
-import Theme from '../src/constants/theme';
 import apiClient from '../src/services/api';
+import { formatAdminDateTime } from '../src/services/dateFormat';
+import { formatAdminMoney } from '../src/services/moneyFormat';
+import {
+  AdminIcon,
+  AdminCard,
+  AdminScreenHeader,
+  AdminSearchBar,
+  AdminButton,
+  AdminEmptyState,
+  StatusPill,
+} from '../src/components/AdminUI';
+import AdminModal, {
+  AdminField,
+  AdminNotice,
+  AdminDetailList,
+  AdminActionList,
+  AdminActionRow,
+  AdminSectionTitle,
+  AdminTag,
+} from '../src/components/AdminModal';
+import {
+  Tone,
+  adminLayout,
+  adminRadius,
+  adminSpace,
+  adminType,
+  MUTED_TEXT,
+} from '../src/constants/adminTheme';
 
 const ITEMS_PER_PAGE = 10;
 
@@ -240,356 +257,269 @@ export default function AdminTransactionsScreen() {
       />
 
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-        {/* Title Header with Export CSV Action */}
-        <View style={styles.headerRow}>
-          <View>
-            <Text style={styles.headerTitle}>Financial & Escrow Ledger</Text>
-            <Text style={styles.headerSubtitle}>{rawTransactions.length} total escrow transactions</Text>
+        <View style={adminLayout.content}>
+          <AdminScreenHeader
+            title="Financial & Escrow Ledger"
+            subtitle={`${rawTransactions.length} total escrow transactions`}
+            right={<AdminButton label="Export CSV" icon="download-outline" variant="secondary" onPress={handleExportCSV} />}
+          />
+
+          {/* Escrow Balance hero */}
+          <View style={styles.hero}>
+            <View style={styles.heroTop}>
+              <View style={styles.heroIcon}>
+                <AdminIcon name="shield-checkmark-outline" size={20} color={Colors.primary} />
+              </View>
+              <Text style={styles.heroTitle}>Active Platform Escrow Balance</Text>
+            </View>
+            <Text style={styles.heroAmount} numberOfLines={1} adjustsFontSizeToFit>
+              ${typeof platformEscrowValue === 'number'
+                ? platformEscrowValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                : platformEscrowValue}
+            </Text>
+            <View style={styles.trendTag}>
+              <AdminIcon name="trending-up-outline" size={14} color={Colors.primary} />
+              <Text style={styles.trendText}>{trend}</Text>
+            </View>
           </View>
 
-          <TouchableOpacity style={styles.exportBtn} onPress={handleExportCSV} activeOpacity={0.8}>
-            <Text style={styles.exportBtnText}>📥 Export CSV</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Escrow Balance KPI Banner */}
-        <View style={styles.escrowCard}>
-          <Text style={styles.escrowTitle}>Active Platform Escrow Balance</Text>
-          <Text style={styles.escrowAmount}>
-            ${typeof platformEscrowValue === 'number'
-              ? platformEscrowValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-              : platformEscrowValue}
-          </Text>
-          <View style={styles.trendTag}>
-            <Text style={styles.trendText}>📈 {trend}</Text>
-          </View>
-        </View>
-
-        {/* Search Input Bar */}
-        <View style={styles.searchBar}>
-          <Text style={{ fontSize: 16, marginRight: 8 }}>🔍</Text>
-          <TextInput
-            style={styles.searchInput}
+          <AdminSearchBar
+            style={styles.search}
             placeholder="Search transaction ID, project, or party..."
-            placeholderTextColor={Colors.neutralLight}
             value={searchQuery}
             onChangeText={(text) => {
               setSearchQuery(text);
               setCurrentPage(1);
             }}
           />
-        </View>
 
-        {/* Filters & Sort Controls */}
-        <View style={styles.filterSortRow}>
-          <View style={styles.filterChipsRow}>
-            {['All', 'Completed', 'Disputed', 'Refunded'].map((filter) => {
-              const isSelected = activeFilter === filter;
-              return (
-                <TouchableOpacity
-                  key={filter}
-                  style={[styles.chip, isSelected && styles.chipActive]}
-                  onPress={() => {
-                    setActiveFilter(filter);
-                    setCurrentPage(1);
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>
-                    {filter}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          <View style={styles.sortBtnRow}>
-            <TouchableOpacity
-              style={[styles.sortBtn, sortField === 'date' && styles.sortBtnActive]}
-              onPress={() => toggleSort('date')}
-            >
-              <Text style={[styles.sortBtnText, sortField === 'date' && styles.sortBtnTextActive]}>
-                Date {sortField === 'date' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.sortBtn, sortField === 'amount' && styles.sortBtnActive]}
-              onPress={() => toggleSort('amount')}
-            >
-              <Text style={[styles.sortBtnText, sortField === 'amount' && styles.sortBtnTextActive]}>
-                Amount {sortField === 'amount' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Transactions List */}
-        <View style={styles.txnList}>
-          {isLoading ? (
-            <>
-              <SkeletonCard height={110} />
-              <SkeletonCard height={110} />
-              <SkeletonCard height={110} />
-            </>
-          ) : filteredTransactions.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <Text style={{ fontSize: 32, marginBottom: 8 }}>💳</Text>
-              <Text style={styles.emptyTitle}>No Transactions Found</Text>
-              <Text style={styles.emptySub}>No financial records matched your search filters.</Text>
+          {/* Filters & Sort Controls */}
+          <View style={styles.filterSortRow}>
+            <View style={styles.filterChips}>
+              {['All', 'Completed', 'Disputed', 'Refunded'].map((filter) => {
+                const isSelected = activeFilter === filter;
+                return (
+                  <TouchableOpacity
+                    key={filter}
+                    style={[styles.chip, isSelected && styles.chipActive]}
+                    onPress={() => {
+                      setActiveFilter(filter);
+                      setCurrentPage(1);
+                    }}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected }}
+                  >
+                    <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>{filter}</Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
-          ) : (
-            filteredTransactions.slice(0, visibleLimit).map((txn: any) => (
-              <View key={txn.id} style={styles.txnCard}>
-                <View style={styles.cardHeader}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.txnProject}>{txn.project}</Text>
-                    <Text style={styles.txnParties}>
+
+            <View style={styles.sortGroup}>
+              <Text style={styles.sortLabel}>Sort by</Text>
+              <View style={styles.segment}>
+                <TouchableOpacity
+                  style={[styles.segBtn, sortField === 'date' && styles.segBtnActive]}
+                  onPress={() => toggleSort('date')}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: sortField === 'date' }}
+                >
+                  <Text style={[styles.segText, sortField === 'date' && styles.segTextActive]}>Date</Text>
+                  {sortField === 'date' ? (
+                    <AdminIcon name={sortOrder === 'asc' ? 'arrow-up' : 'arrow-down'} size={13} color={Colors.surface} />
+                  ) : null}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.segBtn, sortField === 'amount' && styles.segBtnActive]}
+                  onPress={() => toggleSort('amount')}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: sortField === 'amount' }}
+                >
+                  <Text style={[styles.segText, sortField === 'amount' && styles.segTextActive]}>Amount</Text>
+                  {sortField === 'amount' ? (
+                    <AdminIcon name={sortOrder === 'asc' ? 'arrow-up' : 'arrow-down'} size={13} color={Colors.surface} />
+                  ) : null}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+
+          {/* Transactions List */}
+          <View style={styles.txnList}>
+            {isLoading ? (
+              <>
+                <SkeletonCard height={110} />
+                <SkeletonCard height={110} />
+                <SkeletonCard height={110} />
+              </>
+            ) : filteredTransactions.length === 0 ? (
+              <AdminCard>
+                <AdminEmptyState
+                  icon="card-outline"
+                  title="No Transactions Found"
+                  message="No financial records matched your search filters."
+                />
+              </AdminCard>
+            ) : (
+              filteredTransactions.slice(0, visibleLimit).map((txn: any) => (
+                <AdminCard key={txn.id} style={styles.txnCard}>
+                  <View style={styles.txnMain}>
+                    <Text style={styles.txnProject} numberOfLines={2}>{txn.project}</Text>
+                    <Text style={styles.txnParties} numberOfLines={2}>
                       {txn.client} • {txn.freelancer}
                     </Text>
+                    <View style={styles.dateRow}>
+                      <AdminIcon name="time-outline" size={13} color={MUTED_TEXT} />
+                      <Text style={styles.txnDate}>{formatAdminDateTime(txn.date)}</Text>
+                    </View>
                   </View>
-                  <Text style={styles.txnAmount}>{txn.amount}</Text>
-                </View>
 
-                <View style={styles.cardFooter}>
-                  <Text style={styles.txnDate}>🕒 {txn.date}</Text>
+                  <Text style={styles.txnAmount}>{formatAdminMoney(txn.amount)}</Text>
 
-                  <View style={styles.badgesRow}>
-                    <View
-                      style={[
-                        styles.statusTag,
-                        txn.status === 'REFUNDED' && styles.tagRefunded,
-                        txn.status === 'DISPUTED' && styles.tagDisputed,
-                        txn.status === 'COMPLETED' && styles.tagCompleted,
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.statusTagText,
-                          txn.status === 'REFUNDED' && styles.textRefunded,
-                          txn.status === 'DISPUTED' && styles.textDisputed,
-                          txn.status === 'COMPLETED' && styles.textCompleted,
-                        ]}
-                      >
-                        {txn.status}
-                      </Text>
-                    </View>
-
-                    <View
-                      style={[
-                        styles.riskTag,
-                        txn.riskLevel === 'high' && styles.riskHigh,
-                        txn.riskLevel === 'medium' && styles.riskMedium,
-                        txn.riskLevel === 'low' && styles.riskLow,
-                      ]}
-                    >
-                      <Text style={styles.riskText}>{txn.risk}</Text>
-                    </View>
-
-                    <TouchableOpacity
-                      style={styles.inspectBtn}
+                  <View style={styles.txnMeta}>
+                    <StatusPill label={txn.status} tone={statusTone(txn.status)} style={styles.metaPill} />
+                    <AdminTag label={txn.risk} tone={riskTone(txn.riskLevel)} style={styles.metaTag} />
+                    <AdminButton
+                      label="Inspect"
+                      icon="search-outline"
+                      size="sm"
+                      variant="secondary"
                       onPress={() => handleOpenDetail(txn)}
-                    >
-                      <Text style={styles.inspectBtnText}>🔍 Inspect</Text>
-                    </TouchableOpacity>
+                    />
                   </View>
-                </View>
-              </View>
-            ))
-          )}
-        </View>
-
-        {/* Load More Pagination Option for > 4 items */}
-        {filteredTransactions.length > 4 && (
-          <View style={styles.loadMoreContainer}>
-            {visibleLimit < filteredTransactions.length ? (
-              <TouchableOpacity
-                style={styles.loadMoreBtn}
-                onPress={() => setVisibleLimit((prev) => prev + 4)}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.loadMoreText}>
-                  Load More (+{filteredTransactions.length - visibleLimit} remaining)
-                </Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                style={styles.loadMoreBtnOutline}
-                onPress={() => setVisibleLimit(4)}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.loadMoreTextOutline}>Show Less</Text>
-              </TouchableOpacity>
+                </AdminCard>
+              ))
             )}
           </View>
-        )}
+
+          {/* Load More Pagination Option for > 4 items */}
+          {filteredTransactions.length > 4 && (
+            <View style={styles.loadMoreContainer}>
+              {visibleLimit < filteredTransactions.length ? (
+                <AdminButton
+                  label={`Load More (+${filteredTransactions.length - visibleLimit} remaining)`}
+                  onPress={() => setVisibleLimit((prev) => prev + 4)}
+                />
+              ) : (
+                <AdminButton label="Show Less" variant="secondary" onPress={() => setVisibleLimit(4)} />
+              )}
+            </View>
+          )}
+        </View>
       </ScrollView>
 
       {/* TRANSACTION INSPECT / DETAIL MODAL */}
-      <Modal
+      <AdminModal
         visible={isDetailModalOpen}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setIsDetailModalOpen(false)}
+        onClose={() => setIsDetailModalOpen(false)}
+        title="Financial Ledger Record"
+        subtitle={selectedTxn ? `ID: ${selectedTxn.id}` : undefined}
+        icon="receipt-outline"
+        footer={<AdminButton label="Close Record" variant="secondary" onPress={() => setIsDetailModalOpen(false)} />}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            {selectedTxn && (
-              <>
-                <View style={styles.modalHeader}>
-                  <Text style={styles.modalTitle}>Financial Ledger Record</Text>
-                  <TouchableOpacity onPress={() => setIsDetailModalOpen(false)}>
-                    <Text style={styles.closeIcon}>✕</Text>
-                  </TouchableOpacity>
-                </View>
+        {selectedTxn && (
+          <>
+            <View style={styles.summary}>
+              <Text style={styles.summaryProject}>{selectedTxn.project}</Text>
+              <Text style={styles.summaryAmount}>{formatAdminMoney(selectedTxn.amount)}</Text>
+              <StatusPill label={selectedTxn.status} tone={statusTone(selectedTxn.status)} />
+            </View>
 
-                <View style={styles.detailBox}>
-                  <Text style={styles.detailTxnId}>ID: {selectedTxn.id}</Text>
-                  <Text style={styles.detailProjectTitle}>{selectedTxn.project}</Text>
-                  <Text style={styles.detailAmountText}>{selectedTxn.amount}</Text>
+            <AdminDetailList
+              rows={[
+                { label: 'Client', value: selectedTxn.client },
+                { label: 'Freelancer', value: selectedTxn.freelancer },
+                { label: 'Date & Time', value: formatAdminDateTime(selectedTxn.date) },
+                {
+                  label: 'Status',
+                  value: selectedTxn.status,
+                  tone: selectedTxn.status === 'REFUNDED' ? 'danger' : 'neutral',
+                },
+                { label: 'Audit Risk Level', value: selectedTxn.risk, tone: riskTone(selectedTxn.riskLevel) },
+              ]}
+            />
 
-                  <View style={styles.detailMetaRow}>
-                    <Text style={styles.detailMetaLabel}>Client:</Text>
-                    <Text style={styles.detailMetaVal}>{selectedTxn.client}</Text>
-                  </View>
-                  <View style={styles.detailMetaRow}>
-                    <Text style={styles.detailMetaLabel}>Freelancer:</Text>
-                    <Text style={styles.detailMetaVal}>{selectedTxn.freelancer}</Text>
-                  </View>
-                  <View style={styles.detailMetaRow}>
-                    <Text style={styles.detailMetaLabel}>Date & Time:</Text>
-                    <Text style={styles.detailMetaVal}>{selectedTxn.date}</Text>
-                  </View>
-                  <View style={styles.detailMetaRow}>
-                    <Text style={styles.detailMetaLabel}>Status:</Text>
-                    <Text style={[styles.detailMetaVal, selectedTxn.status === 'REFUNDED' && { color: Colors.errorText }]}>
-                      {selectedTxn.status}
-                    </Text>
-                  </View>
-                  <View style={styles.detailMetaRow}>
-                    <Text style={styles.detailMetaLabel}>Audit Risk Level:</Text>
-                    <Text style={styles.detailMetaVal}>{selectedTxn.risk}</Text>
-                  </View>
-                </View>
-
-                <View style={styles.detailActionsContainer}>
-                  <TouchableOpacity
-                    style={styles.detailActionItem}
-                    onPress={() =>
-                      flagMutation.mutate({
-                        id: selectedTxn.id,
-                        newStatus: selectedTxn.status === 'DISPUTED' ? 'COMPLETED' : 'DISPUTED',
-                        project: selectedTxn.project,
-                        amount: selectedTxn.rawAmount,
-                        client: selectedTxn.client,
-                      })
-                    }
-                  >
-                    <Text style={styles.detailActionIcon}>🚩</Text>
-                    <Text style={styles.detailActionLabel}>
-                      {selectedTxn.status === 'DISPUTED' ? 'Unflag / Clear Audit' : 'Flag Transaction for Audit'}
-                    </Text>
-                  </TouchableOpacity>
-
-                  {selectedTxn.status === 'REFUNDED' ? (
-                    <View style={[styles.detailActionItem, { borderBottomWidth: 0, opacity: 0.6 }]}>
-                      <Text style={styles.detailActionIcon}>✅</Text>
-                      <Text style={[styles.detailActionLabel, { color: Colors.successText || Colors.primaryDark }]}>
-                        Escrow Refund Issued & Settled
-                      </Text>
-                    </View>
-                  ) : (
-                    <TouchableOpacity
-                      style={[styles.detailActionItem, { borderBottomWidth: 0 }]}
-                      onPress={handleOpenRefund}
-                    >
-                      <Text style={styles.detailActionIcon}>↩️</Text>
-                      <Text style={styles.detailActionLabel}>Process Escrow Refund</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-
-                <TouchableOpacity
-                  style={styles.closeDetailBtn}
-                  onPress={() => setIsDetailModalOpen(false)}
-                >
-                  <Text style={styles.closeDetailText}>Close Record</Text>
-                </TouchableOpacity>
-              </>
-            )}
-          </View>
-        </View>
-      </Modal>
+            <AdminSectionTitle>Actions</AdminSectionTitle>
+            <AdminActionList>
+              <AdminActionRow
+                icon="flag-outline"
+                tone="warning"
+                label={selectedTxn.status === 'DISPUTED' ? 'Unflag / Clear Audit' : 'Flag Transaction for Audit'}
+                onPress={() =>
+                  flagMutation.mutate({
+                    id: selectedTxn.id,
+                    newStatus: selectedTxn.status === 'DISPUTED' ? 'COMPLETED' : 'DISPUTED',
+                    project: selectedTxn.project,
+                    amount: selectedTxn.rawAmount,
+                    client: selectedTxn.client,
+                  })
+                }
+              />
+              {selectedTxn.status === 'REFUNDED' ? (
+                <AdminActionRow
+                  last
+                  icon="checkmark-circle-outline"
+                  tone="success"
+                  label="Escrow Refund Issued & Settled"
+                />
+              ) : (
+                <AdminActionRow
+                  last
+                  icon="arrow-undo-outline"
+                  tone="danger"
+                  label="Process Escrow Refund"
+                  onPress={handleOpenRefund}
+                />
+              )}
+            </AdminActionList>
+          </>
+        )}
+      </AdminModal>
 
       {/* REFUND TRANSACTION MODAL */}
-      <Modal
+      <AdminModal
         visible={isRefundModalOpen}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setIsRefundModalOpen(false)}
+        onClose={() => setIsRefundModalOpen(false)}
+        title="Process Escrow Refund"
+        icon="arrow-undo-outline"
+        tone="danger"
+        footer={
+          <>
+            <AdminButton label="Cancel" variant="secondary" onPress={() => setIsRefundModalOpen(false)} />
+            <AdminButton
+              label="Confirm & Issue Refund"
+              variant="danger"
+              onPress={handleRefundSubmit}
+              loading={refundMutation.isPending}
+            />
+          </>
+        }
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            {selectedTxn && (
-              <>
-                <View style={styles.modalHeader}>
-                  <Text style={styles.modalTitle}>↩️ Process Escrow Refund</Text>
-                  <TouchableOpacity onPress={() => setIsRefundModalOpen(false)}>
-                    <Text style={styles.closeIcon}>✕</Text>
-                  </TouchableOpacity>
-                </View>
+        {selectedTxn && (
+          <>
+            <AdminNotice tone="warning">
+              Refunding <Text style={styles.noticeStrong}>{formatAdminMoney(selectedTxn.amount)}</Text> for milestone:{' '}
+              <Text style={styles.noticeStrong}>{selectedTxn.project}</Text>
+            </AdminNotice>
 
-                <View style={{ marginVertical: 8 }}>
-                  <Text style={{ fontSize: 13, color: Colors.neutralMedium }}>
-                    Refunding <Text style={{ fontWeight: '700', color: Colors.dark }}>{selectedTxn.amount}</Text> for milestone:{' '}
-                    <Text style={{ fontWeight: '700', color: Colors.dark }}>{selectedTxn.project}</Text>
-                  </Text>
-                </View>
+            <AdminField
+              label="Reason for Refund"
+              placeholder="e.g. Milestone cancelled by client"
+              value={refundReason}
+              onChangeText={setRefundReason}
+            />
 
-                <Text style={styles.inputLabel}>Reason for Refund</Text>
-                <TextInput
-                  style={styles.modalInput}
-                  placeholder="e.g. Milestone cancelled by client"
-                  placeholderTextColor={Colors.neutralLight}
-                  value={refundReason}
-                  onChangeText={setRefundReason}
-                />
-
-                <Text style={styles.inputLabel}>Admin Note</Text>
-                <TextInput
-                  style={[styles.modalInput, { height: 60, paddingTop: 8 }]}
-                  placeholder="Enter administrative memo or notes..."
-                  placeholderTextColor={Colors.neutralLight}
-                  multiline
-                  value={refundNote}
-                  onChangeText={setRefundNote}
-                />
-
-                <View style={styles.modalFooter}>
-                  <TouchableOpacity
-                    style={styles.cancelModalBtn}
-                    onPress={() => setIsRefundModalOpen(false)}
-                  >
-                    <Text style={styles.cancelModalText}>Cancel</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.dangerModalBtn}
-                    onPress={handleRefundSubmit}
-                    disabled={refundMutation.isPending}
-                  >
-                    {refundMutation.isPending ? (
-                      <ActivityIndicator color={Colors.surface} size="small" />
-                    ) : (
-                      <Text style={styles.dangerModalText}>Confirm & Issue Refund</Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              </>
-            )}
-          </View>
-        </View>
-      </Modal>
+            <AdminField
+              label="Admin Note"
+              placeholder="Enter administrative memo or notes..."
+              multiline
+              value={refundNote}
+              onChangeText={setRefundNote}
+            />
+          </>
+        )}
+      </AdminModal>
 
       <AdminTabBar activeTab="transactions" />
     </SafeAreaView>
@@ -597,333 +527,169 @@ export default function AdminTransactionsScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  container: {
-    flex: 1,
-  },
+  safeArea: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1 },
   contentContainer: {
-    padding: Theme.spacing.md,
-    paddingBottom: 80,
+    padding: adminSpace.lg,
+    paddingBottom: adminLayout.bottomClearance,
   },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Theme.spacing.md,
+
+  hero: {
+    backgroundColor: Colors.dark,
+    borderRadius: adminRadius.lg,
+    padding: adminSpace.xl,
+    marginBottom: adminSpace.lg,
+    shadowColor: '#101827',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 3,
   },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: Colors.dark,
-  },
-  headerSubtitle: {
-    fontSize: 12,
-    color: Colors.neutralMedium,
-    marginTop: 2,
-  },
-  exportBtn: {
-    paddingHorizontal: Theme.spacing.md,
-    paddingVertical: Theme.spacing.xs + 2,
-    borderRadius: Theme.borderRadius.md,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
+  heroTop: { flexDirection: 'row', alignItems: 'center', gap: adminSpace.sm },
+  heroIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: adminRadius.sm + 2,
+    backgroundColor: 'rgba(255,255,255,0.08)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  exportBtnText: {
-    color: Colors.dark,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  escrowCard: {
-    backgroundColor: Colors.dark,
-    borderRadius: Theme.borderRadius.lg,
-    padding: Theme.spacing.lg,
-    marginBottom: Theme.spacing.md,
-    ...Theme.shadows.card,
-  },
-  escrowTitle: {
-    fontSize: 13,
-    color: Colors.neutralLight,
-    fontWeight: '600',
-  },
-  escrowAmount: {
-    fontSize: 32,
+  heroTitle: { flex: 1, fontSize: 13, fontWeight: '700', color: '#D1D5DB', letterSpacing: 0.2 },
+  heroAmount: {
+    fontSize: 38,
     fontWeight: '800',
     color: Colors.surface,
-    marginVertical: Theme.spacing.xs,
+    letterSpacing: -1,
+    marginTop: adminSpace.lg,
+    marginBottom: adminSpace.md,
+    fontVariant: ['tabular-nums'],
   },
   trendTag: {
-    backgroundColor: Colors.primary + '30',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: adminRadius.pill,
   },
-  trendText: {
-    color: Colors.primary,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  searchBar: {
-    height: 48,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: Theme.borderRadius.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Theme.spacing.md,
-    marginBottom: Theme.spacing.md,
-  },
-  searchInput: { flex: 1, fontSize: 14, color: Colors.dark },
+  trendText: { color: Colors.primary, fontSize: 12, fontWeight: '700' },
+
+  search: { marginBottom: adminSpace.md },
   filterSortRow: {
-    gap: Theme.spacing.sm,
-    marginBottom: Theme.spacing.md,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: adminSpace.md,
+    marginBottom: adminSpace.lg,
   },
-  filterChipsRow: { flexDirection: 'row', gap: Theme.spacing.xs },
+  filterChips: { flexDirection: 'row', flexWrap: 'wrap', gap: adminSpace.sm },
   chip: {
-    paddingHorizontal: Theme.spacing.md,
-    paddingVertical: Theme.spacing.xs + 2,
-    borderRadius: Theme.borderRadius.full,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  chipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  chipText: { fontSize: 13, color: Colors.neutralMedium, fontWeight: '500' },
-  chipTextActive: { color: Colors.surface, fontWeight: '700' },
-  sortBtnRow: { flexDirection: 'row', gap: Theme.spacing.xs },
-  sortBtn: {
-    paddingHorizontal: Theme.spacing.sm + 2,
-    paddingVertical: Theme.spacing.xs,
-    borderRadius: Theme.borderRadius.sm,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-  },
-  sortBtnActive: { borderColor: Colors.primary, backgroundColor: Colors.primary + '10' },
-  sortBtnText: { fontSize: 11, color: Colors.neutralMedium, fontWeight: '600' },
-  sortBtnTextActive: { color: Colors.primary, fontWeight: '700' },
-  txnList: { gap: Theme.spacing.md },
-  emptyCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: Theme.borderRadius.lg,
-    padding: Theme.spacing.xl,
-    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    minHeight: 36,
     justifyContent: 'center',
+    borderRadius: adminRadius.pill,
     borderWidth: 1,
     borderColor: Colors.border,
+    backgroundColor: Colors.surface,
   },
-  emptyTitle: { fontSize: 16, fontWeight: '700', color: Colors.dark },
-  emptySub: { fontSize: 13, color: Colors.neutralMedium, textAlign: 'center', marginTop: 4 },
+  chipActive: { backgroundColor: Colors.dark, borderColor: Colors.dark },
+  chipText: { fontSize: 13, fontWeight: '600', color: Colors.neutralMedium },
+  chipTextActive: { color: Colors.surface },
+  sortGroup: { flexDirection: 'row', alignItems: 'center', gap: adminSpace.sm },
+  sortLabel: { ...adminType.label, color: MUTED_TEXT },
+  segment: {
+    flexDirection: 'row',
+    backgroundColor: '#F3F4F6',
+    borderRadius: adminRadius.sm + 2,
+    padding: 3,
+    gap: 2,
+  },
+  segBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    minHeight: 36,
+    paddingHorizontal: adminSpace.md,
+    borderRadius: adminRadius.sm,
+  },
+  segBtnActive: { backgroundColor: Colors.dark },
+  segText: { fontSize: 12, fontWeight: '700', color: Colors.neutralMedium },
+  segTextActive: { color: Colors.surface },
+
+  txnList: { gap: adminSpace.md },
   txnCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: Theme.borderRadius.lg,
-    padding: Theme.spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    ...Theme.shadows.card,
-  },
-  cardHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: Theme.spacing.xs,
-  },
-  txnProject: { fontSize: 15, fontWeight: '700', color: Colors.dark },
-  txnParties: { fontSize: 12, color: Colors.neutralMedium, marginTop: 2 },
-  txnAmount: { fontSize: 16, fontWeight: '800', color: Colors.dark },
-  cardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexWrap: 'wrap',
     alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    paddingTop: Theme.spacing.xs + 2,
-    marginTop: Theme.spacing.xs,
+    columnGap: adminSpace.lg,
+    rowGap: adminSpace.md,
   },
-  txnDate: { fontSize: 11, color: Colors.neutralLight },
-  badgesRow: { flexDirection: 'row', alignItems: 'center', gap: Theme.spacing.xs },
-  statusTag: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, backgroundColor: Colors.background },
-  tagRefunded: { backgroundColor: Colors.errorBg || '#FEE2E2' },
-  tagDisputed: { backgroundColor: Colors.warningBg || '#FEF3C7' },
-  tagCompleted: { backgroundColor: Colors.successBg || '#D1FAE5' },
-  statusTagText: { fontSize: 10, fontWeight: '700', color: Colors.dark },
-  textRefunded: { color: Colors.errorText || '#DC2626' },
-  textDisputed: { color: Colors.warningText || '#D97706' },
-  textCompleted: { color: Colors.successText || '#059669' },
-  riskTag: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-  riskHigh: { backgroundColor: Colors.errorBg },
-  riskMedium: { backgroundColor: Colors.warningBg },
-  riskLow: { backgroundColor: Colors.successBg },
-  riskText: { fontSize: 10, fontWeight: '700', color: Colors.dark },
-  inspectBtn: {
-    paddingHorizontal: Theme.spacing.sm + 4,
-    paddingVertical: 4,
-    borderRadius: Theme.borderRadius.sm,
-    backgroundColor: Colors.dark,
-  },
-  inspectBtnText: { color: Colors.surface, fontSize: 11, fontWeight: '700' },
-  paginationRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: Theme.spacing.lg,
-    paddingVertical: Theme.spacing.xs,
-  },
-  pageBtn: {
-    paddingHorizontal: Theme.spacing.md,
-    paddingVertical: Theme.spacing.xs + 2,
-    borderRadius: Theme.borderRadius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-  },
-  pageBtnDisabled: { opacity: 0.4 },
-  pageBtnText: { fontSize: 12, fontWeight: '700', color: Colors.dark },
-  pageBtnTextDisabled: { color: Colors.neutralLight },
-  pageIndicator: { fontSize: 12, fontWeight: '600', color: Colors.neutralMedium },
-
-  // Modal Styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: Theme.spacing.md,
-  },
-  modalContent: {
-    width: '100%',
-    maxWidth: 480,
-    backgroundColor: Colors.surface,
-    borderRadius: Theme.borderRadius.lg,
-    padding: Theme.spacing.lg,
-    ...Theme.shadows.modal,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Theme.spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-    paddingBottom: Theme.spacing.sm,
-  },
-  modalTitle: { fontSize: 18, fontWeight: '800', color: Colors.dark },
-  closeIcon: { fontSize: 18, fontWeight: '700', color: Colors.neutralMedium },
-  inputLabel: { fontSize: 13, fontWeight: '700', color: Colors.dark, marginTop: Theme.spacing.sm, marginBottom: 4 },
-  modalInput: {
-    height: 44,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: Theme.borderRadius.md,
-    paddingHorizontal: Theme.spacing.md,
-    fontSize: 14,
+  txnMain: { flexGrow: 1, flexShrink: 1, flexBasis: 220, minWidth: 200 },
+  txnProject: { ...adminType.cardTitle },
+  txnParties: { ...adminType.body, marginTop: 2 },
+  dateRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6 },
+  txnDate: { ...adminType.caption },
+  txnAmount: {
+    fontSize: 20,
+    fontWeight: '800',
     color: Colors.dark,
-    backgroundColor: Colors.background,
+    letterSpacing: -0.3,
+    fontVariant: ['tabular-nums'],
+    minWidth: 110,
   },
-  modalFooter: {
+  // Centered with the Inspect button (the pill's own top-alignment would float it up) and given a
+  // fixed minimum width so amounts and buttons line up in a column across rows
+  metaPill: { alignSelf: 'center', minWidth: 112, justifyContent: 'center' },
+  metaTag: { alignSelf: 'center', minWidth: 92, justifyContent: 'center' },
+  txnMeta: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: Theme.spacing.sm,
-    marginTop: Theme.spacing.lg,
-    paddingTop: Theme.spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: adminSpace.sm,
   },
-  cancelModalBtn: {
-    paddingHorizontal: Theme.spacing.md,
-    paddingVertical: Theme.spacing.xs + 4,
-    borderRadius: Theme.borderRadius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  cancelModalText: { fontSize: 13, fontWeight: '700', color: Colors.neutralMedium },
-  dangerModalBtn: {
-    paddingHorizontal: Theme.spacing.lg,
-    paddingVertical: Theme.spacing.xs + 4,
-    borderRadius: Theme.borderRadius.md,
-    backgroundColor: Colors.errorText,
-  },
-  dangerModalText: { fontSize: 13, fontWeight: '700', color: Colors.surface },
 
-  // Inspect Modal specific
-  detailBox: {
+  loadMoreContainer: { marginTop: adminSpace.lg, alignItems: 'center' },
+
+  summary: {
     backgroundColor: Colors.background,
     borderWidth: 1,
     borderColor: Colors.border,
-    borderRadius: Theme.borderRadius.md,
-    padding: Theme.spacing.md,
-    marginVertical: Theme.spacing.sm,
+    borderRadius: adminRadius.md,
+    padding: adminSpace.lg,
+    marginBottom: adminSpace.lg,
+    gap: adminSpace.sm,
   },
-  detailTxnId: { fontSize: 11, color: Colors.neutralLight, fontWeight: '700' },
-  detailProjectTitle: { fontSize: 16, fontWeight: '800', color: Colors.dark, marginTop: 2 },
-  detailAmountText: { fontSize: 22, fontWeight: '800', color: Colors.dark, marginVertical: 6 },
-  detailMetaRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },
-  detailMetaLabel: { fontSize: 12, color: Colors.neutralMedium, fontWeight: '600' },
-  detailMetaVal: { fontSize: 12, color: Colors.dark, fontWeight: '700' },
-  detailActionsContainer: {
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: Theme.borderRadius.md,
-    backgroundColor: Colors.surface,
-    marginVertical: Theme.spacing.md,
+  summaryProject: { ...adminType.cardTitle, fontSize: 16 },
+  summaryAmount: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: Colors.dark,
+    letterSpacing: -0.5,
+    fontVariant: ['tabular-nums'],
   },
-  detailActionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: Theme.spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  detailActionIcon: { fontSize: 16, marginRight: 12 },
-  detailActionLabel: { fontSize: 14, fontWeight: '600', color: Colors.dark },
-  closeDetailBtn: {
-    width: '100%',
-    paddingVertical: Theme.spacing.sm + 2,
-    borderRadius: Theme.borderRadius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    alignItems: 'center',
-  },
-  closeDetailText: { fontSize: 14, fontWeight: '700', color: Colors.dark },
-  loadMoreContainer: {
-    marginTop: Theme.spacing.md,
-    marginBottom: Theme.spacing.lg,
-    alignItems: 'center',
-  },
-  loadMoreBtn: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: Theme.spacing.xl,
-    paddingVertical: Theme.spacing.sm + 4,
-    borderRadius: Theme.borderRadius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Theme.shadows.card,
-  },
-  loadMoreText: {
-    color: Colors.surface,
-    fontWeight: '700',
-    fontSize: 13,
-  },
-  loadMoreBtnOutline: {
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    paddingHorizontal: Theme.spacing.xl,
-    paddingVertical: Theme.spacing.sm + 4,
-    borderRadius: Theme.borderRadius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadMoreTextOutline: {
-    color: Colors.neutralMedium,
-    fontWeight: '600',
-    fontSize: 13,
-  },
+  noticeStrong: { fontWeight: '800' },
 });
+
+const statusTone = (status: string): Tone => {
+  switch (status) {
+    case 'COMPLETED':
+      return 'success';
+    case 'REFUNDED':
+      return 'danger';
+    case 'DISPUTED':
+      return 'warning';
+    case 'PENDING':
+    case 'HELD':
+    case 'IN_ESCROW':
+      return 'info';
+    default:
+      return 'neutral';
+  }
+};
+
+const riskTone = (level: string): Tone =>
+  level === 'high' ? 'danger' : level === 'medium' ? 'warning' : level === 'low' ? 'success' : 'neutral';

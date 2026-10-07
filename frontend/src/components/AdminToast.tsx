@@ -1,7 +1,8 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Animated, TouchableOpacity, Platform } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import Colors from '../constants/colors';
-import Theme from '../constants/theme';
+import { adminRadius, adminShadow } from '../constants/adminTheme';
 
 export type ToastType = 'success' | 'error' | 'info' | 'warning';
 
@@ -28,14 +29,14 @@ export default function AdminToast({
       Animated.parallel([
         Animated.spring(translateY, {
           toValue: 0,
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== 'web',
           tension: 80,
           friction: 10,
         }),
         Animated.timing(opacity, {
           toValue: 1,
           duration: 200,
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== 'web',
         }),
       ]).start();
 
@@ -51,12 +52,12 @@ export default function AdminToast({
       Animated.timing(translateY, {
         toValue: -100,
         duration: 250,
-        useNativeDriver: true,
+        useNativeDriver: Platform.OS !== 'web',
       }),
       Animated.timing(opacity, {
         toValue: 0,
         duration: 250,
-        useNativeDriver: true,
+        useNativeDriver: Platform.OS !== 'web',
       }),
     ]).start(() => {
       onDismiss();
@@ -65,50 +66,43 @@ export default function AdminToast({
 
   if (!visible) return null;
 
-  const bgColor =
-    type === 'success' ? Colors.successBg :
-    type === 'error' ? Colors.errorBg :
-    type === 'warning' ? Colors.warningBg :
-    Colors.infoBg;
-
   const textColor =
     type === 'success' ? Colors.successText :
     type === 'error' ? Colors.errorText :
     type === 'warning' ? Colors.warningText :
     Colors.infoText;
 
-  const icon =
-    type === 'success' ? '✓' :
-    type === 'error' ? '✕' :
-    type === 'warning' ? '⚠' :
-    'ℹ';
-
-  const borderColor =
+  const accent =
     type === 'success' ? Colors.primary :
     type === 'error' ? Colors.error :
     type === 'warning' ? Colors.warning :
     Colors.info;
+
+  const iconName =
+    type === 'success' ? 'checkmark' :
+    type === 'error' ? 'close' :
+    type === 'warning' ? 'alert' :
+    'information';
 
   return (
     <Animated.View
       style={[
         styles.container,
         {
-          backgroundColor: bgColor,
-          borderColor: borderColor,
+          borderLeftColor: accent,
           transform: [{ translateY }],
           opacity,
         },
       ]}
     >
-      <View style={[styles.iconCircle, { backgroundColor: borderColor }]}>
-        <Text style={[styles.iconText, { color: Colors.surface }]}>{icon}</Text>
+      <View style={[styles.iconCircle, { backgroundColor: accent }]}>
+        <Ionicons name={iconName} size={14} color={Colors.surface} />
       </View>
-      <Text style={[styles.message, { color: textColor }]} numberOfLines={2}>
+      <Text style={styles.message} numberOfLines={2}>
         {message}
       </Text>
-      <TouchableOpacity onPress={dismissToast} style={styles.closeBtn}>
-        <Text style={[styles.closeText, { color: textColor }]}>✕</Text>
+      <TouchableOpacity onPress={dismissToast} style={styles.closeBtn} accessibilityLabel="Dismiss">
+        <Ionicons name="close" size={16} color={textColor} />
       </TouchableOpacity>
     </Animated.View>
   );
@@ -117,7 +111,7 @@ export default function AdminToast({
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    top: 50,
+    top: 16,
     left: 16,
     right: 16,
     zIndex: 9999,
@@ -125,9 +119,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     paddingHorizontal: 14,
-    borderRadius: Theme.borderRadius.md,
+    backgroundColor: Colors.surface,
+    borderRadius: adminRadius.md,
     borderWidth: 1,
-    ...Theme.shadows.card,
+    borderColor: Colors.border,
+    borderLeftWidth: 4,
+    ...adminShadow.raised,
   },
   iconCircle: {
     width: 24,
@@ -137,22 +134,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 10,
   },
-  iconText: {
-    fontSize: 13,
-    fontWeight: '800',
-  },
   message: {
     flex: 1,
     fontSize: 13,
     fontWeight: '600',
     lineHeight: 18,
+    color: Colors.dark,
   },
   closeBtn: {
     marginLeft: 8,
     padding: 4,
-  },
-  closeText: {
-    fontSize: 14,
-    fontWeight: '700',
   },
 });

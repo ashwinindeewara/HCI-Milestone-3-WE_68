@@ -3,8 +3,26 @@ import { View, StyleSheet } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import Colors from '../src/constants/colors';
+import AdminHeaderBack from '../src/components/AdminHeaderBack';
 
 const queryClient = new QueryClient();
+
+// Navy top bar used by every admin screen (the freelancer screens draw their own headers)
+const adminHeaderOptions = {
+  headerShown: true,
+  headerStyle: { backgroundColor: Colors.dark },
+  headerTintColor: Colors.surface,
+  headerTitleStyle: { fontWeight: '700' as const },
+  contentStyle: { backgroundColor: Colors.background },
+  headerLeft: () => <AdminHeaderBack fallbackHref="/admin-dashboard" />,
+};
+
+// The dashboard is the admin home, so with no history its arrow returns to the login screen
+const adminDashboardHeaderOptions = {
+  ...adminHeaderOptions,
+  headerLeft: () => <AdminHeaderBack fallbackHref="/login" />,
+};
 
 export default function RootLayout() {
   return (
@@ -42,7 +60,11 @@ export default function RootLayout() {
           <Stack.Screen name="notification-details" options={{ headerShown: false }} />
 
           {/* Admin & Staff Dashboards */}
-          <Stack.Screen name="admin-dashboard" options={{ headerShown: false }} />
+          <Stack.Screen name="admin-dashboard" options={adminDashboardHeaderOptions} />
+          <Stack.Screen name="admin-users" options={adminHeaderOptions} />
+          <Stack.Screen name="admin-transactions" options={adminHeaderOptions} />
+          <Stack.Screen name="admin-disputes" options={adminHeaderOptions} />
+          <Stack.Screen name="admin-security" options={adminHeaderOptions} />
           <Stack.Screen name="staff-dashboard" options={{ headerShown: false }} />
 
           {/* Main Bottom Tabs Navigator */}
