@@ -1,22 +1,39 @@
 import React, { useState, useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TextInput,
-  TouchableOpacity,
-  SafeAreaView,
-  Modal,
-  ActivityIndicator,
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, SafeAreaView,
+  Platform,
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import SkeletonCard from '../src/components/SkeletonCard';
 import Colors from '../src/constants/colors';
 import AdminTabBar from '../src/components/AdminTabBar';
 import AdminToast, { ToastType } from '../src/components/AdminToast';
-import Theme from '../src/constants/theme';
 import apiClient from '../src/services/api';
+import { formatAdminDateTime } from '../src/services/dateFormat';
+import {
+  AdminIcon,
+  AdminCard,
+  AdminScreenHeader,
+  AdminSectionHeader,
+  AdminButton,
+  AdminEmptyState,
+  StatusPill,
+} from '../src/components/AdminUI';
+import AdminModal, {
+  AdminField,
+  AdminTag,
+  AdminDetailList,
+  AdminActionList,
+  AdminActionRow,
+} from '../src/components/AdminModal';
+import {
+  Tone,
+  toneColors,
+  adminLayout,
+  adminRadius,
+  adminSpace,
+  adminType,
+  MUTED_TEXT,
+} from '../src/constants/adminTheme';
 
 const ITEMS_PER_PAGE = 10;
 
@@ -274,410 +291,354 @@ export default function AdminSecurityScreen() {
       />
 
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-        {/* Title Header with Export CSV & Log Incident Buttons */}
-        <View style={styles.headerRow}>
-          <View>
-            <Text style={styles.headerTitle}>Security & Audit Logs</Text>
-            <Text style={styles.headerSubtitle}>{alerts.length} security events monitored</Text>
-          </View>
-          <View style={{ flexDirection: 'row', gap: Theme.spacing.xs, alignItems: 'center' }}>
-            <TouchableOpacity style={styles.exportBtn} onPress={handleExportCSV} activeOpacity={0.8}>
-              <Text style={styles.exportBtnText}>📥 Export CSV</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.addBtn}
-              onPress={() => setIsLogModalOpen(true)}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.addBtnText}>+ Log Incident</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Search Input Bar */}
-        <View style={styles.searchBar}>
-          <Text style={{ fontSize: 16, marginRight: 8 }}>🔍</Text>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search event title, user email, or IP address..."
-            placeholderTextColor={Colors.neutralLight}
-            value={searchQuery}
-            onChangeText={(text) => {
-              setSearchQuery(text);
-              setCurrentPage(1);
-            }}
+        <View style={adminLayout.content}>
+          <AdminScreenHeader
+            title="Security & Audit Logs"
+            subtitle={`${alerts.length} security events monitored`}
           />
-          {searchQuery ? (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Text style={{ color: Colors.neutralMedium, fontWeight: '700' }}>✕</Text>
-            </TouchableOpacity>
-          ) : null}
-        </View>
 
-        {/* Filters & Sort Row */}
-        <View style={styles.filterSortRow}>
-          <View style={styles.filterChipsRow}>
-            {['All', 'Critical', 'Medium', 'Low', 'Reviewed'].map((filter) => {
-              const isSelected = activeFilter === filter;
-              const isReviewedActive = isSelected && filter === 'Reviewed';
-              return (
-                <TouchableOpacity
-                  key={filter}
-                  style={[
-                    styles.chip,
-                    isSelected && (isReviewedActive ? styles.chipActiveReviewed : styles.chipActive),
-                  ]}
-                  onPress={() => {
-                    setActiveFilter(filter);
-                    setCurrentPage(1);
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[
-                    styles.chipText,
-                    isSelected && (isReviewedActive ? styles.chipTextActiveReviewed : styles.chipTextActive),
-                  ]}>
-                    {filter === 'Reviewed' ? '✓ Reviewed' : filter}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
+          <View style={styles.actionsRow}>
+            <AdminButton label="Export CSV" icon="download-outline" variant="secondary" onPress={handleExportCSV} />
+            <AdminButton label="Log Incident" icon="add" onPress={() => setIsLogModalOpen(true)} />
           </View>
 
-          <TouchableOpacity
-            style={[styles.sortBtn, styles.sortBtnActive]}
-            onPress={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-          >
-            <Text style={styles.sortBtnTextActive}>
-              Severity {sortOrder === 'desc' ? ' High → Low' : ' Low → High'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Security Alert Cards */}
-        <View style={styles.alertsList}>
-          {isLoading ? (
-            <>
-              <SkeletonCard height={110} />
-              <SkeletonCard height={110} />
-            </>
-          ) : filteredAlerts.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <Text style={{ fontSize: 32, marginBottom: 8 }}>🛡️</Text>
-              <Text style={styles.emptyTitle}>No Security Incidents</Text>
-              <Text style={styles.emptySub}>No alert logs matching your selected filter level.</Text>
-            </View>
-          ) : (
-            filteredAlerts.slice(0, visibleLimit).map((alert: any) => (
-              <View key={alert.id} style={styles.alertCard}>
-                <View style={styles.cardTopRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.alertTitle}>{alert.title}</Text>
-                    <Text style={styles.alertUser}>User: {alert.user}</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                      <Text style={styles.alertTarget}>IP / Target: {alert.target}</Text>
-                      {blockedIpSet.has(alert.target) && (
-                        <View style={{ backgroundColor: Colors.errorBg, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                          <Text style={{ fontSize: 9, fontWeight: '800', color: Colors.errorText }}>🚫 IP BLOCKED</Text>
-                        </View>
-                      )}
-                    </View>
-                  </View>
-
-                  <View
-                    style={[
-                      styles.severityTag,
-                      alert.severityType === 'high' && styles.sevHigh,
-                      alert.severityType === 'medium' && styles.sevMedium,
-                      alert.severityType === 'low' && styles.sevLow,
-                      alert.severityType === 'reviewed' && styles.sevReviewed,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.severityText,
-                        alert.severityType === 'high' && styles.sevTextHigh,
-                        alert.severityType === 'medium' && styles.sevTextMedium,
-                        alert.severityType === 'low' && styles.sevTextLow,
-                        alert.severityType === 'reviewed' && styles.sevTextReviewed,
-                      ]}
-                    >
-                      {alert.severity}
-                    </Text>
-                  </View>
+          {/* Severity summary */}
+          <View style={styles.summaryRow}>
+            {([
+              { label: 'High', tone: 'danger' as Tone, count: alerts.filter((a: any) => a.severityType === 'high').length },
+              { label: 'Medium', tone: 'warning' as Tone, count: alerts.filter((a: any) => a.severityType === 'medium').length },
+              { label: 'Low', tone: 'success' as Tone, count: alerts.filter((a: any) => a.severityType === 'low').length },
+            ]).map((s) => (
+              <AdminCard key={s.label} style={styles.summaryCard}>
+                <View style={[styles.summaryDot, { backgroundColor: toneColors[s.tone].solid }]} />
+                <View>
+                  <Text style={styles.summaryCount}>{s.count}</Text>
+                  <Text style={styles.summaryLabel}>{s.label}</Text>
                 </View>
+              </AdminCard>
+            ))}
+          </View>
 
-                <View style={styles.cardFooter}>
-                  <Text style={styles.timeText}>🕒 {alert.time}</Text>
+          <View style={styles.searchBox}>
+            <AdminIcon name="search-outline" size={18} color={MUTED_TEXT} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search event title, user email, or IP address..."
+              placeholderTextColor={MUTED_TEXT}
+              accessibilityLabel="Search security events"
+              value={searchQuery}
+              onChangeText={(text) => {
+                setSearchQuery(text);
+                setCurrentPage(1);
+              }}
+            />
+            {searchQuery ? (
+              <TouchableOpacity
+                onPress={() => setSearchQuery('')}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityRole="button"
+                accessibilityLabel="Clear search"
+              >
+                <AdminIcon name="close-circle" size={18} color={Colors.neutralLight} />
+              </TouchableOpacity>
+            ) : null}
+          </View>
 
+          <View style={styles.filterSortRow}>
+            <View style={styles.chipRow}>
+              {['All', 'Critical', 'Medium', 'Low', 'Reviewed'].map((filter) => {
+                const isSelected = activeFilter === filter;
+                return (
                   <TouchableOpacity
-                    style={styles.actionBtn}
-                    onPress={() => handleOpenAction(alert)}
+                    key={filter}
+                    style={[styles.chip, isSelected && styles.chipSelected]}
+                    onPress={() => {
+                      setActiveFilter(filter);
+                      setCurrentPage(1);
+                    }}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected }}
                   >
-                    <Text style={styles.actionBtnText}>🛡️ Investigate</Text>
+                    <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>{filter}</Text>
                   </TouchableOpacity>
-                </View>
-              </View>
-            ))
-          )}
-        </View>
+                );
+              })}
+            </View>
+            <TouchableOpacity
+              style={styles.sortBtn}
+              onPress={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Toggle severity sort order"
+            >
+              <AdminIcon name="swap-vertical-outline" size={16} color={Colors.dark} />
+              <Text style={styles.sortBtnText}>
+                Severity {sortOrder === 'desc' ? ' High → Low' : ' Low → High'}
+              </Text>
+            </TouchableOpacity>
+          </View>
 
-        {/* Load More Pagination Option for > 4 items */}
-        {filteredAlerts.length > 4 && (
-          <View style={styles.loadMoreContainer}>
-            {visibleLimit < filteredAlerts.length ? (
-              <TouchableOpacity
-                style={styles.loadMoreBtn}
-                onPress={() => setVisibleLimit((prev) => prev + 4)}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.loadMoreText}>
-                  Load More (+{filteredAlerts.length - visibleLimit} remaining)
-                </Text>
-              </TouchableOpacity>
+          {/* Security Alert Cards */}
+          <View style={styles.alertsGrid}>
+            {isLoading ? (
+              <>
+                <View style={styles.alertCell}><SkeletonCard height={110} /></View>
+                <View style={styles.alertCell}><SkeletonCard height={110} /></View>
+              </>
+            ) : filteredAlerts.length === 0 ? (
+              <AdminCard style={{ width: '100%' }}>
+                <AdminEmptyState
+                  icon="shield-checkmark-outline"
+                  title="No Security Incidents"
+                  message="No alert logs matching your selected filter level."
+                />
+              </AdminCard>
             ) : (
-              <TouchableOpacity
-                style={styles.loadMoreBtnOutline}
-                onPress={() => setVisibleLimit(4)}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.loadMoreTextOutline}>Show Less</Text>
-              </TouchableOpacity>
+              filteredAlerts.slice(0, visibleLimit).map((alert: any) => {
+                const tone = severityTone(alert.severityType, alert.severity);
+                return (
+                  <View key={alert.id} style={styles.alertCell}>
+                    <AdminCard padded={false} style={[styles.alertCard, { borderLeftColor: toneColors[tone].solid }]}>
+                      <View style={styles.alertBody}>
+                        <View style={styles.cardTopRow}>
+                          <Text style={styles.alertTitle}>{alert.title}</Text>
+                          <StatusPill label={alert.severity} tone={tone} />
+                        </View>
+
+                        <View style={styles.metaRow}>
+                          <AdminIcon name="person-outline" size={14} color={MUTED_TEXT} />
+                          <Text style={styles.metaText} numberOfLines={1}>User: {alert.user}</Text>
+                        </View>
+                        <View style={styles.metaRow}>
+                          <AdminIcon name="globe-outline" size={14} color={MUTED_TEXT} />
+                          <Text style={styles.metaText} numberOfLines={1}>IP / Target: {alert.target}</Text>
+                          {blockedIpSet.has(alert.target) && <AdminTag label="IP BLOCKED" tone="danger" />}
+                        </View>
+
+                        <View style={styles.cardFooter}>
+                          <View style={[styles.metaRow, { flex: 1 }]}>
+                            <AdminIcon name="time-outline" size={14} color={MUTED_TEXT} />
+                            <Text style={styles.metaText}>{formatAdminDateTime(alert.time)}</Text>
+                          </View>
+                          <AdminButton
+                            label="Investigate"
+                            icon="shield-outline"
+                            variant="secondary"
+                            onPress={() => handleOpenAction(alert)}
+                          />
+                        </View>
+                      </View>
+                    </AdminCard>
+                  </View>
+                );
+              })
             )}
           </View>
-        )}
 
-        {/* Active Blocked IP Addresses Management Section */}
-        <View style={{ marginTop: Theme.spacing.lg }}>
-          <Text style={{ fontSize: 18, fontWeight: '800', color: Colors.dark, marginBottom: 2 }}>
-            🚫 Active Blocked IP Addresses ({blockedIps.length})
-          </Text>
-          <Text style={{ fontSize: 13, color: Colors.neutralMedium, marginBottom: Theme.spacing.md }}>
-            IP addresses listed below are blocked by SecurityInterceptor and denied access to platform APIs.
-          </Text>
-
-          {blockedIps.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <Text style={{ fontSize: 24, marginBottom: 4 }}>✅</Text>
-              <Text style={styles.emptyTitle}>No Blocked IP Addresses</Text>
-              <Text style={styles.emptySub}>No client IP addresses are currently restricted by security firewall rules.</Text>
+          {/* Load More Pagination Option for > 4 items */}
+          {filteredAlerts.length > 4 && (
+            <View style={styles.loadMoreContainer}>
+              {visibleLimit < filteredAlerts.length ? (
+                <AdminButton
+                  label={`Load More (+${filteredAlerts.length - visibleLimit} remaining)`}
+                  icon="chevron-down"
+                  onPress={() => setVisibleLimit((prev) => prev + 4)}
+                />
+              ) : (
+                <AdminButton
+                  label="Show Less"
+                  icon="chevron-up"
+                  variant="secondary"
+                  onPress={() => setVisibleLimit(4)}
+                />
+              )}
             </View>
-          ) : (
-            blockedIps.map((b: any) => (
-              <View key={b.id || b.ipAddress} style={[styles.alertCard, { marginBottom: Theme.spacing.sm, borderLeftWidth: 4, borderLeftColor: Colors.error }]}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <Text style={{ fontSize: 15, fontWeight: '800', color: Colors.dark }}>{b.ipAddress}</Text>
-                      <View style={{ backgroundColor: Colors.errorBg, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                        <Text style={{ fontSize: 10, fontWeight: '800', color: Colors.errorText }}>BLOCKED</Text>
-                      </View>
+          )}
+
+          {/* Active Blocked IP Addresses Management Section */}
+          <AdminSectionHeader title="Active Blocked IP Addresses" count={blockedIps.length} />
+          <AdminCard>
+            <Text style={[adminType.body, { marginBottom: adminSpace.md }]}>
+              IP addresses listed below are blocked by SecurityInterceptor and denied access to platform APIs.
+            </Text>
+
+            {blockedIps.length === 0 ? (
+              <AdminEmptyState
+                icon="checkmark-circle-outline"
+                title="No Blocked IP Addresses"
+                message="No client IP addresses are currently restricted by security firewall rules."
+              />
+            ) : (
+              blockedIps.map((b: any, index: number) => (
+                <View
+                  key={b.id || b.ipAddress}
+                  style={[styles.blockedRow, index === blockedIps.length - 1 && { borderBottomWidth: 0 }]}
+                >
+                  <View style={styles.blockedIconTile}>
+                    <AdminIcon name="ban-outline" size={18} color={toneColors.danger.fg} />
+                  </View>
+                  <View style={styles.blockedInfo}>
+                    <View style={styles.blockedTitleRow}>
+                      <Text style={styles.blockedIp}>{b.ipAddress}</Text>
+                      <StatusPill label="BLOCKED" tone="danger" />
                     </View>
-                    <Text style={{ fontSize: 12, color: Colors.neutralMedium, marginTop: 2 }}>Reason: {b.reason || 'Security threat detected'}</Text>
+                    <Text style={styles.metaText}>Reason: {b.reason || 'Security threat detected'}</Text>
                     {b.blockedAt && (
-                      <Text style={{ fontSize: 11, color: Colors.neutralLight, marginTop: 1 }}>
-                        Blocked at: {new Date(b.blockedAt).toLocaleString()}
-                      </Text>
+                      <Text style={adminType.caption}>Blocked at: {new Date(b.blockedAt).toLocaleString()}</Text>
                     )}
                   </View>
-
-                  <TouchableOpacity
-                    style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 6, backgroundColor: Colors.primary, marginLeft: 10 }}
+                  <AdminButton
+                    label="Unblock"
+                    icon="lock-open-outline"
+                    variant="secondary"
                     onPress={() => unblockIpMutation.mutate(b.ipAddress)}
                     disabled={unblockIpMutation.isPending}
-                  >
-                    <Text style={{ color: Colors.surface, fontSize: 12, fontWeight: '700' }}>🔓 Unblock</Text>
-                  </TouchableOpacity>
+                  />
                 </View>
-              </View>
-            ))
-          )}
+              ))
+            )}
+          </AdminCard>
         </View>
       </ScrollView>
 
       {/* CREATE LOG MODAL */}
-      <Modal
+      <AdminModal
         visible={isLogModalOpen}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setIsLogModalOpen(false)}
+        onClose={() => setIsLogModalOpen(false)}
+        title="Log Security Incident"
+        icon="alert-circle-outline"
+        tone="danger"
+        footer={
+          <>
+            <AdminButton label="Cancel" variant="secondary" onPress={() => setIsLogModalOpen(false)} />
+            <AdminButton
+              label="Log Incident"
+              onPress={handleCreateLogSubmit}
+              loading={createMutation.isPending}
+            />
+          </>
+        }
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>🚨 Log Security Incident</Text>
-              <TouchableOpacity onPress={() => setIsLogModalOpen(false)}>
-                <Text style={styles.closeIcon}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={{ maxHeight: 400 }}>
-              <Text style={styles.inputLabel}>Event Action / Title</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="e.g. Anomaly Login Attempt"
-                placeholderTextColor={Colors.neutralLight}
-                value={newAction}
-                onChangeText={setNewAction}
-              />
-
-              <Text style={styles.inputLabel}>Target User Email</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="e.g. suspicious.user@domain.com"
-                placeholderTextColor={Colors.neutralLight}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                value={newUserEmail}
-                onChangeText={setNewUserEmail}
-              />
-
-              <Text style={styles.inputLabel}>Source IP Address</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="e.g. 192.168.1.1"
-                placeholderTextColor={Colors.neutralLight}
-                value={newIpAddress}
-                onChangeText={setNewIpAddress}
-              />
-
-              <Text style={styles.inputLabel}>Severity Level</Text>
-              <View style={styles.radioGroup}>
-                {['High', 'Medium', 'Low'].map((s) => (
-                  <TouchableOpacity
-                    key={s}
-                    style={[styles.radioItem, newSeverity === s && styles.radioItemActive]}
-                    onPress={() => setNewSeverity(s)}
-                  >
-                    <Text style={[styles.radioText, newSeverity === s && styles.radioTextActive]}>
-                      {s} Severity
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
-
-            <View style={styles.modalFooter}>
+        <AdminField
+          label="Event Action / Title"
+          required
+          placeholder="e.g. Anomaly Login Attempt"
+          value={newAction}
+          onChangeText={setNewAction}
+        />
+        <AdminField
+          label="Target User Email"
+          required
+          placeholder="e.g. suspicious.user@domain.com"
+          keyboardType="email-address"
+          autoCapitalize="none"
+          value={newUserEmail}
+          onChangeText={setNewUserEmail}
+        />
+        <AdminField
+          label="Source IP Address"
+          placeholder="e.g. 192.168.1.1"
+          value={newIpAddress}
+          onChangeText={setNewIpAddress}
+        />
+        <View style={styles.choiceBox}>
+          <Text style={styles.choiceLabel}>Severity Level</Text>
+          <View style={styles.chipRow}>
+            {['High', 'Medium', 'Low'].map((s) => (
               <TouchableOpacity
-                style={styles.cancelModalBtn}
-                onPress={() => setIsLogModalOpen(false)}
+                key={s}
+                style={[styles.chip, newSeverity === s && styles.chipSelected]}
+                onPress={() => setNewSeverity(s)}
+                activeOpacity={0.8}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: newSeverity === s }}
               >
-                <Text style={styles.cancelModalText}>Cancel</Text>
+                <Text style={[styles.chipText, newSeverity === s && styles.chipTextSelected]}>{s} Severity</Text>
               </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.submitModalBtn}
-                onPress={handleCreateLogSubmit}
-                disabled={createMutation.isPending}
-              >
-                {createMutation.isPending ? (
-                  <ActivityIndicator color={Colors.surface} size="small" />
-                ) : (
-                  <Text style={styles.submitModalText}>Log Incident</Text>
-                )}
-              </TouchableOpacity>
-            </View>
+            ))}
           </View>
         </View>
-      </Modal>
+      </AdminModal>
 
       {/* INVESTIGATE / ACTION MODAL */}
-      <Modal
+      <AdminModal
         visible={isActionModalOpen}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setIsActionModalOpen(false)}
+        onClose={() => setIsActionModalOpen(false)}
+        title="Security Incident Report"
+        subtitle={selectedAlert ? selectedAlert.title : undefined}
+        icon="shield-outline"
+        tone={selectedAlert ? severityTone(selectedAlert.severityType, selectedAlert.severity) : 'neutral'}
+        footer={
+          <AdminButton label="Close Report" variant="secondary" onPress={() => setIsActionModalOpen(false)} />
+        }
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            {selectedAlert && (
-              <>
-                <View style={styles.modalHeader}>
-                  <Text style={styles.modalTitle}>Security Incident Report</Text>
-                  <TouchableOpacity onPress={() => setIsActionModalOpen(false)}>
-                    <Text style={styles.closeIcon}>✕</Text>
-                  </TouchableOpacity>
-                </View>
+        {selectedAlert && (
+          <>
 
-                <View style={styles.incidentBox}>
-                  <Text style={styles.incidentTitle}>{selectedAlert.title}</Text>
-                  <Text style={styles.incidentMeta}>User: {selectedAlert.user}</Text>
-                  <Text style={styles.incidentMeta}>IP Address: {selectedAlert.target}</Text>
-                  <Text style={styles.incidentMeta}>Logged: {selectedAlert.time}</Text>
-                  <View style={{ marginTop: 6, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: Colors.dark }}>
-                      Severity: {selectedAlert.severity}
-                    </Text>
-                    {blockedIpSet.has(selectedAlert.target) && (
-                      <View style={{ backgroundColor: Colors.errorBg, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                        <Text style={{ fontSize: 10, fontWeight: '800', color: Colors.errorText }}>🚫 IP BLOCKED</Text>
-                      </View>
-                    )}
-                  </View>
-                </View>
+            <AdminDetailList
+              rows={[
+                { label: 'User', value: String(selectedAlert.user) },
+                { label: 'IP Address', value: String(selectedAlert.target) },
+                { label: 'Logged', value: formatAdminDateTime(selectedAlert.time) },
+                {
+                  label: 'Severity',
+                  value: (
+                    <View style={styles.tagRow}>
+                      <AdminTag
+                        label={selectedAlert.severity}
+                        tone={severityTone(selectedAlert.severityType, selectedAlert.severity)}
+                      />
+                      {blockedIpSet.has(selectedAlert.target) && <AdminTag label="IP BLOCKED" tone="danger" />}
+                    </View>
+                  ),
+                },
+              ]}
+            />
 
-                <View style={styles.detailActionsContainer}>
-                  {blockedIpSet.has(selectedAlert.target) ? (
-                    <TouchableOpacity
-                      style={[styles.detailActionItem, { backgroundColor: Colors.primary + '15' }]}
-                      onPress={() => {
-                        unblockIpMutation.mutate(selectedAlert.target);
-                        setIsActionModalOpen(false);
-                      }}
-                      disabled={unblockIpMutation.isPending}
-                    >
-                      <Text style={styles.detailActionIcon}>🔓</Text>
-                      <Text style={[styles.detailActionLabel, { color: Colors.primaryDark, fontWeight: '800' }]}>
-                        Unblock Source IP Address
-                      </Text>
-                    </TouchableOpacity>
-                  ) : (
-                    <TouchableOpacity
-                      style={styles.detailActionItem}
-                      onPress={() => {
-                        blockIpMutation.mutate({
-                          ipAddress: selectedAlert.target,
-                          reason: `Blocked via Incident Report: ${selectedAlert.title}`
-                        });
-                        setIsActionModalOpen(false);
-                      }}
-                      disabled={blockIpMutation.isPending}
-                    >
-                      <Text style={styles.detailActionIcon}>🚫</Text>
-                      <Text style={styles.detailActionLabel}>Block Source IP Address</Text>
-                    </TouchableOpacity>
-                  )}
-
-                  <TouchableOpacity
-                    style={styles.detailActionItem}
-                    onPress={() => reviewMutation.mutate(selectedAlert.id)}
-                  >
-                    <Text style={styles.detailActionIcon}>✅</Text>
-                    <Text style={styles.detailActionLabel}>Mark Reviewed & Dismiss</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.detailActionItem, { borderBottomWidth: 0 }]}
-                    onPress={() => deleteMutation.mutate(selectedAlert.id)}
-                  >
-                    <Text style={styles.detailActionIcon}>🗑️</Text>
-                    <Text style={[styles.detailActionLabel, { color: Colors.errorText }]}>
-                      Delete Incident Record
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                <TouchableOpacity
-                  style={styles.closeDetailBtn}
-                  onPress={() => setIsActionModalOpen(false)}
-                >
-                  <Text style={styles.closeDetailText}>Close Report</Text>
-                </TouchableOpacity>
-              </>
-            )}
-          </View>
-        </View>
-      </Modal>
+            <Text style={styles.actionsHeading}>Response actions</Text>
+            <AdminActionList>
+              {blockedIpSet.has(selectedAlert.target) ? (
+                <AdminActionRow
+                  icon="lock-open-outline"
+                  tone="success"
+                  label="Unblock Source IP Address"
+                  onPress={() => {
+                    unblockIpMutation.mutate(selectedAlert.target);
+                    setIsActionModalOpen(false);
+                  }}
+                  disabled={unblockIpMutation.isPending}
+                />
+              ) : (
+                <AdminActionRow
+                  icon="ban-outline"
+                  label="Block Source IP Address"
+                  onPress={() => {
+                    blockIpMutation.mutate({
+                      ipAddress: selectedAlert.target,
+                      reason: `Blocked via Incident Report: ${selectedAlert.title}`
+                    });
+                    setIsActionModalOpen(false);
+                  }}
+                  disabled={blockIpMutation.isPending}
+                />
+              )}
+              <AdminActionRow
+                icon="checkmark-circle-outline"
+                label="Mark Reviewed & Dismiss"
+                onPress={() => reviewMutation.mutate(selectedAlert.id)}
+              />
+              <AdminActionRow
+                icon="trash-outline"
+                tone="danger"
+                label="Delete Incident Record"
+                onPress={() => deleteMutation.mutate(selectedAlert.id)}
+                last
+              />
+            </AdminActionList>
+          </>
+        )}
+      </AdminModal>
 
       <AdminTabBar activeTab="security" />
     </SafeAreaView>
@@ -685,316 +646,140 @@ export default function AdminSecurityScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  container: {
-    flex: 1,
-  },
+  safeArea: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1 },
   contentContainer: {
-    padding: Theme.spacing.md,
-    paddingBottom: 80,
+    padding: adminSpace.lg,
+    paddingBottom: adminLayout.bottomClearance,
   },
-  headerRow: {
+  actionsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+    gap: adminSpace.sm,
+    marginTop: -adminSpace.md,
+    marginBottom: adminSpace.lg,
+  },
+  summaryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: adminSpace.md, marginBottom: adminSpace.lg },
+  summaryCard: {
+    flex: 1,
+    minWidth: 100,
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: Theme.spacing.md,
+    gap: adminSpace.md,
+    padding: adminSpace.md + 2,
   },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: Colors.dark,
-  },
-  headerSubtitle: {
-    fontSize: 13,
-    color: Colors.neutralMedium,
-    marginTop: 2,
-  },
-  exportBtn: {
-    paddingHorizontal: Theme.spacing.md,
-    paddingVertical: Theme.spacing.xs + 2,
-    borderRadius: Theme.borderRadius.md,
+  summaryDot: { width: 10, height: 10, borderRadius: 5 },
+  summaryCount: { fontSize: 22, fontWeight: '800', color: Colors.dark, letterSpacing: -0.4 },
+  summaryLabel: adminType.label,
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: adminSpace.sm,
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderRadius: adminRadius.md,
+    paddingHorizontal: adminSpace.md,
+    minHeight: 46,
+    marginBottom: adminSpace.md,
   },
-  exportBtnText: {
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
     color: Colors.dark,
-    fontSize: 12,
-    fontWeight: '700',
+    paddingVertical: 10,
+    // Rounded, palette-colored focus ring on web (the browser default is a square blue box)
+    ...(Platform.OS === 'web' ? ({ outlineColor: Colors.primary, borderRadius: 8 } as object) : null),
   },
-  addBtn: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: Theme.spacing.md,
-    paddingVertical: Theme.spacing.xs + 4,
-    borderRadius: Theme.borderRadius.md,
-    ...Theme.shadows.card,
-  },
-  addBtnText: {
-    color: Colors.surface,
-    fontWeight: '700',
-    fontSize: 13,
-  },
-  searchBar: {
-    height: 48,
-    backgroundColor: Colors.surface,
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: adminSpace.sm, flexShrink: 1 },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: adminRadius.pill,
     borderWidth: 1,
     borderColor: Colors.border,
-    borderRadius: Theme.borderRadius.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Theme.spacing.md,
-    marginBottom: Theme.spacing.md,
+    backgroundColor: Colors.surface,
   },
-  searchInput: { flex: 1, fontSize: 14, color: Colors.dark },
+  chipSelected: { backgroundColor: Colors.dark, borderColor: Colors.dark },
+  chipText: { fontSize: 13, fontWeight: '600', color: Colors.neutralMedium },
+  chipTextSelected: { color: Colors.surface },
+  choiceBox: { marginBottom: adminSpace.lg },
+  choiceLabel: { fontSize: 12, fontWeight: '700', color: Colors.neutralDark, marginBottom: 6 },
   filterSortRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Theme.spacing.md,
+    gap: adminSpace.md,
+    marginBottom: adminSpace.lg,
   },
-  filterChipsRow: { flexDirection: 'row', gap: Theme.spacing.xs },
-  chip: {
-    paddingHorizontal: Theme.spacing.md,
-    paddingVertical: Theme.spacing.xs + 2,
-    borderRadius: Theme.borderRadius.full,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  chipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  chipActiveReviewed: { backgroundColor: Colors.info, borderColor: Colors.info },
-  chipText: { fontSize: 13, color: Colors.neutralMedium, fontWeight: '500' },
-  chipTextActive: { color: Colors.surface, fontWeight: '700' },
-  chipTextActiveReviewed: { color: Colors.surface, fontWeight: '700' },
   sortBtn: {
-    paddingHorizontal: Theme.spacing.sm + 2,
-    paddingVertical: Theme.spacing.xs + 2,
-    borderRadius: Theme.borderRadius.sm,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-  },
-  sortBtnActive: { borderColor: Colors.primary, backgroundColor: Colors.primary + '10' },
-  sortBtnTextActive: { color: Colors.primary, fontSize: 11, fontWeight: '700' },
-  alertsList: { gap: Theme.spacing.md },
-  emptyCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: Theme.borderRadius.lg,
-    padding: Theme.spacing.xl,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 6,
+    minHeight: 40,
+    paddingHorizontal: adminSpace.md,
+    borderRadius: adminRadius.md,
     borderWidth: 1,
     borderColor: Colors.border,
-  },
-  emptyTitle: { fontSize: 16, fontWeight: '700', color: Colors.dark },
-  emptySub: { fontSize: 13, color: Colors.neutralMedium, textAlign: 'center', marginTop: 4 },
-  alertCard: {
     backgroundColor: Colors.surface,
-    borderRadius: Theme.borderRadius.lg,
-    padding: Theme.spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    ...Theme.shadows.card,
   },
-  cardTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  alertTitle: { fontSize: 15, fontWeight: '800', color: Colors.dark },
-  alertUser: { fontSize: 12, color: Colors.neutralMedium, marginTop: 2 },
-  alertTarget: { fontSize: 11, color: Colors.neutralLight, marginTop: 1 },
-  severityTag: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 },
-  sevHigh: { backgroundColor: Colors.errorBg },
-  sevMedium: { backgroundColor: Colors.warningBg },
-  sevLow: { backgroundColor: Colors.successBg },
-  sevReviewed: { backgroundColor: Colors.infoBg },
-  severityText: { fontSize: 10, fontWeight: '700' },
-  sevTextHigh: { color: Colors.errorText },
-  sevTextMedium: { color: Colors.warningText },
-  sevTextLow: { color: Colors.primaryDark },
-  sevTextReviewed: { color: Colors.infoText },
+  sortBtnText: { fontSize: 12, fontWeight: '700', color: Colors.dark },
+  alertsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: adminSpace.md },
+  alertCell: { flexGrow: 1, flexBasis: 440, minWidth: 280, maxWidth: '100%' },
+  alertCard: { borderLeftWidth: 4, overflow: 'hidden' },
+  alertBody: { padding: adminSpace.lg, gap: 6 },
+  cardTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: adminSpace.md,
+    marginBottom: 4,
+  },
+  alertTitle: { ...adminType.cardTitle, flex: 1 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
+  metaText: { fontSize: 12, color: MUTED_TEXT, flexShrink: 1 },
   cardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: adminSpace.sm,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
-    paddingTop: Theme.spacing.xs + 2,
-    marginTop: Theme.spacing.xs + 2,
+    paddingTop: adminSpace.md,
+    marginTop: adminSpace.sm,
   },
-  timeText: { fontSize: 11, color: Colors.neutralLight },
-  actionBtn: {
-    paddingHorizontal: Theme.spacing.md,
-    paddingVertical: Theme.spacing.xs,
-    borderRadius: Theme.borderRadius.sm,
-    backgroundColor: Colors.dark,
-  },
-  actionBtnText: { color: Colors.surface, fontSize: 11, fontWeight: '700' },
-  paginationRow: {
+  loadMoreContainer: { marginTop: adminSpace.lg, alignItems: 'center' },
+  blockedRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexWrap: 'wrap',
     alignItems: 'center',
-    marginTop: Theme.spacing.lg,
-    paddingVertical: Theme.spacing.xs,
-  },
-  pageBtn: {
-    paddingHorizontal: Theme.spacing.md,
-    paddingVertical: Theme.spacing.xs + 2,
-    borderRadius: Theme.borderRadius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-  },
-  pageBtnDisabled: { opacity: 0.4 },
-  pageBtnText: { fontSize: 12, fontWeight: '700', color: Colors.dark },
-  pageBtnTextDisabled: { color: Colors.neutralLight },
-  pageIndicator: { fontSize: 12, fontWeight: '600', color: Colors.neutralMedium },
-
-  // Modal Styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: Theme.spacing.md,
-  },
-  modalContent: {
-    width: '100%',
-    maxWidth: 480,
-    backgroundColor: Colors.surface,
-    borderRadius: Theme.borderRadius.lg,
-    padding: Theme.spacing.lg,
-    ...Theme.shadows.modal,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Theme.spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-    paddingBottom: Theme.spacing.sm,
-  },
-  modalTitle: { fontSize: 18, fontWeight: '800', color: Colors.dark },
-  closeIcon: { fontSize: 18, fontWeight: '700', color: Colors.neutralMedium },
-  inputLabel: { fontSize: 13, fontWeight: '700', color: Colors.dark, marginTop: Theme.spacing.sm, marginBottom: 4 },
-  modalInput: {
-    height: 44,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: Theme.borderRadius.md,
-    paddingHorizontal: Theme.spacing.md,
-    fontSize: 14,
-    color: Colors.dark,
-    backgroundColor: Colors.background,
-  },
-  radioGroup: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginVertical: 6 },
-  radioItem: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-  },
-  radioItemActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  radioText: { fontSize: 12, fontWeight: '600', color: Colors.neutralMedium },
-  radioTextActive: { color: Colors.surface, fontWeight: '700' },
-  modalFooter: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: Theme.spacing.sm,
-    marginTop: Theme.spacing.lg,
-    paddingTop: Theme.spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-  },
-  cancelModalBtn: {
-    paddingHorizontal: Theme.spacing.md,
-    paddingVertical: Theme.spacing.xs + 4,
-    borderRadius: Theme.borderRadius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  cancelModalText: { fontSize: 13, fontWeight: '700', color: Colors.neutralMedium },
-  submitModalBtn: {
-    paddingHorizontal: Theme.spacing.lg,
-    paddingVertical: Theme.spacing.xs + 4,
-    borderRadius: Theme.borderRadius.md,
-    backgroundColor: Colors.primary,
-  },
-  submitModalText: { fontSize: 13, fontWeight: '700', color: Colors.surface },
-
-  // Incident Box
-  incidentBox: {
-    backgroundColor: Colors.background,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: Theme.borderRadius.md,
-    padding: Theme.spacing.md,
-    marginVertical: Theme.spacing.sm,
-  },
-  incidentTitle: { fontSize: 16, fontWeight: '800', color: Colors.dark },
-  incidentMeta: { fontSize: 12, color: Colors.neutralMedium, marginTop: 2 },
-  detailActionsContainer: {
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: Theme.borderRadius.md,
-    backgroundColor: Colors.surface,
-    marginVertical: Theme.spacing.md,
-  },
-  detailActionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: Theme.spacing.md,
+    gap: adminSpace.md,
+    paddingVertical: adminSpace.md,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  detailActionIcon: { fontSize: 16, marginRight: 12 },
-  detailActionLabel: { fontSize: 14, fontWeight: '600', color: Colors.dark },
-  closeDetailBtn: {
-    width: '100%',
-    paddingVertical: Theme.spacing.sm + 2,
-    borderRadius: Theme.borderRadius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    alignItems: 'center',
-  },
-  closeDetailText: { fontSize: 14, fontWeight: '700', color: Colors.dark },
-  loadMoreContainer: {
-    marginTop: Theme.spacing.md,
-    marginBottom: Theme.spacing.lg,
-    alignItems: 'center',
-  },
-  loadMoreBtn: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: Theme.spacing.xl,
-    paddingVertical: Theme.spacing.sm + 4,
-    borderRadius: Theme.borderRadius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Theme.shadows.card,
-  },
-  loadMoreText: {
-    color: Colors.surface,
-    fontWeight: '700',
-    fontSize: 13,
-  },
-  loadMoreBtnOutline: {
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    paddingHorizontal: Theme.spacing.xl,
-    paddingVertical: Theme.spacing.sm + 4,
-    borderRadius: Theme.borderRadius.md,
+  blockedIconTile: {
+    width: 36,
+    height: 36,
+    borderRadius: adminRadius.sm,
+    backgroundColor: toneColors.danger.bg,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  loadMoreTextOutline: {
-    color: Colors.neutralMedium,
-    fontWeight: '600',
-    fontSize: 13,
-  },
+  blockedInfo: { flex: 1, minWidth: 180, gap: 2 },
+  blockedTitleRow: { flexDirection: 'row', alignItems: 'center', gap: adminSpace.sm, flexWrap: 'wrap' },
+  blockedIp: { fontSize: 15, fontWeight: '800', color: Colors.dark },
+  tagRow: { flexDirection: 'row', gap: adminSpace.sm, flexWrap: 'wrap', justifyContent: 'flex-end' },
+  actionsHeading: { ...adminType.overline, marginBottom: adminSpace.sm },
 });
+
+// Presentation helper: maps an alert to its status tone.
+const severityTone = (severityType?: string, severity?: string): Tone => {
+  if (severityType === 'reviewed') return 'info';
+  if (severityType === 'high' || severity === 'High') return 'danger';
+  if (severityType === 'medium' || severity === 'Medium') return 'warning';
+  if (severityType === 'low' || severity === 'Low') return 'success';
+  return 'info';
+};
