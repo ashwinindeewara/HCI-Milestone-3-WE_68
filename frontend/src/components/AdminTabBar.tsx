@@ -1,41 +1,54 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import Colors from '../constants/colors';
+import { MUTED_TEXT, adminShadow } from '../constants/adminTheme';
+
+type AdminTab = 'dashboard' | 'users' | 'transactions' | 'disputes' | 'security';
 
 interface AdminTabBarProps {
-  activeTab: 'dashboard' | 'users' | 'transactions' | 'disputes' | 'security';
+  activeTab: AdminTab;
 }
+
+type TabIcon = React.ComponentProps<typeof Ionicons>['name'];
+
+const TABS: { key: AdminTab; label: string; href: string; icon: TabIcon; activeIcon: TabIcon }[] = [
+  { key: 'dashboard', label: 'Dashboard', href: '/admin-dashboard', icon: 'grid-outline', activeIcon: 'grid' },
+  { key: 'users', label: 'Users', href: '/admin-users', icon: 'people-outline', activeIcon: 'people' },
+  { key: 'transactions', label: 'Transactions', href: '/admin-transactions', icon: 'wallet-outline', activeIcon: 'wallet' },
+  { key: 'disputes', label: 'Disputes', href: '/admin-disputes', icon: 'scale-outline', activeIcon: 'scale' },
+  { key: 'security', label: 'Security', href: '/admin-security', icon: 'shield-checkmark-outline', activeIcon: 'shield-checkmark' },
+];
 
 export default function AdminTabBar({ activeTab }: AdminTabBarProps) {
   const router = useRouter();
 
   return (
     <View style={styles.adminTabBar}>
-      <TouchableOpacity style={styles.tabItem} onPress={() => router.replace('/admin-dashboard')}>
-        <Text style={[styles.tabIcon, activeTab === 'dashboard' && styles.tabIconActive]}>🎛️</Text>
-        <Text style={[styles.tabLabel, activeTab === 'dashboard' && styles.tabLabelActive]}>Dashboard</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity style={styles.tabItem} onPress={() => router.replace('/admin-users')}>
-        <Text style={[styles.tabIcon, activeTab === 'users' && styles.tabIconActive]}>👥</Text>
-        <Text style={[styles.tabLabel, activeTab === 'users' && styles.tabLabelActive]}>Users</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity style={styles.tabItem} onPress={() => router.replace('/admin-transactions')}>
-        <Text style={[styles.tabIcon, activeTab === 'transactions' && styles.tabIconActive]}>💵</Text>
-        <Text style={[styles.tabLabel, activeTab === 'transactions' && styles.tabLabelActive]}>Transactions</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity style={styles.tabItem} onPress={() => router.replace('/admin-disputes')}>
-        <Text style={[styles.tabIcon, activeTab === 'disputes' && styles.tabIconActive]}>⚠️</Text>
-        <Text style={[styles.tabLabel, activeTab === 'disputes' && styles.tabLabelActive]}>Disputes</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity style={styles.tabItem} onPress={() => router.replace('/admin-security')}>
-        <Text style={[styles.tabIcon, activeTab === 'security' && styles.tabIconActive]}>🛡️</Text>
-        <Text style={[styles.tabLabel, activeTab === 'security' && styles.tabLabelActive]}>Security</Text>
-      </TouchableOpacity>
+      <View style={styles.inner}>
+        {TABS.map((tab) => {
+          const active = tab.key === activeTab;
+          return (
+            <TouchableOpacity
+              key={tab.key}
+              style={styles.tabItem}
+              onPress={() => router.replace(tab.href as any)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: active }}
+              accessibilityLabel={tab.label}
+            >
+              <View style={[styles.activeBar, active && styles.activeBarOn]} />
+              <Ionicons
+                name={active ? tab.activeIcon : tab.icon}
+                size={22}
+                color={active ? Colors.primary : MUTED_TEXT}
+              />
+              <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{tab.label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
     </View>
   );
 }
@@ -46,35 +59,34 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: 64,
+    height: 68,
     backgroundColor: Colors.surface,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
     zIndex: 999,
+    ...adminShadow.card,
+  },
+  inner: {
+    flex: 1,
+    width: '100%',
+    flexDirection: 'row',
   },
   tabItem: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 3,
   },
-  tabIcon: {
-    fontSize: 18,
-    opacity: 0.6,
+  activeBar: {
+    position: 'absolute',
+    top: 0,
+    width: 28,
+    height: 3,
+    borderBottomLeftRadius: 3,
+    borderBottomRightRadius: 3,
+    backgroundColor: 'transparent',
   },
-  tabIconActive: {
-    opacity: 1,
-    transform: [{ scale: 1.1 }],
-  },
-  tabLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: Colors.neutralMedium,
-    marginTop: 2,
-  },
-  tabLabelActive: {
-    color: Colors.primary,
-    fontWeight: '700',
-  },
+  activeBarOn: { backgroundColor: Colors.primary },
+  tabLabel: { fontSize: 11, fontWeight: '600', color: MUTED_TEXT },
+  tabLabelActive: { color: Colors.primaryDark, fontWeight: '700' },
 });
