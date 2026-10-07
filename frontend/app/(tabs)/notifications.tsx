@@ -10,10 +10,10 @@ import {
   RefreshControl,
   Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import Colors from '../../src/constants/colors';
 import Theme from '../../src/constants/theme';
-import apiClient from '../../src/services/api';
+import { apiClient, getCurrentUser, FreelancerApiService } from '../../src/services/api';
 
 interface NotificationCardItem {
   id: number | string;
@@ -99,28 +99,67 @@ const FALLBACK_NOTIFICATIONS: NotificationCardItem[] = [
 
 export default function NotificationsScreen() {
   const router = useRouter();
-  const [notifications, setNotifications] = useState<NotificationCardItem[]>(FALLBACK_NOTIFICATIONS);
+  const currentUser = getCurrentUser();
+  const isChathuni =
+    currentUser?.email === 'chathuniimalsha.com' ||
+    (currentUser?.fullName && currentUser.fullName.toLowerCase().includes('chathuni')) ||
+    (currentUser?.email && currentUser.email.toLowerCase().includes('chathuni'));
+
+  const [notifications, setNotifications] = useState<NotificationCardItem[]>(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const u = getCurrentUser();
+        const k = `notifications_list_${u?.email || u?.fullName || 'default'}`;
+        const s = localStorage.getItem(k);
+        if (s) {
+          const p = JSON.parse(s);
+          if (Array.isArray(p)) return p;
+        }
+      } catch (e) {}
+    }
+    return isChathuni ? FALLBACK_NOTIFICATIONS : [];
+  });
   const [activeCategory, setActiveCategory] = useState('All');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchNotifications = async () => {
     try {
-      const res = await apiClient.get('/notifications');
-      if (res.data && Array.isArray(res.data) && res.data.length > 0) {
-        setNotifications(res.data);
+      const activeName = currentUser?.fullName || (isChathuni ? 'Chathuni Imalsha' : '');
+      const res = await FreelancerApiService.getNotifications(activeName, currentUser?.email);
+      const data = Array.isArray(res) ? res : (res?.data || []);
+      if (Array.isArray(data) && data.length > 0) {
+        setNotifications(data);
+        if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+          const k = `notifications_list_${currentUser?.email || currentUser?.fullName || 'default'}`;
+          localStorage.setItem(k, JSON.stringify(data));
+        }
+      } else if (!isChathuni) {
+        setNotifications([]);
+        if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+          const k = `notifications_list_${currentUser?.email || currentUser?.fullName || 'default'}`;
+          localStorage.setItem(k, JSON.stringify([]));
+        }
       }
     } catch {
-      console.warn('Using offline notifications dataset');
+      if (!isChathuni) {
+        setNotifications([]);
+        if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+          const k = `notifications_list_${currentUser?.email || currentUser?.fullName || 'default'}`;
+          localStorage.setItem(k, JSON.stringify([]));
+        }
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
-  useEffect(() => {
-    fetchNotifications();
-  }, []);
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchNotifications();
+    }, [currentUser?.email, currentUser?.fullName])
+  );
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -227,7 +266,20 @@ export default function NotificationsScreen() {
           ) : (
             /* Notifications Cards List Matching the Exact Visual Card Design */
             <View style={styles.listContainer}>
-              {filteredNotifications.map((item) => {
+              {filteredNotifications.length === 0 ? (
+                <View style={{ backgroundColor: '#FFFFFF', borderRadius: 16, padding: 36, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E2E8F0', marginTop: 12 }}>
+                  <Text style={{ fontSize: 36, marginBottom: 12 }}>🔔</Text>
+                  <Text style={{ fontSize: 16, fontWeight: '700', color: Colors.text.primary, marginBottom: 6 }}>
+                    No Notifications
+                  </Text>
+                  <Text style={{ fontSize: 13, color: Colors.text.secondary, textAlign: 'center', lineHeight: 20 }}>
+                    {activeCategory === 'All'
+                      ? 'You have no alerts or notifications at this time.'
+                      : `No notifications found under "${activeCategory}".`}
+                  </Text>
+                </View>
+              ) : (
+                filteredNotifications.map((item) => {
                 const isReview = item.badgeType === 'review' || item.badgeText === 'Under Review';
                 const isOpen = item.badgeType === 'open' || item.badgeText === 'Open';
                 const isResolved = item.badgeType === 'resolved' || item.badgeText === 'Resolved';
@@ -297,7 +349,7 @@ export default function NotificationsScreen() {
                     </View>
                   </TouchableOpacity>
                 );
-              })}
+              }))}
             </View>
           )}
         </ScrollView>

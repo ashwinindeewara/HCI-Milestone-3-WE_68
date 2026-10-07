@@ -10,10 +10,10 @@ import {
   RefreshControl,
   Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
-import apiClient from '../src/services/api';
+import { apiClient, getCurrentUser, FreelancerApiService } from '../src/services/api';
 import {
   HomeIcon,
   ProjectsIcon,
@@ -67,36 +67,75 @@ const FALLBACK_DISPUTES: DisputeItem[] = [
 
 export default function FreelancerDisputesScreen() {
   const router = useRouter();
-  const [disputes, setDisputes] = useState<DisputeItem[]>(FALLBACK_DISPUTES);
-  const [loading, setLoading] = useState(true);
+  const currentUser = getCurrentUser();
+  const isChathuni =
+    currentUser?.email === 'chathuniimalsha.com' ||
+    (currentUser?.fullName && currentUser.fullName.toLowerCase().includes('chathuni')) ||
+    (currentUser?.email && currentUser.email.toLowerCase().includes('chathuni'));
+
+  const [disputes, setDisputes] = useState<DisputeItem[]>(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const u = getCurrentUser();
+        const k = `disputes_list_${u?.email || u?.fullName || 'default'}`;
+        const s = localStorage.getItem(k);
+        if (s) {
+          const p = JSON.parse(s);
+          if (Array.isArray(p)) return p;
+        }
+      } catch (e) {}
+    }
+    return isChathuni ? FALLBACK_DISPUTES : [];
+  });
+  const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchDisputes = async () => {
     try {
-      const res = await apiClient.get('/disputes');
-      if (res.data && Array.isArray(res.data) && res.data.length > 0) {
-        const formatted: DisputeItem[] = res.data.map((d: any) => ({
+      const activeName = currentUser?.fullName || (isChathuni ? 'Chathuni Imalsha' : '');
+      const res = await FreelancerApiService.getDisputes(activeName);
+      const data = Array.isArray(res) ? res : (res?.data || []);
+      if (Array.isArray(data) && data.length > 0) {
+        const formatted: DisputeItem[] = data.map((d: any) => ({
           id: d.id || d.dspNumber,
           project: d.project,
           amount: typeof d.amount === 'number' ? `$${d.amount.toLocaleString()}` : (d.amount || '$0'),
           reason: d.issueType || d.reason || 'Payment Issue',
-          date: d.filedDate || (d.createdAt ? `Filed ${new Date(d.createdAt).toLocaleDateString()}` : 'Filed Oct 10, 2024'),
+          date: d.filedDate || (d.createdAt ? `Filed ${new Date(d.createdAt).toLocaleDateString()}` : 'Filed Recently'),
           status: d.status || 'Under Review',
           statusType: d.statusType || (d.status === 'Resolved' ? 'resolved' : d.status === 'Open' ? 'open' : 'review'),
         }));
         setDisputes(formatted);
+        if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+          const k = `disputes_list_${currentUser?.email || currentUser?.fullName || 'default'}`;
+          localStorage.setItem(k, JSON.stringify(formatted));
+        }
+      } else if (!isChathuni) {
+        setDisputes([]);
+        if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+          const k = `disputes_list_${currentUser?.email || currentUser?.fullName || 'default'}`;
+          localStorage.setItem(k, JSON.stringify([]));
+        }
       }
     } catch {
-      console.warn('Using offline disputes data');
+      if (!isChathuni) {
+        setDisputes([]);
+        if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+          const k = `disputes_list_${currentUser?.email || currentUser?.fullName || 'default'}`;
+          localStorage.setItem(k, JSON.stringify([]));
+        }
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
-  useEffect(() => {
-    fetchDisputes();
-  }, []);
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchDisputes();
+    }, [currentUser?.email, currentUser?.fullName])
+  );
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -154,7 +193,18 @@ export default function FreelancerDisputesScreen() {
           ) : (
             /* Disputes Cards List Matching Screenshot 1 */
             <View style={styles.listContainer}>
-              {disputes.map((item) => {
+              {disputes.length === 0 ? (
+                <View style={{ backgroundColor: '#FFFFFF', borderRadius: 16, padding: 36, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E2E8F0', marginTop: 12 }}>
+                  <Text style={{ fontSize: 36, marginBottom: 12 }}>⚖️</Text>
+                  <Text style={{ fontSize: 16, fontWeight: '700', color: Colors.text.primary, marginBottom: 6 }}>
+                    No Disputes Found
+                  </Text>
+                  <Text style={{ fontSize: 13, color: Colors.text.secondary, textAlign: 'center', lineHeight: 20 }}>
+                    You currently do not have any open or resolved disputes.
+                  </Text>
+                </View>
+              ) : (
+                disputes.map((item) => {
                 const isReview = item.statusType === 'review' || item.status === 'Under Review';
                 const isOpen = item.statusType === 'open' || item.status === 'Open';
                 const isResolved = item.statusType === 'resolved' || item.status === 'Resolved';
@@ -203,7 +253,7 @@ export default function FreelancerDisputesScreen() {
                     </View>
                   </TouchableOpacity>
                 );
-              })}
+              }))}
             </View>
           )}
         </ScrollView>

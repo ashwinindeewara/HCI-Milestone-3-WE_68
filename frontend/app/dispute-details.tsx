@@ -13,7 +13,7 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
-import apiClient from '../src/services/api';
+import { apiClient, getCurrentUser } from '../src/services/api';
 import {
   HomeIcon,
   ProjectsIcon,
@@ -83,9 +83,44 @@ export default function DisputeDetailsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const disputeId = (params.id as string) || 'DSP-409';
+  const currentUser = getCurrentUser();
+  const activeFreelancerName = currentUser?.fullName || 'Freelancer';
+  const isChathuni =
+    currentUser?.email === 'chathuniimalsha.com' ||
+    (currentUser?.fullName && currentUser.fullName.toLowerCase().includes('chathuni')) ||
+    (currentUser?.email && currentUser.email.toLowerCase().includes('chathuni'));
+  const isChathuniDemo = isChathuni && disputeId === 'DSP-409';
 
-  const [dispute, setDispute] = useState<DisputeDetailData>(DEFAULT_DISPUTE_DETAIL);
-  const [loading, setLoading] = useState(true);
+  const [dispute, setDispute] = useState<DisputeDetailData>(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const s = localStorage.getItem(`dispute_detail_cache_${disputeId}`);
+        if (s) {
+          const p = JSON.parse(s);
+          if (p && p.project) return p;
+        }
+      } catch (e) {}
+    }
+    if (isChathuniDemo) {
+      return DEFAULT_DISPUTE_DETAIL;
+    }
+    return {
+      id: disputeId,
+      dspNumber: disputeId,
+      project: 'Dispute Case',
+      parties: `Client vs. ${activeFreelancerName}`,
+      issueType: 'Payment Delay',
+      description: '',
+      evidenceFilesList: [],
+      amount: '$0',
+      status: 'Under Review',
+      statusType: 'review',
+      filedDate: 'Recently',
+      timelineStep: 2,
+      messages: [],
+    };
+  });
+  const [loading, setLoading] = useState(false);
   const [replyText, setReplyText] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [downloadToast, setDownloadToast] = useState<string | null>(null);
@@ -98,25 +133,30 @@ export default function DisputeDetailsScreen() {
         const formatted: DisputeDetailData = {
           id: d.id || disputeId,
           dspNumber: d.dspNumber || disputeId,
-          project: d.project || 'E-Commerce Redesign',
-          parties: d.parties || 'TechVentures Inc. vs. Chathuni',
+          project: d.project || (isChathuniDemo ? 'E-Commerce Redesign' : 'Dispute Case'),
+          parties: d.parties || `Client vs. ${activeFreelancerName}`,
           issueType: d.issueType || 'Payment Delay',
-          description: d.description || DEFAULT_DISPUTE_DETAIL.description,
+          description: d.description || (isChathuniDemo ? DEFAULT_DISPUTE_DETAIL.description : ''),
           evidenceFilesList:
             d.evidenceFilesList && d.evidenceFilesList.length > 0
               ? d.evidenceFilesList
-              : ['contract-agreement.pdf', 'approved-screens-specs.png'],
-          amount: typeof d.amount === 'number' ? `$${d.amount.toLocaleString()}` : (d.amount || '$2,400'),
+              : (isChathuniDemo ? ['contract-agreement.pdf', 'approved-screens-specs.png'] : []),
+          amount: typeof d.amount === 'number' ? `$${d.amount.toLocaleString()}` : (d.amount || (isChathuniDemo ? '$2,400' : '$0')),
           status: d.status || 'Under Review',
           statusType: d.statusType || 'review',
-          filedDate: d.filedDate ? d.filedDate.replace('Filed ', '') : 'Oct 10, 2024',
+          filedDate: d.filedDate ? d.filedDate.replace('Filed ', '') : (d.createdAt ? new Date(d.createdAt).toLocaleDateString() : 'Recently'),
           timelineStep: d.timelineStep || (d.status === 'Resolved' ? 3 : d.status === 'Open' ? 1 : 2),
           messages:
             d.messages && d.messages.length > 0
               ? d.messages
-              : DEFAULT_DISPUTE_DETAIL.messages,
+              : (isChathuniDemo ? DEFAULT_DISPUTE_DETAIL.messages : []),
         };
         setDispute(formatted);
+        if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+          try {
+            localStorage.setItem(`dispute_detail_cache_${disputeId}`, JSON.stringify(formatted));
+          } catch (e) {}
+        }
       }
     } catch {
       console.warn('Fallback offline dispute detail view');
@@ -138,7 +178,7 @@ export default function DisputeDetailsScreen() {
 
     const timeNow = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const localMsg: DiscussionMessage = {
-      senderName: 'Sarah',
+      senderName: activeFreelancerName,
       senderRole: 'FREELANCER',
       message: newMsgText,
       timestamp: timeNow,
@@ -151,7 +191,7 @@ export default function DisputeDetailsScreen() {
 
     try {
       await apiClient.post(`/disputes/${disputeId}/messages`, {
-        senderName: 'Sarah',
+        senderName: activeFreelancerName,
         senderRole: 'FREELANCER',
         message: newMsgText,
       });
@@ -296,9 +336,15 @@ export default function DisputeDetailsScreen() {
               <View style={styles.sectionContainer}>
                 <Text style={styles.sectionHeading}>Discussion Thread</Text>
                 <View style={styles.messagesList}>
-                  {dispute.messages.map((msg, index) => {
+                  {dispute.messages.length === 0 ? (
+                    <View style={{ paddingVertical: 18, alignItems: 'center' }}>
+                      <Text style={{ color: '#94A3B8', fontSize: 13 }}>No messages in this dispute discussion yet.</Text>
+                    </View>
+                  ) : (
+                    dispute.messages.map((msg, index) => {
                     const isFreelancer =
                       msg.senderRole === 'FREELANCER' ||
+                      msg.senderName === activeFreelancerName ||
                       msg.senderName === 'Sarah' ||
                       msg.senderName === 'Chathuni';
                     return (
@@ -315,8 +361,9 @@ export default function DisputeDetailsScreen() {
                         </Text>
                       </View>
                     );
-                  })}
-                </View>
+                  })
+                )}
+              </View>
 
                 {/* Reply Input Bar */}
                 <View style={styles.replyBar}>

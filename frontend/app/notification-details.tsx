@@ -7,10 +7,11 @@ import {
   TouchableOpacity,
   SafeAreaView,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import Colors from '../src/constants/colors';
-import { FreelancerApiService } from '../src/services/api';
+import { FreelancerApiService, getCurrentUser } from '../src/services/api';
 
 interface NotificationDetailData {
   id: number | string;
@@ -52,9 +53,41 @@ export default function NotificationDetailsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const notifId = (params.id as string) || '5';
+  const currentUser = getCurrentUser();
+  const isChathuni =
+    currentUser?.email === 'chathuniimalsha.com' ||
+    (currentUser?.fullName && currentUser.fullName.toLowerCase().includes('chathuni')) ||
+    (currentUser?.email && currentUser.email.toLowerCase().includes('chathuni'));
 
-  const [notification, setNotification] = useState<NotificationDetailData>(FALLBACK_DETAIL);
-  const [loading, setLoading] = useState(true);
+  const [notification, setNotification] = useState<NotificationDetailData>(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const s = localStorage.getItem(`notification_detail_cache_${notifId}`);
+        if (s) {
+          const p = JSON.parse(s);
+          if (p && p.title) return p;
+        }
+      } catch (e) {}
+    }
+    if (isChathuni && notifId === '5') return FALLBACK_DETAIL;
+    return {
+      id: notifId,
+      title: '',
+      subtitle: '',
+      message: '',
+      type: '',
+      badgeText: '',
+      badgeType: '',
+      amount: '',
+      category: '',
+      actionUrl: '',
+      actionLabel: '',
+      relatedEntityId: '',
+      unread: false,
+      timestamp: '',
+    };
+  });
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     fetchNotificationDetails();
@@ -65,6 +98,11 @@ export default function NotificationDetailsScreen() {
       const res = await FreelancerApiService.getNotification(notifId);
       if (res.data) {
         setNotification(res.data);
+        if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+          try {
+            localStorage.setItem(`notification_detail_cache_${notifId}`, JSON.stringify(res.data));
+          } catch (e) {}
+        }
         // Automatically mark as read
         if (res.data.unread) {
           await FreelancerApiService.markNotificationAsRead(notifId);
@@ -142,7 +180,7 @@ export default function NotificationDetailsScreen() {
             <View style={{ width: 36 }} />
           </View>
 
-          {loading ? (
+          {loading && !notification.title ? (
             <View style={styles.loaderBox}>
               <ActivityIndicator size="large" color={Colors.primary} />
             </View>

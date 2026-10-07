@@ -15,7 +15,7 @@ import {
 import { useRouter, useFocusEffect } from 'expo-router';
 import Colors from '../../src/constants/colors';
 import { VerifiedBadge, StarIcon, ExitLogoutIcon } from '../../src/components/Icons';
-import apiClient, { resolveMediaUrl } from '../../src/services/api';
+import apiClient, { resolveMediaUrl, getCurrentUser, API_BASE_URL, FreelancerApiService } from '../../src/services/api';
 
 export interface ProjectItem {
   id: string;
@@ -71,12 +71,49 @@ const DEFAULT_PROFILE: FreelancerProfileData = {
   ],
 };
 
+const getInitialProfile = (): FreelancerProfileData => {
+  const currentUser = getCurrentUser();
+  const isChathuni =
+    currentUser?.email === 'chathuniimalsha.com' ||
+    (currentUser?.fullName && currentUser.fullName.toLowerCase().includes('chathuni')) ||
+    (currentUser?.email && currentUser.email.toLowerCase().includes('chathuni'));
+
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+    try {
+      const k = `profile_cache_${currentUser?.email || currentUser?.fullName || 'default'}`;
+      const s = localStorage.getItem(k);
+      if (s) {
+        const p = JSON.parse(s);
+        if (p && p.name) return p;
+      }
+    } catch (e) {}
+  }
+
+  if (isChathuni) {
+    return DEFAULT_PROFILE;
+  }
+  return {
+    name: currentUser?.fullName || 'Freelancer',
+    email: currentUser?.email || '',
+    title: '',
+    avatarUri: '',
+    rating: 0,
+    reviewCount: 0,
+    completedProjects: 0,
+    hourlyRate: 0,
+    status: 'Available',
+    about: '',
+    skills: [],
+    featuredProjects: [],
+  };
+};
+
 export default function FreelancerProfileScreen() {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [profile, setProfile] = useState<FreelancerProfileData>(DEFAULT_PROFILE);
+  const [profile, setProfile] = useState<FreelancerProfileData>(getInitialProfile());
 
   // Edit form state
   const [editName, setEditName] = useState(profile.name);
@@ -99,26 +136,39 @@ export default function FreelancerProfileScreen() {
 
   const fetchProfile = async () => {
     try {
-      const res = await apiClient.get('/freelancer/profile');
+      const currentUser = getCurrentUser();
+      const targetEmail = currentUser?.email;
+      const res = await apiClient.get('/freelancer/profile', {
+        params: targetEmail ? { email: targetEmail } : {},
+      });
       if (res.data) {
         const data = res.data;
-        setProfile({
-          name: data.fullName || DEFAULT_PROFILE.name,
-          email: data.email || DEFAULT_PROFILE.email,
-          title: data.title || DEFAULT_PROFILE.title,
-          avatarUri: data.avatarUrl || DEFAULT_PROFILE.avatarUri,
-          rating: data.rating || DEFAULT_PROFILE.rating,
-          reviewCount: data.reviewCount || DEFAULT_PROFILE.reviewCount,
-          completedProjects: data.completedProjects || DEFAULT_PROFILE.completedProjects,
-          hourlyRate: data.hourlyRate || DEFAULT_PROFILE.hourlyRate,
-          status: (data.status as any) || DEFAULT_PROFILE.status,
-          about: data.about || DEFAULT_PROFILE.about,
-          skills: data.skills && data.skills.length > 0 ? data.skills : DEFAULT_PROFILE.skills,
-          featuredProjects:
-            data.featuredProjects && data.featuredProjects.length > 0
-              ? data.featuredProjects
-              : DEFAULT_PROFILE.featuredProjects,
-        });
+        const isChathuni =
+          data.email === 'chathuniimalsha.com' ||
+          (data.fullName && data.fullName.toLowerCase().includes('chathuni')) ||
+          (data.email && data.email.toLowerCase().includes('chathuni'));
+        const fallback = isChathuni ? DEFAULT_PROFILE : getInitialProfile();
+        const updatedProfile: FreelancerProfileData = {
+          name: data.fullName || fallback.name,
+          email: data.email || fallback.email,
+          title: data.title != null ? data.title : fallback.title,
+          avatarUri: data.avatarUrl || '',
+          rating: data.rating != null ? data.rating : fallback.rating,
+          reviewCount: data.reviewCount != null ? data.reviewCount : fallback.reviewCount,
+          completedProjects: data.completedProjects != null ? data.completedProjects : fallback.completedProjects,
+          hourlyRate: data.hourlyRate != null ? data.hourlyRate : fallback.hourlyRate,
+          status: (data.status as any) || fallback.status,
+          about: data.about != null ? data.about : fallback.about,
+          skills: Array.isArray(data.skills) ? data.skills : fallback.skills,
+          featuredProjects: Array.isArray(data.featuredProjects) ? data.featuredProjects : fallback.featuredProjects,
+        };
+        setProfile(updatedProfile);
+        if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+          try {
+            const k = `profile_cache_${currentUser?.email || currentUser?.fullName || 'default'}`;
+            localStorage.setItem(k, JSON.stringify(updatedProfile));
+          } catch (e) {}
+        }
       }
     } catch (err) {
       console.log('Using local fallback profile data:', err);
@@ -139,14 +189,48 @@ export default function FreelancerProfileScreen() {
     setIsEditing(true);
   };
 
+  // Upload avatar image
+  const handlePickAvatar = () => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.onchange = async (e: any) => {
+        const file = e.target?.files?.[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = (uploadEvent) => {
+            const result = uploadEvent.target?.result as string;
+            setProfile((prev) => ({ ...prev, avatarUri: result }));
+          };
+          reader.readAsDataURL(file);
+
+          try {
+            const currentUser = getCurrentUser();
+            const targetEmail = profile.email || currentUser?.email || '';
+            const res = await FreelancerApiService.uploadProfileImage(file, targetEmail);
+            if (res && res.avatarUrl) {
+              setProfile((prev) => ({ ...prev, avatarUri: res.avatarUrl }));
+              setSaveToast(true);
+              setTimeout(() => setSaveToast(false), 3000);
+            }
+          } catch (err) {
+            console.warn('Profile image upload error', err);
+          }
+        }
+      };
+      input.click();
+    }
+  };
+
   // Save changes to backend
   const handleSaveChanges = async () => {
     const updatedName = editName.trim() || profile.name;
     const updatedTitle = editTitle.trim() || profile.title;
-    const updatedCompleted = parseInt(editCompleted, 10) || profile.completedProjects;
-    const updatedRate = parseFloat(editRate) || profile.hourlyRate;
+    const updatedCompleted = parseInt(editCompleted, 10) || 0;
+    const updatedRate = parseFloat(editRate) || 0;
     const updatedStatus = editStatus;
-    const updatedAbout = editAbout.trim() || profile.about;
+    const updatedAbout = editAbout.trim();
     const updatedSkills = editSkills;
 
     const newProfileState: FreelancerProfileData = {
@@ -162,21 +246,34 @@ export default function FreelancerProfileScreen() {
 
     setProfile(newProfileState);
     setIsEditing(false);
-    setSaveToast(true);
-    setTimeout(() => setSaveToast(false), 3000);
 
     try {
       setSaving(true);
-      await apiClient.put('/freelancer/profile', {
-        email: profile.email,
-        fullName: updatedName,
-        title: updatedTitle,
-        completedProjects: updatedCompleted,
-        hourlyRate: updatedRate,
-        status: updatedStatus,
-        about: updatedAbout,
-        skills: updatedSkills,
-      });
+      const currentUser = getCurrentUser();
+      const targetEmail = profile.email || currentUser?.email || 'chathuniimalsha.com';
+      await apiClient.put(
+        '/freelancer/profile',
+        {
+          email: targetEmail,
+          fullName: updatedName,
+          title: updatedTitle,
+          avatarUrl: profile.avatarUri,
+          completedProjects: updatedCompleted,
+          hourlyRate: updatedRate,
+          status: updatedStatus,
+          about: updatedAbout,
+          skills: updatedSkills,
+          featuredProjects: profile.featuredProjects,
+        },
+        { params: { email: targetEmail } }
+      );
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+        localStorage.setItem('auth_name', updatedName);
+        const k = `profile_cache_${currentUser?.email || currentUser?.fullName || 'default'}`;
+        localStorage.setItem(k, JSON.stringify(newProfileState));
+      }
+      setSaveToast(true);
+      setTimeout(() => setSaveToast(false), 3500);
     } catch (err) {
       console.warn('Backend profile update warning:', err);
     } finally {
@@ -238,11 +335,11 @@ export default function FreelancerProfileScreen() {
         {/* Success Toast Banner */}
         {saveToast && (
           <View style={styles.toastBanner}>
-            <Text style={styles.toastText}>✓ Profile updated & saved to backend!</Text>
+            <Text style={styles.toastText}>✓ Profile updated and saved to system database!</Text>
           </View>
         )}
 
-        {loading ? (
+        {loading && !profile.name ? (
           <View style={styles.loaderContainer}>
             <ActivityIndicator size="large" color="#16A34A" />
             <Text style={styles.loaderText}>Loading Freelancer Profile...</Text>
@@ -255,17 +352,30 @@ export default function FreelancerProfileScreen() {
           >
             {/* Main Profile Info Card */}
             <View style={styles.mainProfileCard}>
-              <View style={styles.avatarWrapper}>
-                <Image
-                  source={
-                    profile.avatarUri
-                      ? { uri: resolveMediaUrl(profile.avatarUri) }
-                      : require('../../assets/freelancer_avatar.jpg')
-                  }
-                  style={styles.avatarImage}
-                  resizeMode="cover"
-                />
-              </View>
+              <TouchableOpacity
+                style={styles.avatarContainer}
+                onPress={handlePickAvatar}
+                activeOpacity={0.8}
+              >
+                <View style={styles.avatarWrapper}>
+                  {profile.avatarUri ? (
+                    <Image
+                      source={{ uri: resolveMediaUrl(profile.avatarUri) }}
+                      style={styles.avatarImage}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View style={[styles.avatarImage, styles.avatarPlaceholder]}>
+                      <Text style={styles.avatarInitials}>
+                        {profile.name ? profile.name.trim().charAt(0).toUpperCase() : '📷'}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+                <View style={styles.cameraIconBadge}>
+                  <Text style={{ fontSize: 12 }}>📷</Text>
+                </View>
+              </TouchableOpacity>
 
               {/* Name + Verified Badge */}
               <View style={styles.nameRow}>
@@ -291,7 +401,9 @@ export default function FreelancerProfileScreen() {
                   placeholder="Profession / Role (e.g. UI/UX Designer)"
                 />
               ) : (
-                <Text style={styles.professionSubtitle}>{profile.title}</Text>
+                <Text style={styles.professionSubtitle}>
+                  {profile.title || 'Freelancer (Set title in Edit Profile)'}
+                </Text>
               )}
 
               {/* Rating Row */}
@@ -371,7 +483,9 @@ export default function FreelancerProfileScreen() {
                     placeholder="Write your professional bio..."
                   />
                 ) : (
-                  <Text style={styles.aboutText}>{profile.about}</Text>
+                  <Text style={profile.about ? styles.aboutText : styles.emptyNoticeText}>
+                    {profile.about || 'No bio provided yet. Click Edit Profile to add your bio and summary.'}
+                  </Text>
                 )}
               </View>
               {isEditing && <Text style={styles.sectionPencil}>✎</Text>}
@@ -381,19 +495,23 @@ export default function FreelancerProfileScreen() {
             <View style={styles.sectionBlock}>
               <Text style={styles.sectionHeading}>Skills</Text>
               <View style={styles.skillsWrapper}>
-                {(isEditing ? editSkills : profile.skills).map((skill, index) => (
-                  <View key={index} style={styles.skillPill}>
-                    <Text style={styles.skillPillText}>{skill}</Text>
-                    {isEditing && (
-                      <TouchableOpacity
-                        onPress={() => handleRemoveSkill(skill)}
-                        style={styles.skillRemoveBtn}
-                      >
-                        <Text style={styles.skillRemoveText}>✕</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                ))}
+                {(isEditing ? editSkills : profile.skills).length > 0 ? (
+                  (isEditing ? editSkills : profile.skills).map((skill, index) => (
+                    <View key={index} style={styles.skillPill}>
+                      <Text style={styles.skillPillText}>{skill}</Text>
+                      {isEditing && (
+                        <TouchableOpacity
+                          onPress={() => handleRemoveSkill(skill)}
+                          style={styles.skillRemoveBtn}
+                        >
+                          <Text style={styles.skillRemoveText}>✕</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  ))
+                ) : (
+                  <Text style={styles.emptyNoticeText}>No skills added yet. Add your skills in Edit Profile.</Text>
+                )}
               </View>
 
               {/* Add Skill Input in Edit Mode */}
@@ -417,31 +535,37 @@ export default function FreelancerProfileScreen() {
             {/* Featured Work Section */}
             <View style={styles.sectionBlock}>
               <Text style={styles.sectionHeading}>Featured Work</Text>
-              <View style={styles.featuredGrid}>
-                {profile.featuredProjects.map((project) => (
-                  <View key={project.id} style={styles.projectCard}>
-                    <View style={styles.projectImageContainer}>
-                      <Image
-                        source={
-                          project.imageUri
-                            ? { uri: resolveMediaUrl(project.imageUri) }
-                            : project.id === 'p1'
-                              ? require('../../assets/saas_portal.jpg')
-                              : require('../../assets/fittrack_app.jpg')
-                        }
-                        style={styles.projectImage}
-                        resizeMode="cover"
-                      />
+              {profile.featuredProjects.length > 0 ? (
+                <View style={styles.featuredGrid}>
+                  {profile.featuredProjects.map((project) => (
+                    <View key={project.id} style={styles.projectCard}>
+                      <View style={styles.projectImageContainer}>
+                        <Image
+                          source={
+                            project.imageUri
+                              ? { uri: resolveMediaUrl(project.imageUri) }
+                              : project.id === 'p1'
+                                ? require('../../assets/saas_portal.jpg')
+                                : require('../../assets/fittrack_app.jpg')
+                          }
+                          style={styles.projectImage}
+                          resizeMode="cover"
+                        />
+                      </View>
+                      <View style={styles.projectInfo}>
+                        <Text style={styles.projectTitle}>{project.title}</Text>
+                        <Text style={styles.projectSubtitle}>
+                          {project.category} • {project.year}
+                        </Text>
+                      </View>
                     </View>
-                    <View style={styles.projectInfo}>
-                      <Text style={styles.projectTitle}>{project.title}</Text>
-                      <Text style={styles.projectSubtitle}>
-                        {project.category} • {project.year}
-                      </Text>
-                    </View>
-                  </View>
-                ))}
-              </View>
+                  ))}
+                </View>
+              ) : (
+                <View style={styles.emptyCard}>
+                  <Text style={styles.emptyNoticeText}>No featured projects added yet. Showcase your work in Edit Profile.</Text>
+                </View>
+              )}
               {isEditing && <Text style={styles.sectionPencil}>✎</Text>}
             </View>
 
@@ -497,6 +621,13 @@ export default function FreelancerProfileScreen() {
                 style={styles.modalDestructiveBtn}
                 onPress={() => {
                   setLogoutModalVisible(false);
+                  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+                    localStorage.removeItem('auth_user');
+                    localStorage.removeItem('auth_email');
+                    localStorage.removeItem('auth_name');
+                    localStorage.removeItem('auth_role');
+                    localStorage.removeItem('auth_token');
+                  }
                   router.replace('/login');
                 }}
               >
@@ -618,19 +749,62 @@ const styles = StyleSheet.create({
       },
     }),
   },
+  avatarContainer: {
+    position: 'relative',
+    marginBottom: 14,
+  },
   avatarWrapper: {
     width: 104,
     height: 104,
     borderRadius: 52,
     overflow: 'hidden',
     backgroundColor: '#F3F4F6',
-    marginBottom: 14,
     borderWidth: 2,
-    borderColor: '#F3F4F6',
+    borderColor: '#E2E8F0',
+  },
+  cameraIconBadge: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    backgroundColor: '#10B981',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    elevation: 3,
   },
   avatarImage: {
     width: '100%',
     height: '100%',
+  },
+  avatarPlaceholder: {
+    backgroundColor: '#E2E8F0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarInitials: {
+    fontSize: 38,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  emptyNoticeText: {
+    fontSize: 13,
+    color: '#94A3B8',
+    fontStyle: 'italic',
+    paddingVertical: 4,
+  },
+  emptyCard: {
+    padding: 16,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    width: '100%',
   },
   nameRow: {
     flexDirection: 'row',

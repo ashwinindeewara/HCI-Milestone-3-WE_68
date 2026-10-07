@@ -15,7 +15,7 @@ import {
 import { useRouter } from 'expo-router';
 import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
-import { FreelancerApiService, API_BASE_URL, resolveMediaUrl } from '../src/services/api';
+import { FreelancerApiService, API_BASE_URL, resolveMediaUrl, getCurrentUser } from '../src/services/api';
 import { VerifiedBadge, StarIcon } from '../src/components/Icons';
 
 interface FeaturedProjectItem {
@@ -28,45 +28,87 @@ interface FeaturedProjectItem {
 
 export default function EditProfileScreen() {
   const router = useRouter();
+  const currentUser = getCurrentUser();
+  const isChathuni =
+    currentUser?.email === 'chathuniimalsha.com' ||
+    (currentUser?.fullName && currentUser.fullName.toLowerCase().includes('chathuni')) ||
+    (currentUser?.email && currentUser.email.toLowerCase().includes('chathuni'));
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [newSkill, setNewSkill] = useState('');
   const [showSuccessToast, setShowSuccessToast] = useState(false);
 
-  const [profile, setProfile] = useState({
-    email: 'chathuniimalsha.com',
-    fullName: 'Chathuni Imalsha',
-    title: 'UI/UX Designer',
-    avatarUrl: '',
-    completedProjects: '18',
-    hourlyRate: '65',
-    status: 'Available',
-    about:
-      'Productive UI/UX designer with 4+ years of expertise. Specializing in high-fidelity design systems, mobile workflows, and interactive prototyping.',
-    location: 'Colombo, Sri Lanka',
-    phone: '+94 77 123 4567',
-    experience: '4+ years of professional UX/UI design & product development',
-    education: 'B.Sc. in Software Engineering, SLIIT',
-    skills: ['Figma', 'UI Design', 'UX Research', 'Prototyping', 'Design Systems'],
+  const [profile, setProfile] = useState(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const k = `profile_cache_${currentUser?.email || currentUser?.fullName || 'default'}`;
+        const s = localStorage.getItem(k);
+        if (s) {
+          const p = JSON.parse(s);
+          if (p && p.name) {
+            return {
+              email: p.email || currentUser?.email || '',
+              fullName: p.name || currentUser?.fullName || '',
+              title: p.title || '',
+              avatarUrl: p.avatarUri || '',
+              completedProjects: String(p.completedProjects || 0),
+              hourlyRate: String(p.hourlyRate || 0),
+              status: p.status || 'Available',
+              about: p.about || '',
+              location: p.location || '',
+              phone: p.phone || '',
+              experience: p.experience || '',
+              education: p.education || '',
+              skills: Array.isArray(p.skills) ? p.skills : [],
+              rating: p.rating || 0.0,
+              reviewCount: p.reviewCount || 0,
+            };
+          }
+        }
+      } catch (e) {}
+    }
+    return {
+      email: currentUser?.email || (isChathuni ? 'chathuniimalsha.com' : ''),
+      fullName: currentUser?.fullName || (isChathuni ? 'Chathuni Imalsha' : ''),
+      title: isChathuni ? 'UI/UX Designer' : '',
+      avatarUrl: isChathuni ? 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=500&auto=format&fit=crop&q=80' : '',
+      completedProjects: isChathuni ? '18' : '0',
+      hourlyRate: isChathuni ? '65' : '0',
+      status: 'Available',
+      about: isChathuni
+        ? 'Productive UI/UX designer with 4+ years of expertise. Specializing in high-fidelity design systems, mobile workflows, and interactive prototyping.'
+        : '',
+      location: isChathuni ? 'Colombo, Sri Lanka' : '',
+      phone: isChathuni ? '+94 77 123 4567' : '',
+      experience: isChathuni ? '4+ years of professional UX/UI design & product development' : '',
+      education: isChathuni ? 'B.Sc. in Software Engineering, SLIIT' : '',
+      skills: isChathuni ? ['Figma', 'UI Design', 'UX Research', 'Prototyping', 'Design Systems'] : [] as string[],
+      rating: isChathuni ? 4.8 : 0.0,
+      reviewCount: isChathuni ? 23 : 0,
+    };
   });
 
-  const [featuredProjects, setFeaturedProjects] = useState<FeaturedProjectItem[]>([
-    {
-      id: 'p1',
-      title: 'SaaS Finance Portal',
-      category: 'Web Design • Fintech dashboard UI system',
-      year: '2024',
-      imageUri: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=600&auto=format&fit=crop&q=80',
-    },
-    {
-      id: 'p2',
-      title: 'FitTrack App',
-      category: 'iOS Design • Activity tracker mobile experience',
-      year: '2023',
-      imageUri: 'https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?w=600&auto=format&fit=crop&q=80',
-    },
-  ]);
+  const [featuredProjects, setFeaturedProjects] = useState<FeaturedProjectItem[]>(
+    isChathuni
+      ? [
+          {
+            id: 'p1',
+            title: 'SaaS Finance Portal',
+            category: 'Web Design • Fintech dashboard UI system',
+            year: '2024',
+            imageUri: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=600&auto=format&fit=crop&q=80',
+          },
+          {
+            id: 'p2',
+            title: 'FitTrack App',
+            category: 'iOS Design • Activity tracker mobile experience',
+            year: '2023',
+            imageUri: 'https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?w=600&auto=format&fit=crop&q=80',
+          },
+        ]
+      : []
+  );
 
   useEffect(() => {
     fetchProfile();
@@ -74,28 +116,33 @@ export default function EditProfileScreen() {
 
   const fetchProfile = async () => {
     try {
-      const res = await FreelancerApiService.getProfile();
+      const activeUser = getCurrentUser();
+      const res = await FreelancerApiService.getProfile(activeUser?.email);
       if (res.data) {
         const d = res.data;
+        const isTargetChathuni =
+          d.email === 'chathuniimalsha.com' ||
+          (d.fullName && d.fullName.toLowerCase().includes('chathuni'));
+
         setProfile({
-          email: d.email || 'chathuniimalsha.com',
-          fullName: d.fullName || 'Chathuni Imalsha',
-          title: d.title || 'UI/UX Designer',
+          email: d.email || activeUser?.email || '',
+          fullName: d.fullName || activeUser?.fullName || '',
+          title: d.title != null ? d.title : '',
           avatarUrl: d.avatarUrl || '',
-          completedProjects: d.completedProjects ? String(d.completedProjects) : '18',
-          hourlyRate: d.hourlyRate ? String(d.hourlyRate) : '65',
+          completedProjects: d.completedProjects != null ? String(d.completedProjects) : (isTargetChathuni ? '18' : '0'),
+          hourlyRate: d.hourlyRate != null ? String(d.hourlyRate) : (isTargetChathuni ? '65' : '0'),
           status: d.status || 'Available',
-          about:
-            d.about ||
-            'Productive UI/UX designer with 4+ years of expertise. Specializing in high-fidelity design systems, mobile workflows, and interactive prototyping.',
-          location: d.location || 'Colombo, Sri Lanka',
-          phone: d.phone || '+94 77 123 4567',
-          experience: d.experience || '4+ years',
-          education: d.education || 'B.Sc. in Software Engineering',
-          skills: d.skills && d.skills.length > 0 ? d.skills : ['Figma', 'UI Design', 'UX Research', 'Prototyping', 'Design Systems'],
+          about: d.about != null ? d.about : '',
+          location: d.location != null ? d.location : '',
+          phone: d.phone != null ? d.phone : '',
+          experience: d.experience != null ? d.experience : '',
+          education: d.education != null ? d.education : '',
+          skills: Array.isArray(d.skills) ? d.skills : (isTargetChathuni ? ['Figma', 'UI Design', 'UX Research', 'Prototyping', 'Design Systems'] : []),
+          rating: d.rating != null ? d.rating : (isTargetChathuni ? 4.8 : 0.0),
+          reviewCount: d.reviewCount != null ? d.reviewCount : (isTargetChathuni ? 23 : 0),
         });
 
-        if (d.featuredProjects && Array.isArray(d.featuredProjects) && d.featuredProjects.length > 0) {
+        if (d.featuredProjects && Array.isArray(d.featuredProjects)) {
           setFeaturedProjects(d.featuredProjects);
         }
       }
@@ -121,7 +168,7 @@ export default function EditProfileScreen() {
   const handleRemoveSkill = (skillToRemove: string) => {
     setProfile((prev) => ({
       ...prev,
-      skills: prev.skills.filter((s) => s !== skillToRemove),
+      skills: prev.skills.filter((s: string) => s !== skillToRemove),
     }));
   };
 
@@ -141,20 +188,11 @@ export default function EditProfileScreen() {
           reader.readAsDataURL(file);
 
           try {
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('email', profile.email);
-
-            const uploadRes = await fetch(`${API_BASE_URL}/freelancer/profile/image`, {
-              method: 'POST',
-              body: formData,
-            });
-
-            if (uploadRes.ok) {
-              const updatedData = await uploadRes.json();
-              if (updatedData && updatedData.avatarUrl) {
-                setProfile((prev) => ({ ...prev, avatarUrl: updatedData.avatarUrl }));
-              }
+            const activeUser = getCurrentUser();
+            const targetEmail = profile.email || activeUser?.email || '';
+            const updatedData = await FreelancerApiService.uploadProfileImage(file, targetEmail);
+            if (updatedData && updatedData.avatarUrl) {
+              setProfile((prev) => ({ ...prev, avatarUrl: updatedData.avatarUrl }));
             }
           } catch (err) {
             console.warn('Backend avatar upload error, retaining local preview', err);
@@ -245,12 +283,15 @@ export default function EditProfileScreen() {
   const handleSaveProfile = async () => {
     setSaving(true);
     try {
+      const activeUser = getCurrentUser();
+      const targetEmail = profile.email || activeUser?.email || '';
       const payload = {
+        email: targetEmail,
         fullName: profile.fullName,
         title: profile.title,
         avatarUrl: profile.avatarUrl,
-        completedProjects: parseInt(profile.completedProjects, 10) || 18,
-        hourlyRate: parseFloat(profile.hourlyRate) || 65.0,
+        completedProjects: parseInt(profile.completedProjects, 10) || 0,
+        hourlyRate: parseFloat(profile.hourlyRate) || 0.0,
         status: profile.status,
         about: profile.about,
         location: profile.location,
@@ -267,14 +308,32 @@ export default function EditProfileScreen() {
         })),
       };
 
-      await FreelancerApiService.updateProfile(payload, profile.email);
+      await FreelancerApiService.updateProfile(payload, targetEmail);
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+        localStorage.setItem('auth_name', profile.fullName);
+        const k = `profile_cache_${currentUser?.email || currentUser?.fullName || 'default'}`;
+        localStorage.setItem(k, JSON.stringify({
+          name: profile.fullName,
+          email: profile.email,
+          title: profile.title,
+          avatarUri: profile.avatarUrl,
+          completedProjects: parseInt(profile.completedProjects, 10) || 0,
+          hourlyRate: parseFloat(profile.hourlyRate) || 0,
+          status: profile.status,
+          about: profile.about,
+          skills: profile.skills,
+          featuredProjects: featuredProjects,
+          rating: profile.rating,
+          reviewCount: profile.reviewCount,
+        }));
+      }
       setShowSuccessToast(true);
       setTimeout(() => {
         setShowSuccessToast(false);
         safeGoBack();
-      }, 1500);
+      }, 1800);
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Could not save profile changes.');
+      Alert.alert('Save Failed', e.message || 'Could not save profile changes to database.');
     } finally {
       setSaving(false);
     }
@@ -288,7 +347,7 @@ export default function EditProfileScreen() {
     }
   };
 
-  if (loading) {
+  if (loading && !profile.fullName && !profile.email) {
     return (
       <View style={styles.centerContainer}>
         <ActivityIndicator size="large" color="#10B981" />
@@ -319,8 +378,8 @@ export default function EditProfileScreen() {
             activeOpacity={0.7}
             disabled={saving}
           >
-            <View style={styles.headerRightBadgeBox}>
-              <Text style={styles.headerRightBadgeText}>⎋</Text>
+            <View style={styles.headerSaveBtn}>
+              <Text style={styles.headerSaveBtnText}>{saving ? 'Saving...' : '✓ Save'}</Text>
             </View>
           </TouchableOpacity>
         </View>
@@ -328,7 +387,7 @@ export default function EditProfileScreen() {
         {/* Success Toast */}
         {showSuccessToast && (
           <View style={styles.toast}>
-            <Text style={styles.toastText}>✓ Profile updated & saved to backend!</Text>
+            <Text style={styles.toastText}>✓ Profile updated and saved to system database!</Text>
           </View>
         )}
 
@@ -344,15 +403,19 @@ export default function EditProfileScreen() {
               onPress={handlePickAvatar}
               activeOpacity={0.8}
             >
-              <Image
-                source={
-                  profile.avatarUrl
-                    ? { uri: resolveMediaUrl(profile.avatarUrl) }
-                    : require('../assets/freelancer_avatar.jpg')
-                }
-                style={styles.avatarImage}
-                resizeMode="cover"
-              />
+              {profile.avatarUrl ? (
+                <Image
+                  source={{ uri: resolveMediaUrl(profile.avatarUrl) }}
+                  style={styles.avatarImage}
+                  resizeMode="cover"
+                />
+              ) : (
+                <View style={[styles.avatarImage, styles.avatarPlaceholder]}>
+                  <Text style={styles.avatarInitials}>
+                    {profile.fullName ? profile.fullName.trim().charAt(0).toUpperCase() : '📷'}
+                  </Text>
+                </View>
+              )}
               <View style={styles.cameraOverlay}>
                 <Text style={styles.cameraIcon}>📷</Text>
               </View>
@@ -386,8 +449,8 @@ export default function EditProfileScreen() {
             {/* Rating Row */}
             <View style={styles.ratingRow}>
               <StarIcon size={16} />
-              <Text style={styles.ratingScore}>4.8</Text>
-              <Text style={styles.reviewCount}>(23 reviews)</Text>
+              <Text style={styles.ratingScore}>{profile.rating.toFixed(1)}</Text>
+              <Text style={styles.reviewCount}>({profile.reviewCount} reviews)</Text>
             </View>
           </View>
 
@@ -465,7 +528,7 @@ export default function EditProfileScreen() {
           <View style={styles.sectionBlock}>
             <Text style={styles.sectionHeading}>Skills</Text>
             <View style={styles.skillsWrapper}>
-              {profile.skills.map((skill, index) => (
+              {profile.skills.map((skill: string, index: number) => (
                 <View key={index} style={styles.skillPill}>
                   <Text style={styles.skillPillText}>{skill}</Text>
                   <TouchableOpacity
@@ -504,7 +567,23 @@ export default function EditProfileScreen() {
             </View>
 
             <View style={styles.featuredGrid}>
-              {featuredProjects.map((project, index) => (
+              {featuredProjects.length === 0 ? (
+                <TouchableOpacity
+                  style={styles.emptyFeaturedCard}
+                  onPress={handleAddProject}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.emptyFeaturedIcon}>📁</Text>
+                  <Text style={styles.emptyFeaturedTitle}>No Featured Projects Added Yet</Text>
+                  <Text style={styles.emptyFeaturedSub}>
+                    Click here or "+ Add Project" above to showcase your portfolio work.
+                  </Text>
+                  <View style={styles.emptyFeaturedBtn}>
+                    <Text style={styles.emptyFeaturedBtnText}>+ Add Project</Text>
+                  </View>
+                </TouchableOpacity>
+              ) : (
+                featuredProjects.map((project, index) => (
                 <View key={project.id || index} style={styles.projectCard}>
                   {/* Project Image & Upload Button */}
                   <TouchableOpacity
@@ -568,7 +647,7 @@ export default function EditProfileScreen() {
                     </View>
                   </View>
                 </View>
-              ))}
+              )))}
             </View>
           </View>
 
@@ -661,20 +740,32 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'flex-end',
   },
-  headerRightBadgeBox: {
-    width: 32,
-    height: 32,
+  headerSaveBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
     borderRadius: 8,
-    borderWidth: 1.5,
-    borderColor: '#10B981',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#10B981',
     alignItems: 'center',
     justifyContent: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#10B981',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 3,
+      },
+      web: {
+        boxShadow: '0 2px 6px rgba(16, 185, 129, 0.3)',
+      },
+    }),
   },
-  headerRightBadgeText: {
-    fontSize: 15,
-    color: '#10B981',
-    fontWeight: '800',
+  headerSaveBtnText: {
+    fontSize: 13,
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
   toast: {
     backgroundColor: '#ECFDF5',
@@ -734,6 +825,16 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     borderRadius: 52,
+  },
+  avatarPlaceholder: {
+    backgroundColor: '#E2E8F0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarInitials: {
+    fontSize: 38,
+    fontWeight: '700',
+    color: '#475569',
   },
   cameraOverlay: {
     position: 'absolute',
@@ -1017,6 +1118,44 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 12,
+  },
+  emptyFeaturedCard: {
+    width: '100%',
+    padding: 24,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyFeaturedIcon: {
+    fontSize: 28,
+    marginBottom: 6,
+  },
+  emptyFeaturedTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#334155',
+    marginBottom: 4,
+  },
+  emptyFeaturedSub: {
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  emptyFeaturedBtn: {
+    backgroundColor: '#10B981',
+    paddingVertical: 7,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  emptyFeaturedBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
   projectCard: {
     flex: 1,
