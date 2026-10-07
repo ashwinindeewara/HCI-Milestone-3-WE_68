@@ -16,8 +16,11 @@ import java.util.List;
 @CrossOrigin(origins = "*")
 public class SecurityLogController {
 
-    @Autowired
-    private SecurityLogService securityLogService;
+    private final SecurityLogService securityLogService;
+
+    public SecurityLogController(SecurityLogService securityLogService) {
+        this.securityLogService = securityLogService;
+    }
 
     @GetMapping("/logs")
     public ResponseEntity<List<SecurityLog>> getSecurityLogs() {

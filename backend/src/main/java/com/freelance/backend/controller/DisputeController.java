@@ -15,8 +15,11 @@ import java.util.List;
 @CrossOrigin(origins = "*")
 public class DisputeController {
 
-    @Autowired
-    private DisputeService disputeService;
+    private final DisputeService disputeService;
+
+    public DisputeController(DisputeService disputeService) {
+        this.disputeService = disputeService;
+    }
 
     @GetMapping
     public ResponseEntity<List<Dispute>> getAllDisputes() {

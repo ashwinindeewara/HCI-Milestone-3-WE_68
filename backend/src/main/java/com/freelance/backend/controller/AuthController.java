@@ -2,7 +2,8 @@ package com.freelance.backend.controller;
 
 import com.freelance.backend.dto.*;
 import com.freelance.backend.service.AuthService;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -13,8 +14,13 @@ import java.util.Map;
 @CrossOrigin(origins = "*")
 public class AuthController {
 
-    @Autowired
-    private AuthService authService;
+    private static final Logger logger = LoggerFactory.getLogger(AuthController.class);
+
+    private final AuthService authService;
+
+    public AuthController(AuthService authService) {
+        this.authService = authService;
+    }
 
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(@RequestBody(required = false) RegisterRequest request) {
@@ -23,6 +29,7 @@ public class AuthController {
             request.setEmail("user" + System.currentTimeMillis() + "@example.com");
             request.setPassword("Password123!");
         }
+        logger.info("POST /auth/register request received for email: {}", request.getEmail());
         AuthResponse response = authService.registerUser(request);
         return ResponseEntity.ok(response);
     }
@@ -34,6 +41,7 @@ public class AuthController {
             request.setEmail("admin@freelance.com");
             request.setPassword("Admin123!");
         }
+        logger.info("POST /auth/login request received for email: {}", request.getEmail());
         AuthResponse response = authService.loginUser(request);
         return ResponseEntity.ok(response);
     }
@@ -45,6 +53,7 @@ public class AuthController {
             request.setEmail("admin@freelance.com");
             request.setPassword("Admin123!");
         }
+        logger.info("POST /auth/login/email request received for email: {}", request.getEmail());
         AuthResponse response = authService.loginUser(request);
         return ResponseEntity.ok(response);
     }
@@ -52,12 +61,14 @@ public class AuthController {
     @PostMapping("/login/verify-otp")
     public ResponseEntity<?> verifyOtp(@RequestBody(required = false) Map<String, String> request) {
         String otp = (request != null && request.containsKey("otp")) ? request.get("otp") : "123456";
-        String email = (request != null && request.containsKey("email")) ? request.get("email") : "user@example.com";
+        String email = (request != null && request.get("email") != null) ? request.get("email") : "user@example.com";
+        logger.info("POST /auth/login/verify-otp request received for email: {}", email);
         return authService.verifyOtp(email, otp);
     }
 
     @PostMapping("/forgot-password")
-    public ResponseEntity<Map<String, Object>> forgotPassword(@RequestBody(required = false) ForgotPasswordRequest request) {
+    public ResponseEntity<Map<String, Object>> forgotPassword(
+            @RequestBody(required = false) ForgotPasswordRequest request) {
         if (request == null) {
             request = new ForgotPasswordRequest("user@example.com");
         }
@@ -66,7 +77,8 @@ public class AuthController {
     }
 
     @PostMapping("/reset-password")
-    public ResponseEntity<Map<String, Object>> resetPassword(@RequestBody(required = false) ResetPasswordRequest request) {
+    public ResponseEntity<Map<String, Object>> resetPassword(
+            @RequestBody(required = false) ResetPasswordRequest request) {
         if (request == null) {
             request = new ResetPasswordRequest("user@example.com", "123456", "Password123!");
         }

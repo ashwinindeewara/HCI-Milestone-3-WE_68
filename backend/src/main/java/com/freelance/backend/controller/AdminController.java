@@ -16,8 +16,11 @@ import java.util.Map;
 @CrossOrigin(origins = "*")
 public class AdminController {
 
-    @Autowired
-    private AdminService adminService;
+    private final AdminService adminService;
+
+    public AdminController(AdminService adminService) {
+        this.adminService = adminService;
+    }
 
     @GetMapping("/users")
     public ResponseEntity<List<User>> getAllUsers() {

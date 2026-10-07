@@ -1,5 +1,6 @@
 package com.freelance.backend.controller;
 
+import com.freelance.backend.dto.StaffDashboardMetricsDTO;
 import com.freelance.backend.entity.Transaction;
 import com.freelance.backend.service.TransactionService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -9,16 +10,26 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/transactions")
+@RequestMapping({ "/api/v1/transactions", "/api/transactions" })
 @CrossOrigin(origins = "*")
 public class TransactionController {
 
-    @Autowired
-    private TransactionService transactionService;
+    private final TransactionService transactionService;
+
+    public TransactionController(TransactionService transactionService) {
+        this.transactionService = transactionService;
+    }
 
     @GetMapping
-    public ResponseEntity<List<Transaction>> getTransactions(@RequestParam(required = false) String type) {
-        return ResponseEntity.ok(transactionService.getAllTransactions(type));
+    public ResponseEntity<List<Transaction>> getTransactions(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String type) {
+        return ResponseEntity.ok(transactionService.getAllTransactions(status, type));
+    }
+
+    @GetMapping("/metrics")
+    public ResponseEntity<StaffDashboardMetricsDTO> getStaffDashboardMetrics() {
+        return ResponseEntity.ok(transactionService.getStaffDashboardMetrics());
     }
 
     @GetMapping("/{id}")
