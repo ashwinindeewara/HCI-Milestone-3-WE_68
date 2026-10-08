@@ -22,6 +22,9 @@ public class Project {
     @Column(nullable = false)
     private String freelancerName;
 
+    @Column(name = "freelancer_email")
+    private String freelancerEmail;
+
     @Column(columnDefinition = "TEXT")
     private String description;
 
@@ -106,6 +109,14 @@ public class Project {
 
     public String getFreelancerName() {
         return freelancerName;
+    }
+
+    public String getFreelancerEmail() {
+        return freelancerEmail;
+    }
+
+    public void setFreelancerEmail(String freelancerEmail) {
+        this.freelancerEmail = freelancerEmail;
     }
 
     public void setFreelancerName(String freelancerName) {

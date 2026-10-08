@@ -21,6 +21,9 @@ public class Contract {
     @Column(nullable = false)
     private String freelancerName;
 
+    @Column(name = "freelancer_email")
+    private String freelancerEmail;
+
     @Column(nullable = false)
     private Double totalBudget;
 
@@ -93,6 +96,14 @@ public class Contract {
 
     public String getFreelancerName() {
         return freelancerName;
+    }
+
+    public String getFreelancerEmail() {
+        return freelancerEmail;
+    }
+
+    public void setFreelancerEmail(String freelancerEmail) {
+        this.freelancerEmail = freelancerEmail;
     }
 
     public void setFreelancerName(String freelancerName) {

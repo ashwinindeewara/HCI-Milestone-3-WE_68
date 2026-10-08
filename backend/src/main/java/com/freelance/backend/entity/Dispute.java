@@ -40,6 +40,8 @@ public class Dispute {
     private String priority = "Medium"; // High, Medium, Low
     private String clientName;
     private String freelancerName;
+    @Column(name = "freelancer_email")
+    private String freelancerEmail;
     private String contractId;
     private Integer timelineStep = 1; // 1: Open, 2: Reviewing, 3: Resolved
 
@@ -88,6 +90,14 @@ public class Dispute {
 
     public String getId() {
         return id;
+    }
+
+    public String getFreelancerEmail() {
+        return freelancerEmail;
+    }
+
+    public void setFreelancerEmail(String freelancerEmail) {
+        this.freelancerEmail = freelancerEmail;
     }
 
     public void setId(String id) {
