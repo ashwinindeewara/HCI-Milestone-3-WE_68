@@ -122,17 +122,20 @@ export default function CreateProjectScreen() {
       .at(-1) || today;
     setIsSubmitting(true);
     try {
+      const formattedKeyDeliverables = deliverables
+        .map((item) => (item.description ? `${item.title.trim()}: ${item.description.trim()}` : item.title.trim()))
+        .filter(Boolean)
+        .join('\n');
+
       await apiClient.post('/contracts', {
         id: projectId,
         title: projectTitle.trim(),
         description: description.trim(),
         scopeOfWork: scopeOfWork.trim(),
         minimumRequirements: minimumRequirements.trim(),
-        keyDeliverables: deliverables.map((item) => ({
-          title: item.title.trim(),
-          description: item.description.trim(),
-        })),
+        keyDeliverables: formattedKeyDeliverables,
         paymentStrategy,
+        paymentTerms: paymentStrategy,
         clientName: currentUser?.company || currentUser?.fullName || currentUser?.email || 'Client',
         freelancerName: talent.name,
         totalBudget,
@@ -152,7 +155,7 @@ export default function CreateProjectScreen() {
       });
       if (openPreview) {
         router.replace({
-          pathname: '/(tabs)/contract-preview',
+          pathname: '/client-create-contract',
           params: { id: projectId },
         });
       } else {
@@ -161,8 +164,7 @@ export default function CreateProjectScreen() {
         ]);
       }
     } catch (error: any) {
-      Alert.alert(
-        'Could not create project',
+      Alert.alert('Could not create project',
         error.response?.data?.message || 'The backend could not save this project. Try again.'
       );
     } finally {
