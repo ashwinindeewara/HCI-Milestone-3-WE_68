@@ -22,6 +22,11 @@ public class EscrowService {
     @Autowired
     private com.freelance.backend.repository.ContractRepository contractRepository;
 
+    @Autowired(required = false)
+    private com.freelance.backend.repository.UserRepository userRepository;
+
+    @Autowired(required = false)
+    private com.freelance.backend.repository.FreelancerProfileRepository profileRepository;
 
     public EscrowSummaryDTO getEscrowSummary() {
         return getEscrowSummary(null);
@@ -29,7 +34,22 @@ public class EscrowService {
 
     public EscrowSummaryDTO getEscrowSummary(String freelancerName) {
         if (freelancerName != null && !freelancerName.isBlank()) {
-            List<com.freelance.backend.entity.Contract> freelancerContracts = contractRepository.findByFreelancerNameIgnoreCase(freelancerName.trim());
+            String name = freelancerName.trim();
+            if (name.contains("@")) {
+                if (profileRepository != null) {
+                    var p = profileRepository.findByEmailIgnoreCase(name);
+                    if (p.isPresent() && p.get().getFullName() != null && !p.get().getFullName().isBlank()) {
+                        name = p.get().getFullName().trim();
+                    }
+                }
+                if (userRepository != null && name.contains("@")) {
+                    var u = userRepository.findByEmailIgnoreCase(name);
+                    if (u.isPresent() && u.get().getFullName() != null && !u.get().getFullName().isBlank()) {
+                        name = u.get().getFullName().trim();
+                    }
+                }
+            }
+            List<com.freelance.backend.entity.Contract> freelancerContracts = contractRepository.findByFreelancerNameIgnoreCase(name);
 
             if (freelancerContracts.isEmpty()) {
                 return new EscrowSummaryDTO(0.0, 0.0, 0.0, 0.0);

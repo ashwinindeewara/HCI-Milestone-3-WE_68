@@ -5,6 +5,8 @@ import com.freelance.backend.entity.Notification;
 import com.freelance.backend.exception.ResourceNotFoundException;
 import com.freelance.backend.repository.ContractRepository;
 import com.freelance.backend.repository.NotificationRepository;
+import com.freelance.backend.repository.FreelancerProfileRepository;
+import com.freelance.backend.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -22,6 +24,12 @@ public class ContractService {
     @Autowired
     private ProjectService projectService;
 
+    @Autowired(required = false)
+    private UserRepository userRepository;
+
+    @Autowired(required = false)
+    private FreelancerProfileRepository profileRepository;
+
     public List<Contract> getAllContracts() {
         return contractRepository.findAll();
     }
@@ -32,6 +40,17 @@ public class ContractService {
     }
 
     public Contract createContract(Contract contract) {
+        if (contract.getFreelancerEmail() != null && !contract.getFreelancerEmail().isBlank()) {
+            contract.setFreelancerEmail(contract.getFreelancerEmail().trim().toLowerCase());
+        } else if (contract.getFreelancerName() != null && userRepository != null) {
+            List<com.freelance.backend.entity.User> matches = userRepository.findAllByFullNameIgnoreCase(contract.getFreelancerName().trim())
+                    .stream()
+                    .filter(user -> user.getRole() == com.freelance.backend.entity.UserRole.FREELANCER)
+                    .toList();
+            if (matches.size() == 1) {
+                contract.setFreelancerEmail(matches.get(0).getEmail().trim().toLowerCase());
+            }
+        }
         Contract saved = contractRepository.save(contract);
 
         // Automatically create and trigger the first notification for the new contract
@@ -61,6 +80,9 @@ public class ContractService {
                 saved.getId(),
                 "Client " + client + " has selected you and sent a contract offer for '" + saved.getTitle() + "' with total budget of " + amountFormatted + ". Review milestones and sign to start work."
         );
+            if (userRepository != null) {
+                userRepository.findByFullNameIgnoreCase(freelancer).ifPresent(user -> notif.setRecipientEmail(user.getEmail()));
+            }
         notificationRepository.save(notif);
 
         return saved;
@@ -88,6 +110,9 @@ public class ContractService {
                     contract.getId(),
                     "Contract " + contract.getId() + " is now active. Escrow funds have been secured and project workspace initialized."
             );
+                    if (userRepository != null) {
+                        userRepository.findByFullNameIgnoreCase(contract.getFreelancerName()).ifPresent(user -> notif.setRecipientEmail(user.getEmail()));
+                    }
             notificationRepository.save(notif);
         }
 
@@ -95,10 +120,22 @@ public class ContractService {
     }
 
     public List<Contract> getFreelancerContracts(String freelancerName) {
-        if (freelancerName != null && !freelancerName.isBlank()) {
-            return contractRepository.findByFreelancerNameIgnoreCase(freelancerName.trim());
+        if (freelancerName == null || freelancerName.isBlank()) {
+            return List.of();
         }
-        return List.of();
+        String clean = freelancerName.trim();
+        if (clean.contains("@")) {
+            return getFreelancerContractsByEmail(clean);
+        }
+        return contractRepository.findByFreelancerNameIgnoreCase(clean);
+    }
+
+    public List<Contract> getFreelancerContractsByEmail(String email) {
+        if (email == null || email.isBlank()) {
+            return List.of();
+        }
+        String cleanEmail = email.trim();
+        return contractRepository.findByFreelancerEmailIgnoreCase(cleanEmail);
     }
 
     public Contract acceptContract(String id, String signerName) {

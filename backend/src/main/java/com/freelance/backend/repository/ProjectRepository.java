@@ -11,6 +11,7 @@ import java.util.Optional;
 public interface ProjectRepository extends JpaRepository<Project, String> {
     Optional<Project> findByContractId(String contractId);
     List<Project> findByFreelancerNameIgnoreCase(String freelancerName);
+    List<Project> findByFreelancerEmailIgnoreCase(String freelancerEmail);
     List<Project> findByClientNameIgnoreCase(String clientName);
     List<Project> findAllByOrderByCreatedAtDesc();
 }

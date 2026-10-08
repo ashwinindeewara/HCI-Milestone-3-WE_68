@@ -9,7 +9,9 @@ import com.freelance.backend.entity.Notification;
 import com.freelance.backend.exception.ResourceNotFoundException;
 import com.freelance.backend.repository.DisputeMessageRepository;
 import com.freelance.backend.repository.DisputeRepository;
+import com.freelance.backend.repository.FreelancerProfileRepository;
 import com.freelance.backend.repository.NotificationRepository;
+import com.freelance.backend.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -33,29 +35,72 @@ public class DisputeService {
     @Autowired
     private NotificationRepository notificationRepository;
 
+    @Autowired(required = false)
+    private UserRepository userRepository;
+
+    @Autowired(required = false)
+    private FreelancerProfileRepository profileRepository;
+
     public List<Dispute> getAllDisputes() {
         return disputeRepository.findAll();
     }
 
     public List<Dispute> getFreelancerDisputes(String freelancerName) {
-        List<Dispute> disputes = getAllDisputes();
-        if (freelancerName != null && !freelancerName.isBlank()) {
-            String lower = freelancerName.trim().toLowerCase();
-            boolean isChathuni = lower.contains("chathuni");
-            return disputes.stream()
-                    .filter(d -> {
-                        String fName = d.getFreelancerName() != null ? d.getFreelancerName().trim().toLowerCase() : "";
-                        String parties = d.getParties() != null ? d.getParties().trim().toLowerCase() : "";
-                        if (isChathuni) {
-                            return fName.contains("chathuni") || parties.contains("chathuni");
-                        }
-                        boolean matchFreelancer = !fName.isEmpty() && (fName.contains(lower) || lower.contains(fName));
-                        boolean matchParties = !parties.isEmpty() && parties.contains(lower);
-                        return matchFreelancer || matchParties;
-                    })
-                    .toList();
+        if (freelancerName == null || freelancerName.isBlank()) {
+            return List.of();
         }
-        return disputes;
+        String clean = freelancerName.trim();
+        if (clean.contains("@")) {
+            return getFreelancerDisputesByEmail(clean);
+        }
+        List<Dispute> disputes = getAllDisputes();
+        String lower = clean.toLowerCase();
+        boolean isChathuni = lower.contains("chathuni");
+        return disputes.stream()
+                .filter(d -> {
+                    String fName = d.getFreelancerName() != null ? d.getFreelancerName().trim().toLowerCase() : "";
+                    String parties = d.getParties() != null ? d.getParties().trim().toLowerCase() : "";
+                    if (isChathuni) {
+                        return fName.contains("chathuni") || parties.contains("chathuni");
+                    }
+                    boolean matchFreelancer = !fName.isEmpty() && (fName.contains(lower) || lower.contains(fName));
+                    boolean matchParties = !parties.isEmpty() && parties.contains(lower);
+                    return matchFreelancer || matchParties;
+                })
+                .toList();
+    }
+
+    public List<Dispute> getFreelancerDisputesByEmail(String email) {
+        if (email == null || email.isBlank()) {
+            return List.of();
+        }
+        String cleanEmail = email.trim();
+        List<Dispute> emailOwned = disputeRepository.findAll().stream()
+            .filter(d -> d.getFreelancerEmail() != null && d.getFreelancerEmail().equalsIgnoreCase(cleanEmail))
+            .toList();
+        if (!emailOwned.isEmpty()) return emailOwned;
+        if (profileRepository != null) {
+            var profileOpt = profileRepository.findByEmailIgnoreCase(cleanEmail);
+            if (profileOpt.isPresent() && profileOpt.get().getFullName() != null && !profileOpt.get().getFullName().isBlank()) {
+                return getFreelancerDisputes(profileOpt.get().getFullName().trim());
+            }
+        }
+        if (userRepository != null) {
+            var userOpt = userRepository.findByEmailIgnoreCase(cleanEmail);
+            if (userOpt.isPresent() && userOpt.get().getFullName() != null && !userOpt.get().getFullName().isBlank()) {
+                return getFreelancerDisputes(userOpt.get().getFullName().trim());
+            }
+        }
+        List<Dispute> disputes = getAllDisputes();
+        String lower = cleanEmail.toLowerCase();
+        return disputes.stream()
+                .filter(d -> {
+                    String fName = d.getFreelancerName() != null ? d.getFreelancerName().trim().toLowerCase() : "";
+                    String parties = d.getParties() != null ? d.getParties().trim().toLowerCase() : "";
+                    return (!fName.isEmpty() && (fName.contains(lower) || lower.contains(fName))) ||
+                           (!parties.isEmpty() && parties.contains(lower));
+                })
+                .toList();
     }
 
     public Dispute getDisputeById(String id) {
@@ -106,6 +151,7 @@ public class DisputeService {
 
         dispute.setClientName(client);
         dispute.setFreelancerName(freelancer);
+        dispute.setFreelancerEmail(request.getFreelancerEmail());
         dispute.setContractId(request.getContractId());
         dispute.setPriority(request.getPriority() != null ? request.getPriority() : "Medium");
         dispute.setLastUpdatedDate(todayFormatted);
