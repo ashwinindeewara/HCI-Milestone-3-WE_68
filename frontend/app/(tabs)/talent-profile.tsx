@@ -13,7 +13,6 @@ import Colors from '../../src/constants/colors';
 import Theme from '../../src/constants/theme';
 import { TALENT_PROFILES } from '../../src/constants/talentProfiles';
 
-
 export default function TalentProfileScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id?: string }>();

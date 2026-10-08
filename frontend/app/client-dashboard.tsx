@@ -28,7 +28,6 @@ export default function ClientDashboardScreen() {
     upcomingDeadlines: 4,
   });
   const currentUser = getSavedUserData();
-  console.log(currentUser);
 
   const getInitials = (fullName: string) => {
     return fullName
@@ -294,12 +293,12 @@ export default function ClientDashboardScreen() {
               <Text style={styles.tabLabel}>Find Talent</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/staff-reports')}>
+            <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-reports')}>
               <Text style={styles.tabIcon}>💳</Text>
               <Text style={styles.tabLabel}>Payments</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/staff-profile')}>
+            <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-profile')}>
               <Text style={styles.tabIcon}>👤</Text>
               <Text style={styles.tabLabel}>Profile</Text>
             </TouchableOpacity>

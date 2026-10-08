@@ -111,7 +111,8 @@ export const updateSavedUserData = (updatedFields: any): any => {
  * Clears stored authentication session tokens and API authorization headers
  */
 export const clearAuthSession = (): void => {
-  storage.clear();
+  storage.removeItem(TOKEN_KEY);
+  storage.removeItem(USER_KEY);
   delete apiClient.defaults.headers.common['Authorization'];
 };
 

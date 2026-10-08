@@ -171,12 +171,12 @@ export default function ClientContractsScreen() {
             <Text style={styles.tabLabel}>Find Talent</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/staff-reports')}>
+          <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-reports')}>
             <Text style={styles.tabIcon}>💳</Text>
             <Text style={styles.tabLabel}>Payments</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/staff-profile')}>
+          <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-profile')}>
             <Text style={styles.tabIcon}>👤</Text>
             <Text style={styles.tabLabel}>Profile</Text>
           </TouchableOpacity>
