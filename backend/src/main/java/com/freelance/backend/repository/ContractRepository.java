@@ -15,5 +15,6 @@ public interface ContractRepository extends JpaRepository<Contract, String> {
 
     List<Contract> findByClientNameOrFreelancerName(String clientName, String freelancerName);
     List<Contract> findByFreelancerNameIgnoreCase(String freelancerName);
+    List<Contract> findByFreelancerEmailIgnoreCase(String freelancerEmail);
     List<Contract> findByStatus(String status);
 }
