@@ -31,15 +31,33 @@ public class ProjectService {
     @Autowired
     private NotificationRepository notificationRepository;
 
+    @Autowired(required = false)
+    private UserRepository userRepository;
+
+    @Autowired(required = false)
+    private FreelancerProfileRepository profileRepository;
+
     public List<Project> getAllProjects() {
         return projectRepository.findAllByOrderByCreatedAtDesc();
     }
 
     public List<Project> getFreelancerProjects(String freelancerName) {
-        if (freelancerName != null && !freelancerName.isBlank()) {
-            return projectRepository.findByFreelancerNameIgnoreCase(freelancerName.trim());
+        if (freelancerName == null || freelancerName.isBlank()) {
+            return List.of();
         }
-        return List.of();
+        String clean = freelancerName.trim();
+        if (clean.contains("@")) {
+            return getFreelancerProjectsByEmail(clean);
+        }
+        return projectRepository.findByFreelancerNameIgnoreCase(clean);
+    }
+
+    public List<Project> getFreelancerProjectsByEmail(String email) {
+        if (email == null || email.isBlank()) {
+            return List.of();
+        }
+        String cleanEmail = email.trim();
+        return projectRepository.findByFreelancerEmailIgnoreCase(cleanEmail);
     }
 
     public Project getProjectById(String id) {
@@ -77,6 +95,9 @@ public class ProjectService {
                 .map(existing -> {
                     existing.setStatus("ACTIVE");
                     existing.setStatusBadge("On Track");
+                    if (existing.getFreelancerEmail() == null || existing.getFreelancerEmail().isBlank()) {
+                        existing.setFreelancerEmail(contract.getFreelancerEmail());
+                    }
                     existing.setUpdatedAt(LocalDateTime.now());
                     Project saved = projectRepository.save(existing);
                     logActivity(saved.getId(), contract.getId(), "PROJECT_ACTIVATED", "Project status set to Active after contract signature", contract.getFreelancerName());
@@ -87,7 +108,7 @@ public class ProjectService {
                     String timeline = contract.getTimeline() != null ? contract.getTimeline() : (contract.getStartDate() + " - " + contract.getEndDate());
                     String dueDate = contract.getDueDate() != null ? contract.getDueDate() : contract.getEndDate();
                     Double escrow = contract.getInEscrowAmount() != null ? contract.getInEscrowAmount() : 0.0;
-                    Integer completion = contract.getCompletionPercentage() != null ? contract.getCompletionPercentage() : 0;
+                    Integer completion = 0;
 
                     Project project = new Project(
                             projectId,
@@ -106,6 +127,7 @@ public class ProjectService {
                     );
                     project.setStartDate(contract.getStartDate());
                     project.setEndDate(contract.getEndDate());
+                    project.setFreelancerEmail(contract.getFreelancerEmail());
 
                     Project saved = projectRepository.save(project);
 

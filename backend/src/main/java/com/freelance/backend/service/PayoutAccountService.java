@@ -19,79 +19,9 @@ public class PayoutAccountService {
     public List<PayoutAccount> getAccounts(String email, String freelancerName) {
         String targetEmail = (email != null && !email.isBlank()) ? email.trim() : "";
         if (!targetEmail.isEmpty()) {
-            List<PayoutAccount> list = payoutAccountRepository.findByUserEmailOrderByCreatedAtDesc(targetEmail);
-            if (!list.isEmpty()) {
-                return list;
-            }
+            return payoutAccountRepository.findByUserEmailIgnoreCaseOrderByCreatedAtDesc(targetEmail);
         }
-
-        if (freelancerName != null && !freelancerName.isBlank()) {
-            List<PayoutAccount> list = payoutAccountRepository.findByFreelancerNameIgnoreCase(freelancerName.trim());
-            if (!list.isEmpty()) {
-                return list;
-            }
-        }
-
-        // Only for default Chathuni account if empty:
-        boolean isChathuni = targetEmail.contains("chathuni") || (freelancerName != null && freelancerName.toLowerCase().contains("chathuni"));
-        if (isChathuni) {
-            return seedChathuniDefaults(targetEmail.isEmpty() ? "chathuniimalsha.com" : targetEmail);
-        }
-
         return List.of();
-    }
-
-    private List<PayoutAccount> seedChathuniDefaults(String email) {
-        PayoutAccount a1 = new PayoutAccount(
-                "acc-chathuni-1",
-                email,
-                "Chathuni Imalsha",
-                "Chase Bank (Checking)",
-                "Direct Deposit (ACH) • Checking • Routing: 12200049",
-                "Account ending in 4421 • Chathuni Imalsha",
-                true,
-                "🏛️",
-                "Chase Bank",
-                "Chathuni Imalsha",
-                "4421",
-                "12200049",
-                "Direct Deposit (ACH)",
-                "Checking"
-        );
-        PayoutAccount a2 = new PayoutAccount(
-                "acc-chathuni-2",
-                email,
-                "Chathuni Imalsha",
-                "PayPal Business",
-                "Instant Wallet Transfer • USD Preferred",
-                "chathuni.design@agency.io",
-                false,
-                "🅿️",
-                "PayPal",
-                "Chathuni Imalsha",
-                "chathuni.design@agency.io",
-                "",
-                "PayPal Wallet",
-                "Checking"
-        );
-        PayoutAccount a3 = new PayoutAccount(
-                "acc-chathuni-3",
-                email,
-                "Chathuni Imalsha",
-                "Visa Business Debit",
-                "Instant Card Payout • Available 24/7",
-                "Card ending in 8821 • Expires 08/27",
-                false,
-                "💳",
-                "Visa Business",
-                "Chathuni Imalsha",
-                "8821",
-                "",
-                "Instant Debit Card",
-                "Checking"
-        );
-        payoutAccountRepository.saveAll(List.of(a1, a2, a3));
-        return payoutAccountRepository.findByUserEmailOrderByCreatedAtDesc(email);
     }
 
     @Transactional
@@ -102,7 +32,7 @@ public class PayoutAccountService {
 
         String email = account.getUserEmail() != null ? account.getUserEmail().trim() : "";
         if (!email.isEmpty() && Boolean.TRUE.equals(account.getIsDefault())) {
-            List<PayoutAccount> existing = payoutAccountRepository.findByUserEmailOrderByCreatedAtDesc(email);
+            List<PayoutAccount> existing = payoutAccountRepository.findByUserEmailIgnoreCaseOrderByCreatedAtDesc(email);
             for (PayoutAccount a : existing) {
                 if (!a.getId().equals(account.getId())) {
                     a.setIsDefault(false);
@@ -111,16 +41,33 @@ public class PayoutAccountService {
             }
         }
 
+        if (account.getUserEmail() == null || account.getUserEmail().isBlank()) {
+            throw new IllegalArgumentException("Payout account owner email is required");
+        }
+        if (payoutAccountRepository.existsById(account.getId())) {
+            PayoutAccount existing = payoutAccountRepository.findById(account.getId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Payout account not found: " + account.getId()));
+            if (!existing.getUserEmail().equalsIgnoreCase(account.getUserEmail().trim())) {
+                throw new ResourceNotFoundException("Payout account not found for this freelancer");
+            }
+        }
+        account.setUserEmail(account.getUserEmail().trim().toLowerCase());
         return payoutAccountRepository.save(account);
     }
 
     @Transactional
     public PayoutAccount setDefault(String id, String email) {
+        if (email == null || email.isBlank()) {
+            throw new IllegalArgumentException("Payout account owner email is required");
+        }
         PayoutAccount target = payoutAccountRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Payout account not found: " + id));
 
-        String userEmail = (email != null && !email.isBlank()) ? email.trim() : target.getUserEmail();
-        List<PayoutAccount> all = payoutAccountRepository.findByUserEmailOrderByCreatedAtDesc(userEmail);
+        String userEmail = email.trim();
+        if (!target.getUserEmail().equalsIgnoreCase(userEmail)) {
+            throw new ResourceNotFoundException("Payout account not found for this freelancer");
+        }
+        List<PayoutAccount> all = payoutAccountRepository.findByUserEmailIgnoreCaseOrderByCreatedAtDesc(userEmail);
         for (PayoutAccount a : all) {
             a.setIsDefault(a.getId().equals(id));
             payoutAccountRepository.save(a);
@@ -131,7 +78,12 @@ public class PayoutAccountService {
     }
 
     @Transactional
-    public void deleteAccount(String id) {
-        payoutAccountRepository.deleteById(id);
+    public void deleteAccount(String id, String email) {
+        PayoutAccount target = payoutAccountRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Payout account not found: " + id));
+        if (email == null || email.isBlank() || !target.getUserEmail().equalsIgnoreCase(email.trim())) {
+            throw new ResourceNotFoundException("Payout account not found for this freelancer");
+        }
+        payoutAccountRepository.delete(target);
     }
 }

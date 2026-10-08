@@ -20,6 +20,12 @@ public class TransactionService {
     @org.springframework.beans.factory.annotation.Autowired
     private com.freelance.backend.repository.ContractRepository contractRepository;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.freelance.backend.repository.UserRepository userRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.freelance.backend.repository.FreelancerProfileRepository profileRepository;
+
     public TransactionService(TransactionRepository transactionRepository) {
         this.transactionRepository = transactionRepository;
     }
@@ -61,8 +67,24 @@ public class TransactionService {
         }
 
         if (freelancerName != null && !freelancerName.isBlank()) {
-            if (!freelancerName.toLowerCase().contains("chathuni")) {
-                List<String> contractIds = contractRepository.findByFreelancerNameIgnoreCase(freelancerName.trim()).stream()
+            String name = freelancerName.trim();
+            if (name.contains("@")) {
+                if (profileRepository != null) {
+                    var p = profileRepository.findByEmailIgnoreCase(name);
+                    if (p.isPresent() && p.get().getFullName() != null && !p.get().getFullName().isBlank()) {
+                        name = p.get().getFullName().trim();
+                    }
+                }
+                if (userRepository != null && name.contains("@")) {
+                    var u = userRepository.findByEmailIgnoreCase(name);
+                    if (u.isPresent() && u.get().getFullName() != null && !u.get().getFullName().isBlank()) {
+                        name = u.get().getFullName().trim();
+                    }
+                }
+            }
+
+            if (!name.toLowerCase().contains("chathuni")) {
+                List<String> contractIds = contractRepository.findByFreelancerNameIgnoreCase(name).stream()
                         .map(com.freelance.backend.entity.Contract::getId)
                         .toList();
                 if (contractIds.isEmpty()) {

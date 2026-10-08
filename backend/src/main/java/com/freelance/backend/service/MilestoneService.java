@@ -114,6 +114,39 @@ public class MilestoneService {
     public List<Deliverable> getDeliverablesForMilestone(String milestoneId) {
         return deliverableRepository.findByMilestoneId(milestoneId);
     }
+    @Transactional
+    public void deleteDeliverable(String deliverableId) {
+        Deliverable deliverable = getDeliverableById(deliverableId);
+        Milestone milestone = milestoneRepository.findById(deliverable.getMilestoneId()).orElse(null);
+        deliverableRepository.delete(deliverable);
+        if (milestone == null) return;
+
+        boolean hasActiveDeliverable = deliverableRepository.findByMilestoneId(milestone.getId()).stream()
+                .anyMatch(d -> !"REJECTED".equalsIgnoreCase(d.getStatus()));
+        if (!hasActiveDeliverable) {
+            milestone.setStatus("FUNDED");
+            milestoneRepository.save(milestone);
+        }
+        recalculateProjectProgress(milestone.getContractId());
+    }
+
+    private void recalculateProjectProgress(String contractId) {
+        if (contractId == null) return;
+        List<Milestone> allMilestones = milestoneRepository.findByContractId(contractId);
+        long completedCount = allMilestones.stream()
+                .filter(m -> "COMPLETED".equalsIgnoreCase(m.getStatus()) || "RELEASED".equalsIgnoreCase(m.getStatus()) || "SUBMITTED".equalsIgnoreCase(m.getStatus()))
+                .count();
+        int progress = allMilestones.isEmpty() ? 0 : (int) ((completedCount * 100) / allMilestones.size());
+        contractRepository.findById(contractId).ifPresent(contract -> {
+            contract.setCompletionPercentage(progress);
+            contractRepository.save(contract);
+        });
+        projectRepository.findByContractId(contractId).ifPresent(project -> {
+            project.setCompletionPercentage(progress);
+            if (progress < 100 && "COMPLETED".equalsIgnoreCase(project.getStatus())) project.setStatus("ACTIVE");
+            projectRepository.save(project);
+        });
+    }
 
     public Deliverable getDeliverableById(String id) {
         return deliverableRepository.findById(id)

@@ -26,9 +26,8 @@ public class FreelancerProfileService {
     private FileStorageService fileStorageService;
 
     public FreelancerProfile getDefaultProfile() {
-        return profileRepository.findByEmail("chathuniimalsha.com")
-                .orElseGet(() -> profileRepository.findAll().stream().findFirst()
-                        .orElseGet(() -> new FreelancerProfile("freelancer@example.com", "Freelancer")));
+        return profileRepository.findAll().stream().findFirst()
+                .orElseGet(() -> new FreelancerProfile("freelancer@example.com", "Freelancer"));
     }
 
     public FreelancerProfile getProfileByEmail(String email) {
@@ -36,9 +35,9 @@ public class FreelancerProfileService {
             return getDefaultProfile();
         }
         String cleanEmail = email.trim().toLowerCase();
-        return profileRepository.findByEmail(cleanEmail)
+        return profileRepository.findByEmailIgnoreCase(cleanEmail)
                 .orElseGet(() -> {
-                    String name = userRepository.findByEmail(cleanEmail)
+                    String name = userRepository.findByEmailIgnoreCase(cleanEmail)
                             .map(com.freelance.backend.entity.User::getFullName)
                             .orElse("Freelancer");
                     FreelancerProfile freshProfile = new FreelancerProfile(cleanEmail, name);
@@ -48,12 +47,12 @@ public class FreelancerProfileService {
 
     @Transactional
     public FreelancerProfile updateProfile(String email, FreelancerProfileDTO dto) {
-        String cleanEmail = (email != null && !email.isBlank()) ? email.trim().toLowerCase() : "chathuniimalsha.com";
-        FreelancerProfile profile = profileRepository.findByEmail(cleanEmail)
+        String cleanEmail = (email != null && !email.isBlank()) ? email.trim().toLowerCase() : (dto.getEmail() != null ? dto.getEmail().trim().toLowerCase() : "freelancer@example.com");
+        FreelancerProfile profile = profileRepository.findByEmailIgnoreCase(cleanEmail)
                 .orElseGet(() -> {
                     String name = (dto.getFullName() != null && !dto.getFullName().isBlank())
                             ? dto.getFullName()
-                            : userRepository.findByEmail(cleanEmail)
+                            : userRepository.findByEmailIgnoreCase(cleanEmail)
                             .map(com.freelance.backend.entity.User::getFullName)
                             .orElse("Freelancer");
                     FreelancerProfile newProfile = new FreelancerProfile(cleanEmail, name);
