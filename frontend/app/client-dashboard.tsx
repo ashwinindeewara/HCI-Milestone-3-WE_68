@@ -624,6 +624,9 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     color: Colors.neutralMedium,
   },
+  activityList: {
+    marginTop: 4,
+  },
 
   clientTabBar: {
       position: 'absolute',

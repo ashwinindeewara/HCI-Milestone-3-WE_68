@@ -1,4 +1,4 @@
-import { React, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Image,
   SafeAreaView,
@@ -15,7 +15,6 @@ import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
 import apiClient from '../src/services/api';
 import { getSavedUserData, clearAuthSession } from '../src/services/authService';
-import { getClientProfile } from '../src/services/clientService';
 
 interface ClientProfileData {
   id?: number | string;
@@ -759,6 +758,8 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontWeight: '700',
   },
+  tabIcon: { fontSize: 18, opacity: 0.6 },
+  tabIconActive: { opacity: 1, transform: [{ scale: 1.1 }] },
 
   logoutOverlay: {
     position: 'absolute',
@@ -855,21 +856,16 @@ const styles = StyleSheet.create({
   },
 
   clientTabBar: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        height: 64,
-        backgroundColor: Colors.surface,
-        borderTopWidth: 1,
-        borderTopColor: Colors.border,
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        alignItems: 'center',
-    },
-    tabItem: { alignItems: 'center', justifyContent: 'center' },
-    tabIcon: { fontSize: 18, opacity: 0.6 },
-    tabIconActive: { opacity: 1, transform: [{ scale: 1.1 }] },
-    tabLabel: { fontSize: 10, fontWeight: '600', color: Colors.neutralMedium, marginTop: 2 },
-    tabLabelActive: { color: Colors.primary, fontWeight: '700' },
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 64,
+    backgroundColor: Colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+  },
 });

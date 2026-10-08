@@ -191,9 +191,8 @@ export default function CreateContractScreen() {
       setSending(true);
       setSuccessMessage('');
 
-      console.log('Sending contract:', contract.id);
+      console.log('Sending contract to freelancer & storing notification:', contract.id);
 
-      // Your backend already exposes PATCH /api/contracts/{id}/status
       const response = await apiClient.patch(
         `/contracts/${encodeURIComponent(String(contract.id))}/status`,
         null,
@@ -203,12 +202,16 @@ export default function CreateContractScreen() {
         },
       );
 
-      console.log('Contract status updated:', response.data);
+      console.log('Contract status updated & notification saved:', response.data);
 
       setContract(response.data);
       setSuccessMessage(
-        `Draft saved and ready to send to ${response.data?.freelancerName || contract.freelancerName || 'the freelancer'}.`,
+        `Contract sent successfully to ${response.data?.freelancerName || contract.freelancerName || 'the freelancer'}! Notification stored.`,
       );
+      router.replace({
+        pathname: '/client-milestone-review',
+        params: { contractId: contract.id },
+      });
     } catch (error: any) {
       console.error('Failed to send contract:', error);
       console.error('Response:', error?.response?.data);

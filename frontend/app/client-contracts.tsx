@@ -111,7 +111,7 @@ export default function ClientContractsScreen() {
             <TouchableOpacity
               key={item.id}
               style={styles.projectCard}
-              onPress={() => router.push('/(tabs)/files')}
+              onPress={() => router.push({ pathname: '/client-milestone-review', params: { contractId: `C-10${item.id}` } })}
               activeOpacity={0.85}
             >
               <View style={styles.cardHeader}>

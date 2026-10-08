@@ -59,46 +59,47 @@ public class ContractService {
                 contract.setFreelancerEmail(matches.get(0).getEmail().trim().toLowerCase());
             }
         }
-        Contract saved = contractRepository.save(contract);
-
-        // Automatically create and trigger the first notification for the new contract
-        String amountFormatted = saved.getTotalBudget() != null
-                ? "$" + String.format("%,.0f", saved.getTotalBudget())
-                : "$8,500";
-
-        String freelancer = saved.getFreelancerName();
-        String client = saved.getClientName() != null && !saved.getClientName().isBlank()
-                ? saved.getClientName()
-                : "TechVentures Inc.";
-
-        Notification notif = new Notification(
-                freelancer,
-                client,
-                saved.getTitle() != null ? saved.getTitle() : "New Project Contract",
-                "New contract offer from " + client + " • Signature Required",
-                "New Contract",
-                "contract",
-                amountFormatted,
-                "Contracts",
-                "/contract-details?id=" + saved.getId(),
-                "View Contract & Sign",
-                true,
-                "Just now",
-                "CONTRACT_RECEIVED",
-                saved.getId(),
-                "Client " + client + " has selected you and sent a contract offer for '" + saved.getTitle() + "' with total budget of " + amountFormatted + ". Review milestones and sign to start work."
-        );
-            if (userRepository != null) {
-                userRepository.findByFullNameIgnoreCase(freelancer).ifPresent(user -> notif.setRecipientEmail(user.getEmail()));
-            }
-        notificationRepository.save(notif);
-
-        return saved;
+        return contractRepository.save(contract);
     }
 
     public Contract updateContractStatus(String id, String status) {
         Contract contract = getContractById(id);
         contract.setStatus(status);
+
+        if ("PENDING".equalsIgnoreCase(status) || "OFFERED".equalsIgnoreCase(status) || "SENT".equalsIgnoreCase(status)) {
+            String amountFormatted = contract.getTotalBudget() != null
+                    ? "$" + String.format("%,.0f", contract.getTotalBudget())
+                    : "$8,500";
+
+            String freelancer = contract.getFreelancerName();
+            String client = contract.getClientName() != null && !contract.getClientName().isBlank()
+                    ? contract.getClientName()
+                    : "TechVentures Inc.";
+
+            Notification notif = new Notification(
+                    freelancer,
+                    client,
+                    contract.getTitle() != null ? contract.getTitle() : "New Project Contract",
+                    "New contract offer from " + client + " • Signature Required",
+                    "New Contract",
+                    "contract",
+                    amountFormatted,
+                    "Contracts",
+                    "/contract-details?id=" + contract.getId(),
+                    "View Contract & Sign",
+                    true,
+                    "Just now",
+                    "CONTRACT_RECEIVED",
+                    contract.getId(),
+                    "Client " + client + " has selected you and sent a contract offer for '" + contract.getTitle() + "' with total budget of " + amountFormatted + ". Review milestones and sign to start work."
+            );
+            if (contract.getFreelancerEmail() != null && !contract.getFreelancerEmail().isBlank()) {
+                notif.setRecipientEmail(contract.getFreelancerEmail().trim().toLowerCase());
+            } else if (userRepository != null) {
+                userRepository.findByFullNameIgnoreCase(freelancer).ifPresent(user -> notif.setRecipientEmail(user.getEmail()));
+            }
+            notificationRepository.save(notif);
+        }
 
         if ("ACTIVE".equalsIgnoreCase(status) || "IN_PROGRESS".equalsIgnoreCase(status)) {
             Notification notif = new Notification(
@@ -118,9 +119,11 @@ public class ContractService {
                     contract.getId(),
                     "Contract " + contract.getId() + " is now active. Escrow funds have been secured and project workspace initialized."
             );
-                    if (userRepository != null) {
-                        userRepository.findByFullNameIgnoreCase(contract.getFreelancerName()).ifPresent(user -> notif.setRecipientEmail(user.getEmail()));
-                    }
+            if (contract.getFreelancerEmail() != null && !contract.getFreelancerEmail().isBlank()) {
+                notif.setRecipientEmail(contract.getFreelancerEmail().trim().toLowerCase());
+            } else if (userRepository != null) {
+                userRepository.findByFullNameIgnoreCase(contract.getFreelancerName()).ifPresent(user -> notif.setRecipientEmail(user.getEmail()));
+            }
             notificationRepository.save(notif);
         }
 
