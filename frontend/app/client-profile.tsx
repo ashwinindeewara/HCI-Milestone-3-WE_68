@@ -51,7 +51,7 @@ export default function ClientProfileScreen() {
             return;
          }
          const response = await apiClient.get(`/clients/${currentUser.id}/profile`);
-         console.log('CLIENT PROFILE:', response);
+         //console.log('CLIENT PROFILE:', response);
          setProfile(response.data);
       } catch (error: any) {
          console.error('Failed to load client profile:', error?.response?.data || error);
@@ -69,10 +69,10 @@ export default function ClientProfileScreen() {
     ...currentUser,
 
     // Temporary fallback values for fields not yet returned by login
-    location: profile?.location,
-    companyName: profile?.companyName,
-    memberSince: profile?.memberSince,
-    about: profile?.about,
+    location: profile?.location || 'Colombo',
+    companyName: profile?.companyName || 'Sysco Labs',
+    memberSince: profile?.memberSince || '2025',
+    about: profile?.about || 'Creative UI/UX Designer with a strong command of Figma, usability research, and modern design workflows. Dedicated to crafting accessible, user-tested interfaces that delight users and drive business goals',
     status: profile?.status || 'Available',
     projectsPosted: profile?.projectsPosted ?? 0,
     skills: profile?.skills,
@@ -386,104 +386,32 @@ export default function ClientProfileScreen() {
         )}
 
         {/* ================= BOTTOM TAB BAR ================= */}
-        <View style={styles.bottomTabBar}>
+        <View style={styles.clientTabBar}>
+            <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-dashboard')}>
+              <Text style={[styles.tabIcon, styles.tabIconActive]}>🏠</Text>
+              <Text style={[styles.tabLabel, styles.tabLabelActive]}>Home</Text>
+            </TouchableOpacity>
 
-          {/* Home */}
-          <TouchableOpacity
-            style={styles.tabItem}
-            onPress={handleHome}
-            activeOpacity={0.8}
-          >
-            <Ionicons
-              name="home-outline"
-              size={20}
-              color={Colors.primary}
-            />
+            <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-contracts')}>
+              <Text style={styles.tabIcon}>📁</Text>
+              <Text style={styles.tabLabel}>Projects</Text>
+            </TouchableOpacity>
 
-            <Text
-              style={[
-                styles.tabLabel,
-                styles.tabLabelActive,
-              ]}
-            >
-              Home
-            </Text>
-          </TouchableOpacity>
+            <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-find-talent')}>
+              <Text style={styles.tabIcon}>🔍</Text>
+              <Text style={styles.tabLabel}>Find Talent</Text>
+            </TouchableOpacity>
 
-          {/* Projects */}
-          <TouchableOpacity
-            style={styles.tabItem}
-            onPress={handleProjects}
-            activeOpacity={0.8}
-          >
-            <Ionicons
-              name="folder-outline"
-              size={20}
-              color={Colors.neutralMedium}
-            />
+            <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-reports')}>
+              <Text style={styles.tabIcon}>💳</Text>
+              <Text style={styles.tabLabel}>Payments</Text>
+            </TouchableOpacity>
 
-            <Text style={styles.tabLabel}>
-              Projects
-            </Text>
-          </TouchableOpacity>
-
-          {/* Find Talent */}
-          <TouchableOpacity
-            style={styles.tabItem}
-            onPress={handleFindTalent}
-            activeOpacity={0.8}
-          >
-            <Ionicons
-              name="search-outline"
-              size={20}
-              color={Colors.neutralMedium}
-            />
-
-            <Text style={styles.tabLabel}>
-              Find Talent
-            </Text>
-          </TouchableOpacity>
-
-          {/* Payments */}
-          <TouchableOpacity
-            style={styles.tabItem}
-            onPress={handlePayments}
-            activeOpacity={0.8}
-          >
-            <Ionicons
-              name="card-outline"
-              size={20}
-              color={Colors.neutralMedium}
-            />
-
-            <Text style={styles.tabLabel}>
-              Payments
-            </Text>
-          </TouchableOpacity>
-
-          {/* Profile */}
-          <TouchableOpacity
-            style={styles.tabItem}
-            activeOpacity={0.8}
-          >
-            <Ionicons
-              name="person-outline"
-              size={20}
-              color={Colors.primary}
-            />
-
-            <Text
-              style={[
-                styles.tabLabel,
-                styles.tabLabelActive,
-              ]}
-            >
-              Profile
-            </Text>
-          </TouchableOpacity>
-
+            <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-profile')}>
+              <Text style={styles.tabIcon}>👤</Text>
+              <Text style={styles.tabLabel}>Profile</Text>
+            </TouchableOpacity>
         </View>
-
       </View>
     </SafeAreaView>
   );
@@ -925,4 +853,23 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: Colors.surface,
   },
+
+  clientTabBar: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: 64,
+        backgroundColor: Colors.surface,
+        borderTopWidth: 1,
+        borderTopColor: Colors.border,
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        alignItems: 'center',
+    },
+    tabItem: { alignItems: 'center', justifyContent: 'center' },
+    tabIcon: { fontSize: 18, opacity: 0.6 },
+    tabIconActive: { opacity: 1, transform: [{ scale: 1.1 }] },
+    tabLabel: { fontSize: 10, fontWeight: '600', color: Colors.neutralMedium, marginTop: 2 },
+    tabLabelActive: { color: Colors.primary, fontWeight: '700' },
 });
