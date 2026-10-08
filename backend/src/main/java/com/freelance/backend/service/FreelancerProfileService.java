@@ -47,8 +47,14 @@ public class FreelancerProfileService {
     }
 
     public List<FreelancerProfile> getAllFreelancerProfiles() {
-
         return profileRepository.findAll();
+    }
+
+    public FreelancerProfile getProfileById(Long id) {
+        System.out.println("== GET FREELANCER BY ID ==>" + id);
+        return profileRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException( "Freelancer profile not found with id: " + id)
+        );
     }
 
     @Transactional

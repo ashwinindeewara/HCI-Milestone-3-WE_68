@@ -447,7 +447,7 @@ export default function ClientFindTalentScreen() {
                         onPress={() =>
                           router.push({
                             pathname:
-                              '/(tabs)/talent-profile',
+                              '/client-talent-profile',
                             params: {
                               id: String(item.id),
                             },

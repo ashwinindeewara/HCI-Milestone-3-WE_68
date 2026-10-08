@@ -20,8 +20,12 @@ public class FreelancerProfileController {
 
     @GetMapping
     public ResponseEntity<FreelancerProfile> getProfile(
+            @RequestParam(value = "id", required = false) Long id,
             @RequestParam(value = "email", required = false) String email
     ) {
+        if (id != null) {
+            return ResponseEntity.ok(profileService.getProfileById(id) );
+        }
         if (email != null && !email.isBlank()) {
             return ResponseEntity.ok(profileService.getProfileByEmail(email));
         }
