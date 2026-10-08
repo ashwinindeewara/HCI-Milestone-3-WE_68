@@ -24,9 +24,11 @@ public class TransactionController {
     public ResponseEntity<List<Transaction>> getTransactions(
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String type,
-            @RequestParam(required = false) String freelancerName
+            @RequestParam(required = false) String freelancerName,
+            @RequestParam(required = false) String email
     ) {
-        return ResponseEntity.ok(transactionService.getAllTransactions(status, type, freelancerName));
+        String identifier = (email != null && !email.isBlank()) ? email : freelancerName;
+        return ResponseEntity.ok(transactionService.getAllTransactions(status, type, identifier));
     }
 
     @GetMapping("/metrics")

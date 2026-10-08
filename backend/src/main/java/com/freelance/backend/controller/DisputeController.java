@@ -24,11 +24,17 @@ public class DisputeController {
     }
 
     @GetMapping
-    public ResponseEntity<List<Dispute>> getAllDisputes(@RequestParam(required = false) String freelancerName) {
+    public ResponseEntity<List<Dispute>> getAllDisputes(
+            @RequestParam(required = false) String freelancerName,
+            @RequestParam(required = false) String email
+    ) {
+        if (email != null && !email.isBlank()) {
+            return ResponseEntity.ok(disputeService.getFreelancerDisputesByEmail(email));
+        }
         if (freelancerName != null && !freelancerName.isBlank()) {
             return ResponseEntity.ok(disputeService.getFreelancerDisputes(freelancerName));
         }
-        return ResponseEntity.ok(disputeService.getAllDisputes());
+        return ResponseEntity.ok(List.of());
     }
 
     @GetMapping("/{id}")

@@ -41,14 +41,14 @@ public class PayoutAccountController {
     @PutMapping("/{id}/default")
     public ResponseEntity<PayoutAccount> setDefaultAccount(
             @PathVariable String id,
-            @RequestParam(required = false) String email
+            @RequestParam String email
     ) {
         return ResponseEntity.ok(payoutAccountService.setDefault(id, email));
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteAccount(@PathVariable String id) {
-        payoutAccountService.deleteAccount(id);
+    public ResponseEntity<Void> deleteAccount(@PathVariable String id, @RequestParam String email) {
+        payoutAccountService.deleteAccount(id, email);
         return ResponseEntity.noContent().build();
     }
 }

@@ -24,8 +24,11 @@ public class FileController {
     private FileStorageService fileStorageService;
 
     @GetMapping
-    public ResponseEntity<List<FileAttachment>> getAllFiles() {
-        return ResponseEntity.ok(fileStorageService.getAllFiles());
+    public ResponseEntity<List<FileAttachment>> getAllFiles(@RequestParam(required = false) String ownerEmail) {
+        if (ownerEmail != null && !ownerEmail.isBlank()) {
+            return ResponseEntity.ok(fileStorageService.getFilesByOwnerEmail(ownerEmail));
+        }
+        return ResponseEntity.ok(List.of());
     }
 
     @PostMapping("/upload")
@@ -33,9 +36,10 @@ public class FileController {
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "relatedEntityType", required = false, defaultValue = "PROJECT") String relatedEntityType,
             @RequestParam(value = "relatedEntityId", required = false, defaultValue = "GENERAL") String relatedEntityId,
-            @RequestParam(value = "uploadedBy", required = false, defaultValue = "Freelancer") String uploadedBy
+            @RequestParam(value = "uploadedBy", required = false, defaultValue = "Freelancer") String uploadedBy,
+            @RequestParam(value = "uploadedByEmail", required = false) String uploadedByEmail
     ) {
-        FileAttachment saved = fileStorageService.storeFile(file, relatedEntityType, relatedEntityId, uploadedBy);
+        FileAttachment saved = fileStorageService.storeFile(file, relatedEntityType, relatedEntityId, uploadedBy, uploadedByEmail);
         return ResponseEntity.ok(saved);
     }
 

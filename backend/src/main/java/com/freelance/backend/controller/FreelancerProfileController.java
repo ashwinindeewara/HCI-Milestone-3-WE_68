@@ -39,27 +39,36 @@ public class FreelancerProfileController {
     ) {
         String email = (emailParam != null && !emailParam.isBlank())
                 ? emailParam
-                : ((dto.getEmail() != null && !dto.getEmail().isBlank()) ? dto.getEmail() : "chathuniimalsha.com");
-        return ResponseEntity.ok(profileService.updateProfile(email, dto));
+                : ((dto.getEmail() != null && !dto.getEmail().isBlank()) ? dto.getEmail() : "");
+        if (email.isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
+        return ResponseEntity.ok(profileService.updateProfile(email.trim().toLowerCase(), dto));
     }
 
     @PutMapping("/{email}")
     public ResponseEntity<FreelancerProfile> updateProfileByEmail(@PathVariable String email, @RequestBody FreelancerProfileDTO dto) {
-        return ResponseEntity.ok(profileService.updateProfile(email, dto));
+        return ResponseEntity.ok(profileService.updateProfile(email.trim().toLowerCase(), dto));
     }
 
     @PostMapping("/skills")
     public ResponseEntity<FreelancerProfile> addSkill(@RequestBody Map<String, String> payload) {
-        String email = payload.getOrDefault("email", "chathuniimalsha.com");
+        String email = payload.get("email");
+        if (email == null || email.isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
         String skill = payload.get("skill");
-        return ResponseEntity.ok(profileService.addSkill(email, skill));
+        return ResponseEntity.ok(profileService.addSkill(email.trim().toLowerCase(), skill));
     }
 
     @DeleteMapping("/skills")
     public ResponseEntity<FreelancerProfile> removeSkill(@RequestBody Map<String, String> payload) {
-        String email = payload.getOrDefault("email", "chathuniimalsha.com");
+        String email = payload.get("email");
+        if (email == null || email.isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
         String skill = payload.get("skill");
-        return ResponseEntity.ok(profileService.removeSkill(email, skill));
+        return ResponseEntity.ok(profileService.removeSkill(email.trim().toLowerCase(), skill));
     }
 
     @PostMapping("/image")
@@ -73,7 +82,7 @@ public class FreelancerProfileController {
             email = request.getParameter("email");
         }
         if (email == null || email.isBlank()) {
-            email = "chathuniimalsha.com";
+            return ResponseEntity.badRequest().build();
         }
         return ResponseEntity.ok(profileService.uploadProfileImage(email.trim().toLowerCase(), file));
     }

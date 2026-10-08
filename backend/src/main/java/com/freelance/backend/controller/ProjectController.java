@@ -24,15 +24,31 @@ public class ProjectController {
     private FileStorageService fileStorageService;
 
     @GetMapping("/api/projects")
-    public ResponseEntity<List<Project>> getAllProjects() {
-        return ResponseEntity.ok(projectService.getAllProjects());
+    public ResponseEntity<List<Project>> getAllProjects(
+            @RequestParam(required = false) String freelancerName,
+            @RequestParam(required = false) String email
+    ) {
+        if (email != null && !email.isBlank()) {
+            return ResponseEntity.ok(projectService.getFreelancerProjectsByEmail(email));
+        }
+        if (freelancerName != null && !freelancerName.isBlank()) {
+            return ResponseEntity.ok(projectService.getFreelancerProjects(freelancerName));
+        }
+        return ResponseEntity.ok(List.of());
     }
 
     @GetMapping("/api/freelancer/projects")
     public ResponseEntity<List<Project>> getFreelancerProjects(
-            @RequestParam(required = false) String freelancerName
+            @RequestParam(required = false) String freelancerName,
+            @RequestParam(required = false) String email
     ) {
-        return ResponseEntity.ok(projectService.getFreelancerProjects(freelancerName));
+        if (email != null && !email.isBlank()) {
+            return ResponseEntity.ok(projectService.getFreelancerProjectsByEmail(email));
+        }
+        if (freelancerName != null && !freelancerName.isBlank()) {
+            return ResponseEntity.ok(projectService.getFreelancerProjects(freelancerName));
+        }
+        return ResponseEntity.ok(List.of());
     }
 
     @GetMapping("/api/projects/{id}")
@@ -59,9 +75,10 @@ public class ProjectController {
     public ResponseEntity<FileAttachment> uploadProjectFile(
             @PathVariable String id,
             @RequestParam("file") MultipartFile file,
-            @RequestParam(required = false, defaultValue = "Freelancer") String uploadedBy
+            @RequestParam(required = false, defaultValue = "Freelancer") String uploadedBy,
+            @RequestParam(required = false) String uploadedByEmail
     ) {
-        FileAttachment attachment = fileStorageService.storeFile(file, "PROJECT", id, uploadedBy);
+        FileAttachment attachment = fileStorageService.storeFile(file, "PROJECT", id, uploadedBy, uploadedByEmail);
         projectService.logActivity(id, id, "FILE_UPLOADED", "Uploaded file: " + attachment.getOriginalFileName(), uploadedBy);
         return ResponseEntity.ok(attachment);
     }

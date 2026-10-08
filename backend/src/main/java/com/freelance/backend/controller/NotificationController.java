@@ -19,17 +19,20 @@ public class NotificationController {
     @GetMapping
     public ResponseEntity<List<Notification>> getAllNotifications(
             @RequestParam(required = false) String freelancerName,
-            @RequestParam(required = false) String freelancerEmail
+            @RequestParam(required = false) String freelancerEmail,
+            @RequestParam(required = false) String email
     ) {
-        if ((freelancerName != null && !freelancerName.isBlank()) || (freelancerEmail != null && !freelancerEmail.isBlank())) {
+        String effectiveEmail = (freelancerEmail != null && !freelancerEmail.isBlank())
+                ? freelancerEmail.trim()
+                : (email != null ? email.trim() : "");
+        if ((freelancerName != null && !freelancerName.isBlank()) || !effectiveEmail.isBlank()) {
             String name = freelancerName != null ? freelancerName.trim() : "";
-            String email = freelancerEmail != null ? freelancerEmail.trim() : "";
-            boolean isChathuni = name.toLowerCase().contains("chathuni") || email.toLowerCase().contains("chathuni");
+            boolean isChathuni = name.toLowerCase().contains("chathuni") || effectiveEmail.toLowerCase().contains("chathuni");
 
-            List<Notification> userNotifs = notificationRepository.findForUser(name, email, isChathuni);
+            List<Notification> userNotifs = notificationRepository.findForUser(name, effectiveEmail, isChathuni);
             return ResponseEntity.ok(userNotifs);
         }
-        return ResponseEntity.ok(notificationRepository.findAllByOrderByIdDesc());
+        return ResponseEntity.ok(List.of());
     }
 
     @GetMapping("/{id}")

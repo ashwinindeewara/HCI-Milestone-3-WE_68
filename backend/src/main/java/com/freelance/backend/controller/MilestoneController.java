@@ -47,4 +47,9 @@ public class MilestoneController {
     public ResponseEntity<List<Deliverable>> getDeliverables(@PathVariable String milestoneId) {
         return ResponseEntity.ok(milestoneService.getDeliverablesForMilestone(milestoneId));
     }
+    @DeleteMapping("/deliverables/{deliverableId}")
+    public ResponseEntity<Void> deleteDeliverable(@PathVariable String deliverableId) {
+        milestoneService.deleteDeliverable(deliverableId);
+        return ResponseEntity.noContent().build();
+    }
 }

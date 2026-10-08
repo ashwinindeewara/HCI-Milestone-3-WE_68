@@ -17,15 +17,31 @@ public class ContractController {
     private ContractService contractService;
 
     @GetMapping
-    public ResponseEntity<List<Contract>> getAllContracts() {
-        return ResponseEntity.ok(contractService.getAllContracts());
+    public ResponseEntity<List<Contract>> getAllContracts(
+            @RequestParam(required = false) String freelancerName,
+            @RequestParam(required = false) String email
+    ) {
+        if (email != null && !email.isBlank()) {
+            return ResponseEntity.ok(contractService.getFreelancerContractsByEmail(email));
+        }
+        if (freelancerName != null && !freelancerName.isBlank()) {
+            return ResponseEntity.ok(contractService.getFreelancerContracts(freelancerName));
+        }
+        return ResponseEntity.ok(List.of());
     }
 
     @GetMapping("/freelancer")
     public ResponseEntity<List<Contract>> getFreelancerContracts(
-            @RequestParam(required = false) String freelancerName
+            @RequestParam(required = false) String freelancerName,
+            @RequestParam(required = false) String email
     ) {
-        return ResponseEntity.ok(contractService.getFreelancerContracts(freelancerName));
+        if (email != null && !email.isBlank()) {
+            return ResponseEntity.ok(contractService.getFreelancerContractsByEmail(email));
+        }
+        if (freelancerName != null && !freelancerName.isBlank()) {
+            return ResponseEntity.ok(contractService.getFreelancerContracts(freelancerName));
+        }
+        return ResponseEntity.ok(List.of());
     }
 
     @GetMapping("/{id}")
