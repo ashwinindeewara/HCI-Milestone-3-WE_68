@@ -14,6 +14,7 @@ import { useRouter } from 'expo-router';
 import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
 import apiClient from '../src/services/api';
+import { saveAuthSession } from '../src/services/authService';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -36,6 +37,7 @@ export default function LoginScreen() {
     try {
       // Spring Boot backend authentication call to Neon PostgreSQL
       const response = await apiClient.post('/auth/login', { email, password });
+      saveAuthSession( response.data.token, response.data );
       const userRole = response.data?.role;
 
       // Role-based dynamic routing from returned AuthResponse
@@ -44,11 +46,22 @@ export default function LoginScreen() {
       } else if (userRole === 'PAYMENT_STAFF') {
         router.replace('/staff-dashboard');
       } else if (userRole === 'CLIENT') {
-        router.replace({ pathname: '/(tabs)/dashboard', params: { role: 'CLIENT' } });
+        router.replace('/client-dashboard');
       } else {
         router.replace('/select-role');
       }
-    } catch {
+    } catch (error: any) {
+        console.log('LOGIN ERROR:', error);
+          console.log('STATUS:', error?.response?.status);
+          console.log('BACKEND RESPONSE:', error?.response?.data);
+
+          Alert.alert(
+            'Login Failed',
+            error?.response?.data?.message ||
+              error?.response?.data ||
+              error?.message ||
+              'Unable to login'
+          );
       // Fallback transition to Role Selection for demo preview
       setTimeout(() => {
         setIsSubmitting(false);

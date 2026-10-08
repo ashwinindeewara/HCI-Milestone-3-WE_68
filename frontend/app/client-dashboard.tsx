@@ -13,6 +13,7 @@ import { useRouter } from 'expo-router';
 import { useLocalSearchParams } from 'expo-router';
 import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
+import { getSavedUserData } from '../src/services/authService';
 
 export default function ClientDashboardScreen() {
 
@@ -26,6 +27,31 @@ export default function ClientDashboardScreen() {
     pendingPayments: 5600,
     upcomingDeadlines: 4,
   });
+  const currentUser = getSavedUserData();
+  console.log(currentUser);
+
+  const getInitials = (fullName: string) => {
+    return fullName
+      .trim()
+      .split(/\s+/)
+      .slice(0, 2)
+      .map(word => word.charAt(0).toUpperCase())
+      .join('');
+  };
+
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour >= 5 && hour < 12) {
+      return 'Good Morning';
+    }
+    if (hour >= 12 && hour < 17) {
+      return 'Good Afternoon';
+    }
+    if (hour >= 17 && hour < 21) {
+      return 'Good Evening';
+    }
+    return 'Good Night';
+  };
 
   const loadData = async () => {
     try {
@@ -68,11 +94,11 @@ export default function ClientDashboardScreen() {
           <View style={styles.headerRow}>
             <View style={styles.userGreetingRow}>
               <View style={styles.avatarCircle}>
-                <Text style={styles.avatarText}>SW</Text>
+                <Text style={styles.avatarText}>{getInitials(currentUser.fullName)}</Text>
               </View>
               <View>
-                <Text style={styles.greetingSub}>Good morning,</Text>
-                <Text style={styles.userName}>Sadaru Wijethunga</Text>
+                <Text style={styles.greetingSub}>{getGreeting()}!</Text>
+                <Text style={styles.userName}>{currentUser.fullName}</Text>
               </View>
             </View>
 
@@ -322,7 +348,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   greetingSub: {
-    fontSize: 12,
+    fontSize: 16,
     color: Colors.neutralMedium,
   },
   userName: {

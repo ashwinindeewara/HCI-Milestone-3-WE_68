@@ -3,8 +3,10 @@ package com.freelance.backend.service;
 import com.freelance.backend.dto.AuthResponse;
 import com.freelance.backend.dto.LoginRequest;
 import com.freelance.backend.dto.RegisterRequest;
+import com.freelance.backend.entity.ClientProfile;
 import com.freelance.backend.entity.User;
 import com.freelance.backend.entity.UserRole;
+import com.freelance.backend.repository.ClientProfileRepository;
 import com.freelance.backend.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -12,6 +14,7 @@ import org.springframework.stereotype.Service;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.LocalDate;
 import java.util.HexFormat;
 import java.util.UUID;
 
@@ -20,6 +23,9 @@ public class AuthService {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private ClientProfileRepository clientProfileRepository;
 
     /**
      * Hashes password using SHA-256 (BCrypt compatible structure)
@@ -50,6 +56,13 @@ public class AuthService {
         );
 
         User savedUser = userRepository.save(newUser);
+        if (role == UserRole.CLIENT) {
+            ClientProfile clientProfile = new ClientProfile();
+            clientProfile.setUser(savedUser);
+            clientProfile.setMemberSince(LocalDate.now());
+            clientProfileRepository.save(clientProfile);
+        }
+
         String mockJwt = "jwt_token_" + UUID.randomUUID().toString();
 
         return new AuthResponse(
