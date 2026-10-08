@@ -87,7 +87,6 @@ export const getAuthToken = (): string | null => {
  */
 export const getSavedUserData = (): any | null => {
   const data = storage.getItem(USER_KEY);
-  console.log(USER_KEY);
   if (data) {
     try {
       return JSON.parse(data);
