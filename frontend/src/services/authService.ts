@@ -1,4 +1,5 @@
-import apiClient from './api';
+import apiClient, { clearApiCache } from './api';
+import { clearUserSession } from './storage';
 
 const TOKEN_KEY = 'freelanceflow_auth_token';
 const USER_KEY = 'freelanceflow_user_data';
@@ -95,7 +96,25 @@ export const updateSavedUserData = (updatedFields: any): any => {
  */
 export const clearAuthSession = (): void => {
   storage.clear();
+  clearUserSession();
   delete apiClient.defaults.headers.common['Authorization'];
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.removeItem('auth_user');
+      window.localStorage.removeItem('auth_email');
+      window.localStorage.removeItem('auth_name');
+      window.localStorage.removeItem('auth_role');
+      window.localStorage.removeItem('auth_token');
+      window.localStorage.removeItem('freelance_app_user_session');
+      window.localStorage.removeItem('freelanceflow_user_data');
+      window.localStorage.removeItem('freelanceflow_auth_token');
+      window.localStorage.removeItem('freelancer_email');
+      window.localStorage.removeItem('user_email');
+      window.localStorage.removeItem('user_role');
+      window.localStorage.removeItem('active_user_role');
+    }
+  } catch {}
+  clearApiCache();
 };
 
 /**

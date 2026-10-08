@@ -314,7 +314,7 @@ export default function ProjectDetailsScreen() {
         }
       }
 
-      // Load contract, activities, and files in parallel
+      // Load shared database state in parallel; it is authoritative over browser cache.
       const [cResResult, actResResult, fileResResult] = await Promise.allSettled([
         FreelancerApiService.getContract(cleanId),
         FreelancerApiService.getProjectActivities('PRJ-' + projectId),
@@ -342,16 +342,28 @@ export default function ProjectDetailsScreen() {
         }
 
         if (d.milestones && d.milestones.length > 0) {
-          if (typeof window !== 'undefined' && !localStorage.getItem(`project_milestones_${cleanId}`)) {
-            const mappedM = d.milestones.map((m: any) => ({
-              id: m.id,
-              title: m.title,
-              amount: m.amount || 2000,
-              dueDate: m.dueDate || 'Nov 15, 2024',
-              status: m.status || 'PENDING',
-            }));
-            setMilestones(mappedM);
+          const mappedM = d.milestones.map((m: any) => ({
+            id: m.id,
+            title: m.title,
+            amount: m.amount || 2000,
+            dueDate: m.dueDate || 'Nov 15, 2024',
+            status: m.status || 'PENDING',
+          }));
+          setMilestones(mappedM);
+          if (typeof window !== 'undefined') {
             localStorage.setItem(`project_milestones_${cleanId}`, JSON.stringify(mappedM));
+          }
+          const deliverableResults = await Promise.allSettled(
+            mappedM.map((milestone: MilestoneItem) => FreelancerApiService.getDeliverables(milestone.id))
+          );
+          const persistedDeliverables = deliverableResults.flatMap((result: any) =>
+            result.status === 'fulfilled' && Array.isArray(result.value?.data) ? result.value.data : []
+          );
+          if (persistedDeliverables.length > 0 || mappedM.length > 0) {
+            setDeliverables(persistedDeliverables);
+            if (typeof window !== 'undefined') {
+              localStorage.setItem(`project_deliverables_${cleanId}`, JSON.stringify(persistedDeliverables));
+            }
           }
         }
       } else if (storedProgress !== null) {
@@ -509,6 +521,7 @@ Integrity Checksum: SHA256-${Math.random().toString(36).substring(2, 10).toUpper
                 formData.append('relatedEntityType', 'PROJECT');
                 formData.append('relatedEntityId', projectId);
                 formData.append('uploadedBy', activeFreelancer);
+                if (currentUser?.email) formData.append('uploadedByEmail', currentUser.email);
 
                 fetch(`${API_BASE_URL}/files/upload`, {
                   method: 'POST',
@@ -726,6 +739,10 @@ Integrity Checksum: SHA256-${Math.random().toString(36).substring(2, 10).toUpper
 
   // Freelancer Remove Deliverable File (Automatically Decreases Progress Bar!)
   const handleRemoveDeliverable = (deliverableId: string) => {
+
+        FreelancerApiService.deleteDeliverable(deliverableId).catch(() => {
+          showToast('Unable to remove the saved deliverable.');
+        });
     const targetDeliv = deliverables.find((d) => d.id === deliverableId);
     if (!targetDeliv) return;
 

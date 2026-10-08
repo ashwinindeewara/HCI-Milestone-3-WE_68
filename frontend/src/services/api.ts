@@ -53,10 +53,30 @@ export const apiClient = axios.create({
 const apiCache = new Map<string, { data: any; timestamp: number }>();
 const CACHE_TTL_MS = 60000; // 60 seconds background revalidate freshness
 
+const getCurrentUserScope = (): string => {
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+    try {
+      const email = localStorage.getItem('auth_email');
+      if (email) return email.toLowerCase().trim();
+      const user = localStorage.getItem('auth_user');
+      if (user) {
+        const parsed = JSON.parse(user);
+        if (parsed?.email) return parsed.email.toLowerCase().trim();
+      }
+      const sess = localStorage.getItem('freelance_app_user_session');
+      if (sess) {
+        const parsed = JSON.parse(sess);
+        if (parsed?.email) return parsed.email.toLowerCase().trim();
+      }
+    } catch {}
+  }
+  return 'anonymous';
+};
+
 export const getCachedApiData = <T = any>(url: string, params?: any): T | null => {
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
     try {
-      const cacheKey = `${url}?${JSON.stringify(params || {})}`;
+      const cacheKey = `${getCurrentUserScope()}:${url}?${JSON.stringify(params || {})}`;
       const memory = apiCache.get(cacheKey);
       if (memory) return memory.data as T;
 
@@ -77,21 +97,16 @@ export const clearApiCache = (urlPrefix?: string) => {
   apiCache.clear();
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
     try {
-      if (!urlPrefix) {
-        const keysToRemove: string[] = [];
-        for (let i = 0; i < localStorage.length; i++) {
-          const k = localStorage.key(i);
-          if (k && k.startsWith('api_cache_')) keysToRemove.push(k);
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && (k.startsWith('api_cache_') || k.startsWith('profile_cache_'))) {
+          if (!urlPrefix || k.includes(urlPrefix)) {
+            keysToRemove.push(k);
+          }
         }
-        keysToRemove.forEach((k) => localStorage.removeItem(k));
-      } else {
-        const keysToRemove: string[] = [];
-        for (let i = 0; i < localStorage.length; i++) {
-          const k = localStorage.key(i);
-          if (k && k.startsWith('api_cache_') && k.includes(urlPrefix)) keysToRemove.push(k);
-        }
-        keysToRemove.forEach((k) => localStorage.removeItem(k));
       }
+      keysToRemove.forEach((k) => localStorage.removeItem(k));
     } catch {}
   }
 };
@@ -120,7 +135,7 @@ apiClient.interceptors.response.use(
 // Intercept get() with Stale-While-Revalidate for 0ms perceived load time
 const originalGet = apiClient.get.bind(apiClient);
 apiClient.get = ((url: string, config?: any) => {
-  const cacheKey = `${url}?${JSON.stringify(config?.params || {})}`;
+  const cacheKey = `${getCurrentUserScope()}:${url}?${JSON.stringify(config?.params || {})}`;
   const now = Date.now();
 
   // 1. Check memory cache
@@ -199,6 +214,11 @@ export const getCurrentUser = () => {
           email: u.email || localStorage.getItem('auth_email') || '',
         };
       }
+      const session = localStorage.getItem('freelance_app_user_session') || localStorage.getItem('freelanceflow_user_data');
+      if (session) {
+        const u = JSON.parse(session);
+        return { ...u, fullName: u.fullName || '', email: u.email || '' };
+      }
       const email = localStorage.getItem('auth_email');
       const fullName = localStorage.getItem('auth_name');
       if (email || fullName) {
@@ -215,11 +235,25 @@ export const getCurrentUser = () => {
 
 export const FreelancerApiService = {
   // Contracts
-  getContracts: () => apiClient.get('/contracts'),
-  getFreelancerContracts: (freelancerName?: string) => {
+  getContracts: () => {
+    const user = getCurrentUser();
+    const name = user?.fullName || '';
+    const email = user?.email || '';
+    return apiClient.get('/contracts', {
+      params: {
+        ...(name ? { freelancerName: name } : {}),
+        ...(email ? { email } : {}),
+      },
+    });
+  },
+  getFreelancerContracts: (freelancerName?: string, emailParam?: string) => {
     const user = getCurrentUser();
     const name = freelancerName || user?.fullName || '';
-    return apiClient.get(`/contracts/freelancer?freelancerName=${encodeURIComponent(name)}`);
+    const email = emailParam || user?.email || '';
+    const params: any = {};
+    if (name) params.freelancerName = name;
+    if (email) params.email = email;
+    return apiClient.get('/contracts/freelancer', { params });
   },
   getContract: (id: string) => apiClient.get(`/contracts/${id}`),
   getContractDownloadUrl: (id: string) => `${API_BASE_URL}/contracts/${id}/download`,
@@ -232,11 +266,25 @@ export const FreelancerApiService = {
     apiClient.post(`/contracts/${id}/reject?reason=${encodeURIComponent(reason)}`),
 
   // Projects
-  getProjects: () => apiClient.get('/projects'),
-  getFreelancerProjects: (freelancerName?: string) => {
+  getProjects: () => {
+    const user = getCurrentUser();
+    const name = user?.fullName || '';
+    const email = user?.email || '';
+    return apiClient.get('/projects', {
+      params: {
+        ...(name ? { freelancerName: name } : {}),
+        ...(email ? { email } : {}),
+      },
+    });
+  },
+  getFreelancerProjects: (freelancerName?: string, emailParam?: string) => {
     const user = getCurrentUser();
     const name = freelancerName || user?.fullName || '';
-    return apiClient.get(`/freelancer/projects?freelancerName=${encodeURIComponent(name)}`);
+    const email = emailParam || user?.email || '';
+    const params: any = {};
+    if (name) params.freelancerName = name;
+    if (email) params.email = email;
+    return apiClient.get('/freelancer/projects', { params });
   },
   getProject: (id: string) => apiClient.get(`/projects/${id}`),
   getProjectMilestones: (id: string) => apiClient.get(`/projects/${id}/milestones`),
@@ -249,15 +297,17 @@ export const FreelancerApiService = {
     apiClient.post(`/milestones/${milestoneId}/deliverables`, data),
   getDeliverables: (milestoneId: string) => apiClient.get(`/milestones/${milestoneId}/deliverables`),
   getDeliverable: (id: string) => apiClient.get(`/deliverables/${id}`),
+    deleteDeliverable: (id: string) => apiClient.delete(`/deliverables/${id}`),
   approveDeliverable: (id: string) => apiClient.post(`/deliverables/${id}/approve`),
   rejectDeliverable: (id: string, feedback?: string) =>
     apiClient.post(`/deliverables/${id}/reject`, { feedback }),
 
   // Disputes
-  getDisputes: (freelancerName?: string) => {
+  getDisputes: (freelancerName?: string, email?: string) => {
     const user = getCurrentUser();
     const name = freelancerName || user?.fullName || '';
-    return apiClient.get('/disputes', { params: name ? { freelancerName: name } : {} });
+    const targetEmail = email || user?.email || '';
+    return apiClient.get('/disputes', { params: { ...(name ? { freelancerName: name } : {}), ...(targetEmail ? { email: targetEmail } : {}) } });
   },
   getDispute: (id: string) => apiClient.get(`/disputes/${id}`),
   createDispute: (data: {
@@ -268,6 +318,7 @@ export const FreelancerApiService = {
     parties?: string;
     clientName?: string;
     freelancerName?: string;
+    freelancerEmail?: string;
     contractId?: string;
     priority?: string;
     evidenceFile?: string;
@@ -280,7 +331,12 @@ export const FreelancerApiService = {
   // Profile
   getProfile: (email?: string) => {
     const user = getCurrentUser();
-    const targetEmail = email || user?.email;
+    let targetEmail = email || user?.email;
+    if (!targetEmail && Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+      try {
+        targetEmail = localStorage.getItem('auth_email') || JSON.parse(localStorage.getItem('freelance_app_user_session') || '{}')?.email;
+      } catch {}
+    }
     if (targetEmail) {
       return apiClient.get('/freelancer/profile', { params: { email: targetEmail } });
     }
@@ -328,6 +384,7 @@ export const FreelancerApiService = {
     formData.append('relatedEntityType', relatedEntityType);
     formData.append('relatedEntityId', relatedEntityId);
     formData.append('uploadedBy', uploadedBy || user?.fullName || 'Freelancer');
+    if (user?.email) formData.append('uploadedByEmail', user.email);
     const res = await fetch(`${API_BASE_URL}/files/upload`, {
       method: 'POST',
       body: formData,
@@ -341,7 +398,8 @@ export const FreelancerApiService = {
     if (entityType && entityId) {
       return apiClient.get(`/files/entity/${entityType}/${entityId}`);
     }
-    return apiClient.get('/files');
+    const user = getCurrentUser();
+    return apiClient.get('/files', { params: user?.email ? { ownerEmail: user.email } : {} });
   },
 
 
@@ -360,18 +418,24 @@ export const FreelancerApiService = {
   markAllNotificationsAsRead: () => apiClient.put('/notifications/read-all'),
 
   // Escrow & Transactions
-  getEscrowSummary: (freelancerName?: string) => {
+  getEscrowSummary: (freelancerName?: string, email?: string) => {
     const user = getCurrentUser();
     const name = freelancerName || user?.fullName || '';
-    return apiClient.get('/escrow/summary', { params: name ? { freelancerName: name } : {} });
+    const targetEmail = email || user?.email || '';
+    const params: any = {};
+    if (name) params.freelancerName = name;
+    if (targetEmail) params.email = targetEmail;
+    return apiClient.get('/escrow/summary', { params });
   },
-  getTransactions: (type?: string, freelancerName?: string) => {
+  getTransactions: (type?: string, freelancerName?: string, email?: string) => {
     const user = getCurrentUser();
     const name = freelancerName || user?.fullName || '';
+    const targetEmail = email || user?.email || '';
     return apiClient.get('/transactions', {
       params: {
         ...(type && type !== 'ALL' ? { type } : {}),
         ...(name ? { freelancerName: name } : {}),
+        ...(targetEmail ? { email: targetEmail } : {}),
       },
     });
   },
@@ -397,7 +461,10 @@ export const FreelancerApiService = {
       params: targetEmail ? { email: targetEmail } : {},
     });
   },
-  deletePayoutAccount: (id: string) => apiClient.delete(`/payout-accounts/${id}`),
+  deletePayoutAccount: (id: string, email?: string) => {
+    const targetEmail = email || getCurrentUser()?.email || '';
+    return apiClient.delete(`/payout-accounts/${id}`, { params: targetEmail ? { email: targetEmail } : {} });
+  },
 
   // Files
   getFileDownloadUrl: (fileId: string) => `${API_BASE_URL}/files/${fileId}/download`,

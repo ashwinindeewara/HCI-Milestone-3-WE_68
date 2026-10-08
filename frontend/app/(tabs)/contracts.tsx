@@ -27,98 +27,24 @@ interface ProjectDisplayItem {
   status: string;
 }
 
-const DEFAULT_PROJECTS: ProjectDisplayItem[] = [
-  {
-    id: 'PRJ-C-101',
-    contractId: 'C-101',
-    title: 'E-Commerce Redesign',
-    client: 'TechVentures Inc.',
-    milestone: 'UI Design Phase',
-    progress: 65,
-    escrowTag: '$2,400 In Escrow',
-    dueDate: 'Due Oct 15, 2024',
-    status: 'Active',
-  },
-  {
-    id: 'PRJ-C-102',
-    contractId: 'C-102',
-    title: 'Mobile App Contract',
-    client: 'Global Retail Corp',
-    milestone: 'API Integration',
-    progress: 30,
-    escrowTag: '$3,800 In Escrow',
-    dueDate: 'Due Nov 01, 2024',
-    status: 'Active',
-  },
-  {
-    id: 'PRJ-C-103',
-    contractId: 'C-103',
-    title: 'Marketing Brand Strategy',
-    client: 'Apex Ventures',
-    milestone: 'Final Assets Handover',
-    progress: 100,
-    escrowTag: 'Completed & Paid',
-    dueDate: 'Due Sep 30, 2024',
-    status: 'Completed',
-  },
-];
-
 export default function ContractsScreen() {
   const router = useRouter();
   const currentUser = getCurrentUser();
-  const isChathuni =
-    currentUser?.email === 'chathuniimalsha.com' ||
-    (currentUser?.fullName && currentUser.fullName.toLowerCase().includes('chathuni')) ||
-    (currentUser?.email && currentUser.email.toLowerCase().includes('chathuni'));
 
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState('All');
   const [projects, setProjects] = useState<ProjectDisplayItem[]>(() => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-      try {
-        const u = getCurrentUser();
-        const k = `contracts_list_${u?.email || u?.fullName || 'default'}`;
-        const s = localStorage.getItem(k);
-        if (s) {
-          const p = JSON.parse(s);
-          if (Array.isArray(p)) return p;
-        }
-      } catch (e) {}
-    }
-    return isChathuni ? DEFAULT_PROJECTS : [];
+    return [];
   });
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-
-  const applyStoredProgressToProjects = (projectList: ProjectDisplayItem[]): ProjectDisplayItem[] => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-      return projectList.map((p) => {
-        const cleanId = (p.contractId || p.id).replace('PRJ-', '');
-        const saved =
-          localStorage.getItem(`project_progress_${cleanId}`) ||
-          localStorage.getItem(`project_progress_PRJ-${cleanId}`) ||
-          localStorage.getItem(`project_progress_${p.id}`);
-        if (saved != null) {
-          const parsed = parseInt(saved, 10);
-          if (!isNaN(parsed)) {
-            return { ...p, progress: parsed };
-          }
-        }
-        return p;
-      });
-    }
-    return projectList;
-  };
 
   const fetchProjects = async () => {
     try {
       const activeUser = getCurrentUser();
       const activeName = activeUser?.fullName || '';
-      const isTargetChathuni =
-        activeUser?.email === 'chathuniimalsha.com' ||
-        (activeName && activeName.toLowerCase().includes('chathuni'));
-
-      const res = await FreelancerApiService.getFreelancerProjects(activeName);
+      const activeEmail = activeUser?.email || '';
+      const res = await FreelancerApiService.getFreelancerProjects(activeName, activeEmail);
       if (res.data && Array.isArray(res.data)) {
         if (res.data.length > 0) {
           const formatted: ProjectDisplayItem[] = res.data.map((p: any) => {
@@ -135,36 +61,21 @@ export default function ContractsScreen() {
               title: p.title,
               client: p.clientName,
               milestone: p.statusBadge || (isCompleted ? 'Final Delivery' : 'In Progress'),
-              progress: p.completionPercentage ?? (isCompleted ? 100 : 50),
+              progress: p.completionPercentage ?? (isCompleted ? 100 : 0),
               escrowTag: escrowText,
               dueDate: p.dueDate || 'Due soon',
               status: isCompleted ? 'Completed' : 'Active',
             };
           });
-          const withProgress = applyStoredProgressToProjects(formatted);
-          setProjects(withProgress);
-          if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-            const k = `contracts_list_${activeUser?.email || activeName || 'default'}`;
-            localStorage.setItem(k, JSON.stringify(withProgress));
-          }
-        } else if (!isTargetChathuni) {
+          setProjects(formatted);
+        } else {
           setProjects([]);
-          if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-            const k = `contracts_list_${activeUser?.email || activeName || 'default'}`;
-            localStorage.setItem(k, JSON.stringify([]));
-          }
         }
-      } else if (!isTargetChathuni) {
+      } else {
         setProjects([]);
-        if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-          const k = `contracts_list_${activeUser?.email || activeName || 'default'}`;
-          localStorage.setItem(k, JSON.stringify([]));
-        }
       }
     } catch {
-      if (!isChathuni) {
-        setProjects([]);
-      }
+      setProjects([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -174,15 +85,6 @@ export default function ContractsScreen() {
   useEffect(() => {
     fetchProjects();
 
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      const handleStorageUpdate = () => {
-        setProjects((prev) => applyStoredProgressToProjects(prev));
-      };
-      window.addEventListener('storage', handleStorageUpdate);
-      return () => {
-        window.removeEventListener('storage', handleStorageUpdate);
-      };
-    }
   }, []);
 
   const onRefresh = () => {

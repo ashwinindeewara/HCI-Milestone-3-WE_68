@@ -16,6 +16,7 @@ import Colors from '../../src/constants/colors';
 import Theme from '../../src/constants/theme';
 import { FreelancerApiService, resolveMediaUrl, apiClient, getCurrentUser } from '../../src/services/api';
 import { getUserSession } from '../../src/services/storage';
+import { clearAuthSession } from '../../src/services/authService';
 
 interface ProjectItem {
   id: string;
@@ -47,10 +48,13 @@ export default function DashboardScreen() {
     }
   }, [currentRole]);
 
+  const activeName = currentUser?.fullName || session?.fullName || '';
+  const activeEmail = currentUser?.email || session?.email || '';
   const isChathuni =
-    currentUser?.email === 'chathuniimalsha.com' ||
-    (currentUser?.fullName && currentUser.fullName.toLowerCase().includes('chathuni')) ||
-    (currentUser?.email && currentUser.email.toLowerCase().includes('chathuni'));
+    activeEmail === 'chathuniimalsha.com' ||
+    activeEmail === 'chathuni@design.com' ||
+    (activeName && activeName.toLowerCase().includes('chathuni')) ||
+    (activeEmail && activeEmail.toLowerCase().includes('chathuni'));
 
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -58,7 +62,7 @@ export default function DashboardScreen() {
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [downloadToast, setDownloadToast] = useState<string | null>(null);
   const [userProfile, setUserProfile] = useState({
-    name: session?.fullName || currentUser?.fullName || (isChathuni ? 'Chathuni Imalsha' : 'Freelancer'),
+    name: activeName || (isChathuni ? 'Chathuni Imalsha' : 'Freelancer'),
     avatar: isChathuni ? 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80' : '',
   });
 
@@ -73,7 +77,10 @@ export default function DashboardScreen() {
           <View style={styles.suspendedBtnRow}>
             <TouchableOpacity
               style={styles.signOutSuspendedBtn}
-              onPress={() => router.replace('/login')}
+              onPress={() => {
+                clearAuthSession();
+                router.replace('/login');
+              }}
             >
               <Text style={styles.signOutSuspendedText}>Sign Out</Text>
             </TouchableOpacity>
@@ -174,110 +181,25 @@ Executed on:                    ${new Date().toLocaleDateString('en-US', { year:
   };
 
   const [metrics, setMetrics] = useState({
-    totalEarnings: isChathuni ? 12450 : 0,
-    activeProjects: isChathuni ? 2 : 0,
-    pendingMilestones: isChathuni ? 2 : 0,
-    pendingEscrow: isChathuni ? 6200 : 0,
+    totalEarnings: 0,
+    activeProjects: 0,
+    pendingMilestones: 0,
+    pendingEscrow: 0,
   });
 
-  const [projects, setProjects] = useState<ProjectItem[]>(
-    isChathuni
-      ? [
-          {
-            id: 'PRJ-C-101',
-            contractId: 'C-101',
-            title: 'E-Commerce Redesign',
-            clientName: 'TechVentures Inc.',
-            inEscrowAmount: 2400,
-            completionPercentage: 65,
-            dueDate: 'Due Oct 15, 2024',
-            statusBadge: 'On Track',
-            status: 'ACTIVE',
-          },
-          {
-            id: 'PRJ-C-102',
-            contractId: 'C-102',
-            title: 'Mobile App Contract',
-            clientName: 'Global Retail Corp',
-            inEscrowAmount: 3800,
-            completionPercentage: 30,
-            dueDate: 'Due Nov 01, 2024',
-            statusBadge: 'On Track',
-            status: 'ACTIVE',
-          },
-        ]
-      : []
-  );
-
-  const [dashboardContracts, setDashboardContracts] = useState(
-    isChathuni
-      ? [
-          {
-            id: 'C-101',
-            title: 'E-Commerce Redesign',
-            clientName: 'TechVentures Inc.',
-            status: 'New',
-            contractValue: '$8,000',
-            timeline: 'Sep 01 - Nov 30, 2024',
-          },
-          {
-            id: 'C-102',
-            title: 'Mobile App Contract',
-            clientName: 'Global Retail Corp',
-            status: 'Pending',
-            contractValue: '$12,500',
-            timeline: 'Oct 15 - Jan 15',
-          },
-        ]
-      : []
-  );
-
-  const applyStoredProgressToProjects = (projectList: ProjectItem[]): ProjectItem[] => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-      return projectList.map((p) => {
-        const cleanId = (p.contractId || p.id).replace('PRJ-', '');
-        const saved =
-          localStorage.getItem(`project_progress_${cleanId}`) ||
-          localStorage.getItem(`project_progress_PRJ-${cleanId}`) ||
-          localStorage.getItem(`project_progress_${p.id}`);
-        if (saved != null) {
-          const parsed = parseInt(saved, 10);
-          if (!isNaN(parsed)) {
-            return { ...p, completionPercentage: parsed };
-          }
-        }
-        return p;
-      });
-    }
-    return projectList;
-  };
-
-  useEffect(() => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      const handleStorageUpdate = () => {
-        setProjects((prev) => applyStoredProgressToProjects(prev));
-      };
-      window.addEventListener('storage', handleStorageUpdate);
-      return () => {
-        window.removeEventListener('storage', handleStorageUpdate);
-      };
-    }
-  }, []);
+  const [projects, setProjects] = useState<ProjectItem[]>([]);
+  const [dashboardContracts, setDashboardContracts] = useState<any[]>([]);
 
   const loadDashboardData = async () => {
     try {
       const activeUser = getCurrentUser();
       const activeName = activeUser?.fullName || '';
       const activeEmail = activeUser?.email || '';
-      const isTargetChathuni =
-        activeEmail === 'chathuniimalsha.com' ||
-        (activeName && activeName.toLowerCase().includes('chathuni'));
-
       const [pRes, notifRes, prjRes, cRes] = await Promise.allSettled([
         FreelancerApiService.getProfile(activeEmail),
         FreelancerApiService.getNotifications(activeName, activeEmail),
-        FreelancerApiService.getFreelancerProjects(activeName),
-        FreelancerApiService.getFreelancerContracts(activeName),
+        FreelancerApiService.getFreelancerProjects(activeName, activeEmail),
+        FreelancerApiService.getFreelancerContracts(activeName, activeEmail),
       ]);
 
       // 1. Profile
@@ -294,13 +216,13 @@ Executed on:                    ${new Date().toLocaleDateString('en-US', { year:
       if (notifRes.status === 'fulfilled' && Array.isArray(notifRes.value.data)) {
         const unreadCount = notifRes.value.data.filter((n: any) => n.unread).length;
         setUnreadNotifications(unreadCount);
-      } else if (!isTargetChathuni) {
+      } else {
         setUnreadNotifications(0);
       }
 
       // 3. Projects
       if (prjRes.status === 'fulfilled' && Array.isArray(prjRes.value.data)) {
-        const syncedProjects = applyStoredProgressToProjects(prjRes.value.data);
+        const syncedProjects = prjRes.value.data;
         setProjects(syncedProjects);
 
         const activeCount = syncedProjects.filter((p: any) => p.status === 'ACTIVE' || p.status === 'IN_PROGRESS').length;
@@ -311,7 +233,7 @@ Executed on:                    ${new Date().toLocaleDateString('en-US', { year:
           activeProjects: activeCount,
           pendingEscrow: totalEscrow,
         }));
-      } else if (!isTargetChathuni) {
+      } else {
         setProjects([]);
         setMetrics({ totalEarnings: 0, activeProjects: 0, pendingMilestones: 0, pendingEscrow: 0 });
       }
@@ -327,7 +249,7 @@ Executed on:                    ${new Date().toLocaleDateString('en-US', { year:
           timeline: c.timeline || (c.startDate && c.endDate ? `${c.startDate} - ${c.endDate}` : 'Active'),
         }));
         setDashboardContracts(mapped);
-      } else if (!isTargetChathuni) {
+      } else {
         setDashboardContracts([]);
       }
     } catch {

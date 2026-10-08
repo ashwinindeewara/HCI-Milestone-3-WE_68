@@ -93,7 +93,7 @@ export default function FreelancerDisputesScreen() {
   const fetchDisputes = async () => {
     try {
       const activeName = currentUser?.fullName || (isChathuni ? 'Chathuni Imalsha' : '');
-      const res = await FreelancerApiService.getDisputes(activeName);
+      const res = await FreelancerApiService.getDisputes(activeName, currentUser?.email);
       const data = Array.isArray(res) ? res : (res?.data || []);
       if (Array.isArray(data) && data.length > 0) {
         const formatted: DisputeItem[] = data.map((d: any) => ({

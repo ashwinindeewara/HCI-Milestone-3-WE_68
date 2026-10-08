@@ -19,6 +19,7 @@ import { useQuery } from '@tanstack/react-query';
 import Theme from '../src/constants/theme';
 import apiClient from '../src/services/api';
 import { getUserSession, saveUserSession, clearUserSession } from '../src/services/storage';
+import { clearAuthSession } from '../src/services/authService';
 
 export default function AdminDashboardScreen() {
   const router = useRouter();
@@ -152,6 +153,7 @@ export default function AdminDashboardScreen() {
 
   const handleLogout = () => {
     setIsProfileModalOpen(false);
+    clearAuthSession();
     clearUserSession();
     showToast('Logged out successfully. Redirecting...', 'info');
     setTimeout(() => {

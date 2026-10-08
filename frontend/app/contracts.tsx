@@ -89,8 +89,12 @@ export default function ContractsListScreen() {
   const fetchContracts = async () => {
     try {
       const activeName = currentUser?.fullName || (isChathuni ? 'Chathuni Imalsha' : '');
+      const activeEmail = currentUser?.email || '';
       const res = await apiClient.get('/contracts', {
-        params: activeName ? { freelancerName: activeName } : {},
+        params: {
+          ...(activeName ? { freelancerName: activeName } : {}),
+          ...(activeEmail ? { email: activeEmail } : {}),
+        },
       });
       if (res.data && Array.isArray(res.data)) {
         if (res.data.length > 0) {

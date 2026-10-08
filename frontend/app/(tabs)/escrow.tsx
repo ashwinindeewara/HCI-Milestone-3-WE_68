@@ -42,52 +42,6 @@ interface LinkedAccount {
   accountType?: 'Checking' | 'Savings';
 }
 
-const DEFAULT_LINKED_ACCOUNTS: LinkedAccount[] = [
-  {
-    id: 'acc-1',
-    name: 'Chase Checking',
-    type: 'Direct Deposit ACH',
-    detail: 'Account ending in 4192',
-    badge: 'Default',
-    isDefault: true,
-    icon: '🏦',
-    bankName: 'Chase',
-    accountHolder: 'Chathuni Imalsha',
-    accountNumber: '4192',
-    routingNumber: '021000021',
-    paymentType: 'Direct Deposit (ACH)',
-    accountType: 'Checking',
-  },
-  {
-    id: 'acc-2',
-    name: 'PayPal Wallet',
-    type: 'Instant Transfer',
-    detail: 'ruwansadeepa67@gmail.com',
-    badge: 'Verified',
-    isDefault: false,
-    icon: '🅿️',
-    bankName: 'PayPal Wallet',
-    accountHolder: 'Chathuni Imalsha',
-    accountNumber: 'ruwansadeepa67@gmail.com',
-    paymentType: 'Electronic Wallet',
-    accountType: 'Checking',
-  },
-  {
-    id: 'acc-3',
-    name: 'Visa Business Debit',
-    type: 'Instant Card Payout',
-    detail: 'Card ending in 8821 • Exp 08/28',
-    badge: 'Active',
-    isDefault: false,
-    icon: '💳',
-    bankName: 'Visa Business',
-    accountHolder: 'Chathuni Imalsha',
-    accountNumber: '8821',
-    paymentType: 'Instant Debit Card',
-    accountType: 'Checking',
-  },
-];
-
 const DEFAULT_HISTORY: HistoryItem[] = [
   {
     id: 'tx-1',
@@ -180,18 +134,7 @@ export default function EscrowScreen() {
   const [accountsModalVisible, setAccountsModalVisible] = useState(false);
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
   const [linkedAccounts, setLinkedAccounts] = useState<LinkedAccount[]>(() => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-      try {
-        const u = getCurrentUser();
-        const k = `payout_accounts_${u?.email || u?.fullName || 'default'}`;
-        const s = localStorage.getItem(k);
-        if (s) {
-          const p = JSON.parse(s);
-          if (Array.isArray(p)) return p;
-        }
-      } catch (e) {}
-    }
-    return isChathuni ? DEFAULT_LINKED_ACCOUNTS : [];
+    return [];
   });
 
   // Add Bank Account Form State
@@ -236,37 +179,16 @@ export default function EscrowScreen() {
   const loadLinkedAccounts = async () => {
     const activeEmail = currentUser?.email || '';
     const activeName = currentUser?.fullName || '';
-    const storageKey = `payout_accounts_${activeEmail || activeName || 'default'}`;
-
     try {
       const res = await FreelancerApiService.getPayoutAccounts(activeEmail, activeName);
       const data = Array.isArray(res) ? res : (res?.data || []);
       if (Array.isArray(data) && data.length > 0) {
         setLinkedAccounts(data);
-        if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-          localStorage.setItem(storageKey, JSON.stringify(data));
-        }
         return;
       }
-
-      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-        const stored = localStorage.getItem(storageKey);
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setLinkedAccounts(parsed);
-            return;
-          }
-        }
-      }
-
-      if (isChathuni) {
-        setLinkedAccounts(DEFAULT_LINKED_ACCOUNTS);
-      } else {
-        setLinkedAccounts([]);
-      }
+      setLinkedAccounts([]);
     } catch {
-      // Local fallback
+      setLinkedAccounts([]);
     }
   };
 
@@ -275,8 +197,12 @@ export default function EscrowScreen() {
     const fetchEscrowSummary = async () => {
       try {
         const activeName = currentUser?.fullName || (isChathuni ? 'Chathuni Imalsha' : '');
+        const activeEmail = currentUser?.email || '';
         const res = await apiClient.get('/escrow/summary', {
-          params: activeName ? { freelancerName: activeName } : {},
+          params: {
+            ...(activeEmail ? { email: activeEmail } : {}),
+            ...(activeEmail ? { email: activeEmail } : {}),
+          },
         });
         if (res.data) {
           if (res.data.totalInEscrow != null) {
@@ -302,7 +228,9 @@ export default function EscrowScreen() {
     const fetchTransactions = async () => {
       try {
         const activeName = currentUser?.fullName || (isChathuni ? 'Chathuni Imalsha' : '');
-        const txs = await FreelancerApiService.getTransactions(activeName);
+        const activeEmail = currentUser?.email || '';
+        const res = await FreelancerApiService.getTransactions('ALL', activeName, activeEmail);
+        const txs = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
         if (Array.isArray(txs) && txs.length > 0) {
           const mapped: HistoryItem[] = txs.map((t: any) => ({
             id: String(t.id),
@@ -361,46 +289,44 @@ export default function EscrowScreen() {
   };
 
   // Set default account in linked accounts modal
-  const handleSetDefaultAccount = (id: string, name: string) => {
+  const handleSetDefaultAccount = async (id: string, name: string) => {
     const activeEmail = currentUser?.email || '';
     const activeName = currentUser?.fullName || '';
-    const storageKey = `payout_accounts_${activeEmail || activeName || 'default'}`;
-
     const updated = linkedAccounts.map((acc) => ({
       ...acc,
       isDefault: acc.id === id,
       badge: acc.id === id ? 'Default' : 'Active',
     }));
-    setLinkedAccounts(updated);
-    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-      localStorage.setItem(storageKey, JSON.stringify(updated));
+    try {
+      const response = await FreelancerApiService.setDefaultPayoutAccount(id, activeEmail);
+      const savedAccount = response?.data || response;
+      setLinkedAccounts((current) => current.map((account) => ({
+        ...account,
+        isDefault: account.id === savedAccount.id,
+        badge: account.id === savedAccount.id ? 'Default' : 'Active',
+      })));
+      showToast(`✓ Set ${name} as default payout account`);
+    } catch {
+      showToast('Unable to update the default payment account.');
     }
-    FreelancerApiService.setDefaultPayoutAccount(id, activeEmail).catch((e) =>
-      console.warn('Backend payout set default note:', e)
-    );
-    showToast(`✓ Set ${name} as default payout account`);
   };
 
   // Remove linked account using cross icon
-  const handleRemoveAccount = (id: string, name: string) => {
+  const handleRemoveAccount = async (id: string, name: string) => {
     const activeEmail = currentUser?.email || '';
     const activeName = currentUser?.fullName || '';
-    const storageKey = `payout_accounts_${activeEmail || activeName || 'default'}`;
-
     const remaining = linkedAccounts.filter((acc) => acc.id !== id);
     if (remaining.length > 0 && !remaining.some((acc) => acc.isDefault)) {
       remaining[0].isDefault = true;
       remaining[0].badge = 'Default';
     }
-    setLinkedAccounts(remaining);
-    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-      localStorage.setItem(storageKey, JSON.stringify(remaining));
+    try {
+      await FreelancerApiService.deletePayoutAccount(id, activeEmail);
+      setLinkedAccounts(remaining);
+      showToast(`✓ Removed ${name}`);
+    } catch {
+      showToast('Unable to remove the payment account.');
     }
-    FreelancerApiService.deletePayoutAccount(id).catch((e) =>
-      console.warn('Backend payout delete note:', e)
-    );
-
-    showToast(`✓ Removed ${name}`);
   };
 
   // Start editing a linked account
@@ -430,7 +356,7 @@ export default function EscrowScreen() {
   };
 
   // Save or Update bank account details
-  const handleSaveBankDetails = () => {
+  const handleSaveBankDetails = async () => {
     setBankFormError(null);
     if (!newBankName.trim()) {
       setBankFormError('Please enter the bank or provider name.');
@@ -449,8 +375,6 @@ export default function EscrowScreen() {
 
     const activeEmail = currentUser?.email || '';
     const activeName = currentUser?.fullName || '';
-    const storageKey = `payout_accounts_${activeEmail || activeName || 'default'}`;
-
     let updatedList: LinkedAccount[] = [];
 
     if (editingAccountId) {
@@ -472,16 +396,21 @@ export default function EscrowScreen() {
         }
         return acc;
       });
-      setLinkedAccounts(updatedList);
-      showToast(`✓ Updated ${newBankName.trim()} details successfully!`);
-
       const updatedAcc = updatedList.find((a) => a.id === editingAccountId);
       if (updatedAcc) {
-        FreelancerApiService.updatePayoutAccount(editingAccountId, {
-          ...updatedAcc,
-          userEmail: activeEmail,
-          freelancerName: activeName,
-        }).catch((e) => console.warn('Backend payout update note:', e));
+        try {
+          const response = await FreelancerApiService.updatePayoutAccount(editingAccountId, {
+            ...updatedAcc,
+            userEmail: activeEmail,
+            freelancerName: activeName,
+          });
+          const savedAccount = response?.data || response;
+          setLinkedAccounts((current) => current.map((account) => account.id === editingAccountId ? savedAccount : account));
+          showToast(`✓ Updated ${newBankName.trim()} details successfully!`);
+        } catch {
+          showToast('Unable to save payment account changes.');
+          return;
+        }
       }
     } else {
       const newId = 'acc-' + Date.now();
@@ -501,18 +430,19 @@ export default function EscrowScreen() {
         accountType: newAccountType,
       };
       updatedList = [...linkedAccounts, newAcc];
-      setLinkedAccounts(updatedList);
-      showToast(`✓ Linked ${newAcc.name} (${newPaymentType}) successfully!`);
-
-      FreelancerApiService.createPayoutAccount({
-        ...newAcc,
-        userEmail: activeEmail,
-        freelancerName: activeName,
-      }).catch((e) => console.warn('Backend payout create note:', e));
-    }
-
-    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-      localStorage.setItem(storageKey, JSON.stringify(updatedList));
+      try {
+        const response = await FreelancerApiService.createPayoutAccount({
+          ...newAcc,
+          userEmail: activeEmail,
+          freelancerName: activeName,
+        });
+        const savedAccount = response?.data || response;
+        setLinkedAccounts((current) => [...current, savedAccount]);
+        showToast(`✓ Linked ${savedAccount.name || newAcc.name} (${newPaymentType}) successfully!`);
+      } catch {
+        showToast('Unable to save payment account.');
+        return;
+      }
     }
 
     setEditingAccountId(null);

@@ -31,66 +31,25 @@ interface ContractItem {
   timeline: string;
 }
 
-const DEFAULT_CONTRACTS: ContractItem[] = [
-  {
-    id: 'C-101',
-    title: 'E-Commerce Redesign',
-    clientName: 'TechVentures Inc.',
-    status: 'New',
-    badgeType: 'new',
-    contractValue: '$8,000',
-    timeline: 'Sep 01 - Nov 30, 2024',
-  },
-  {
-    id: 'C-102',
-    title: 'Mobile App Contract',
-    clientName: 'Global Retail Corp',
-    status: 'Pending',
-    badgeType: 'pending',
-    contractValue: '$12,500',
-    timeline: 'Oct 15 - Jan 15',
-  },
-  {
-    id: 'C-103',
-    title: 'Marketing Brand Strategy',
-    clientName: 'Apex Ventures',
-    status: 'Completed',
-    badgeType: 'completed',
-    contractValue: '$4,500',
-    timeline: 'Aug 01 - Sep 30',
-  },
-];
-
 export default function ContractsListScreen() {
   const router = useRouter();
   const currentUser = getCurrentUser();
-  const isChathuni =
-    currentUser?.email === 'chathuniimalsha.com' ||
-    (currentUser?.fullName && currentUser.fullName.toLowerCase().includes('chathuni')) ||
-    (currentUser?.email && currentUser.email.toLowerCase().includes('chathuni'));
 
   const [contracts, setContracts] = useState<ContractItem[]>(() => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-      try {
-        const u = getCurrentUser();
-        const k = `contracts_full_list_${u?.email || u?.fullName || 'default'}`;
-        const s = localStorage.getItem(k);
-        if (s) {
-          const p = JSON.parse(s);
-          if (Array.isArray(p)) return p;
-        }
-      } catch (e) {}
-    }
-    return isChathuni ? DEFAULT_CONTRACTS : [];
+    return [];
   });
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchContracts = async () => {
     try {
-      const activeName = currentUser?.fullName || (isChathuni ? 'Chathuni Imalsha' : '');
+      const activeName = currentUser?.fullName || '';
+      const activeEmail = currentUser?.email || '';
       const res = await apiClient.get('/contracts', {
-        params: activeName ? { freelancerName: activeName } : {},
+        params: {
+          ...(activeName ? { freelancerName: activeName } : {}),
+          ...(activeEmail ? { email: activeEmail } : {}),
+        },
       });
       if (res.data && Array.isArray(res.data)) {
         if (res.data.length > 0) {
@@ -120,20 +79,12 @@ export default function ContractsListScreen() {
             };
           });
           setContracts(mapped);
-          if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-            const k = `contracts_full_list_${currentUser?.email || currentUser?.fullName || 'default'}`;
-            localStorage.setItem(k, JSON.stringify(mapped));
-          }
         } else {
           setContracts([]);
-          if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-            const k = `contracts_full_list_${currentUser?.email || currentUser?.fullName || 'default'}`;
-            localStorage.setItem(k, JSON.stringify([]));
-          }
         }
       }
     } catch {
-      // Offline fallback
+      setContracts([]);
     } finally {
       setLoading(false);
       setRefreshing(false);

@@ -16,6 +16,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import Colors from '../../src/constants/colors';
 import { VerifiedBadge, StarIcon, ExitLogoutIcon } from '../../src/components/Icons';
 import apiClient, { resolveMediaUrl, getCurrentUser, API_BASE_URL, FreelancerApiService } from '../../src/services/api';
+import { clearAuthSession } from '../../src/services/authService';
 
 export interface ProjectItem {
   id: string;
@@ -621,13 +622,7 @@ export default function FreelancerProfileScreen() {
                 style={styles.modalDestructiveBtn}
                 onPress={() => {
                   setLogoutModalVisible(false);
-                  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-                    localStorage.removeItem('auth_user');
-                    localStorage.removeItem('auth_email');
-                    localStorage.removeItem('auth_name');
-                    localStorage.removeItem('auth_role');
-                    localStorage.removeItem('auth_token');
-                  }
+                  clearAuthSession();
                   router.replace('/login');
                 }}
               >

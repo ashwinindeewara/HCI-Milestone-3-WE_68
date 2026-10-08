@@ -177,6 +177,7 @@ export default function CreateDisputeScreen() {
         parties: `${project || 'Project'} Client vs. ${activeFreelancer}`,
         clientName: (selectedProj as any)?.client || (isChathuni ? 'TechVentures Inc.' : 'Client'),
         freelancerName: activeFreelancer,
+        freelancerEmail: currentUser?.email || '',
         contractId: (selectedProj as any)?.contractId || (isChathuni ? 'C-101' : ''),
       });
       if (res.data && res.data.id) {
