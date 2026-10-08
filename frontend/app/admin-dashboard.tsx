@@ -5,21 +5,60 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  TouchableOpacityProps,
   SafeAreaView,
-  Modal,
-  TextInput,
   ActivityIndicator,
+  Image,
+  Platform,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import Colors from '../src/constants/colors';
 import AdminTabBar from '../src/components/AdminTabBar';
 import AdminToast, { ToastType } from '../src/components/AdminToast';
 import SkeletonCard from '../src/components/SkeletonCard';
 import { useQuery } from '@tanstack/react-query';
-import Theme from '../src/constants/theme';
-import apiClient from '../src/services/api';
+import apiClient, { API_BASE_URL } from '../src/services/api';
+import { formatAdminMoney } from '../src/services/moneyFormat';
 import { getUserSession, saveUserSession, clearUserSession } from '../src/services/storage';
 import { clearAuthSession } from '../src/services/authService';
+import {
+  AdminIcon,
+  AdminCard,
+  AdminScreenHeader,
+  AdminSectionHeader,
+  AdminStatCard,
+  StatusPill,
+  AdminEmptyState,
+  AdminButton,
+  AdminIconName,
+} from '../src/components/AdminUI';
+import AdminModal, { AdminField, AdminSectionTitle, AdminActionList, AdminActionRow } from '../src/components/AdminModal';
+import { Tone, toneColors, adminLayout, adminSpace, adminType, adminRadius, MUTED_TEXT } from '../src/constants/adminTheme';
+
+const MAX_PICTURE_BYTES = 5 * 1024 * 1024;
+const MAX_PICTURE_SIDE = 2048;
+
+// Web only: scale a chosen photo down to a small JPEG so large camera photos upload reliably.
+// Falls back to the original file if the browser can't process it.
+const shrinkPictureOnWeb = async (file: File): Promise<File> => {
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, MAX_PICTURE_SIDE / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return file;
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const blob: Blob | null = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+    if (!blob) return file;
+    const baseName = (file.name || 'admin-photo').replace(/\.[^.]+$/, '');
+    return new File([blob], `${baseName}.jpg`, { type: 'image/jpeg' });
+  } catch {
+    return file;
+  }
+};
 
 export default function AdminDashboardScreen() {
   const router = useRouter();
@@ -35,12 +74,19 @@ export default function AdminDashboardScreen() {
   const [adminPassword, setAdminPassword] = useState('');
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
 
+  // Profile picture state (image bytes are stored in the database by the backend)
+  const [pictureVersion, setPictureVersion] = useState(() => Date.now());
+  const [pictureFailed, setPictureFailed] = useState(false);
+  const [isUploadingPicture, setIsUploadingPicture] = useState(false);
+  const [adminId, setAdminId] = useState<string | number | undefined>(undefined);
+
   // Fetch saved user credentials from login session
   useEffect(() => {
     const session = getUserSession();
     if (session) {
       if (session.fullName) setAdminName(session.fullName);
       if (session.email) setAdminEmail(session.email);
+      if (session.id !== undefined && session.id !== null) setAdminId(session.id);
     }
   }, []);
 
@@ -52,14 +98,7 @@ export default function AdminDashboardScreen() {
         return response.data;
       } catch (error) {
         console.warn('[AdminDashboard] KPIs endpoint connection error:', error);
-        return {
-          totalUsers: 6,
-          activeFreelancers: 2,
-          activeClients: 2,
-          totalVolumeEscrow: 16950,
-          disputesPending: 2,
-          securityAlertsCritical: 1
-        };
+        throw error;
       }
     },
   });
@@ -151,6 +190,90 @@ export default function AdminDashboardScreen() {
     }
   };
 
+  const pictureUri = adminId !== undefined && !pictureFailed
+    ? `${API_BASE_URL}/admin/profile/picture/${adminId}?v=${pictureVersion}`
+    : null;
+
+  const readErrorMessage = async (res: Response, fallback: string) => {
+    try {
+      const body = await res.json();
+      return body?.message || fallback;
+    } catch {
+      return fallback;
+    }
+  };
+
+  const handleChoosePicture = async () => {
+    if (adminId === undefined) {
+      showToast('Please sign in again to change your profile picture.', 'error');
+      return;
+    }
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (result.canceled || !result.assets || result.assets.length === 0) return;
+
+      const asset = result.assets[0];
+      setIsUploadingPicture(true);
+
+      const formData = new FormData();
+      formData.append('id', String(adminId));
+      if (Platform.OS === 'web' && asset.file) {
+        // Web: the picker hands back a real File object; shrink big photos before sending
+        const prepared = await shrinkPictureOnWeb(asset.file);
+        if (prepared.size > MAX_PICTURE_BYTES) {
+          showToast('Image is too large. Please choose a smaller photo (max 5 MB).', 'error');
+          return;
+        }
+        formData.append('file', prepared);
+      } else {
+        if (asset.fileSize && asset.fileSize > MAX_PICTURE_BYTES) {
+          showToast('Image is too large. Please choose a smaller photo (max 5 MB).', 'error');
+          return;
+        }
+        const name = asset.fileName || `admin-${adminId}.jpg`;
+        formData.append('file', { uri: asset.uri, name, type: asset.mimeType || 'image/jpeg' } as any);
+      }
+
+      const res = await fetch(`${API_BASE_URL}/admin/profile/picture`, { method: 'POST', body: formData });
+      if (!res.ok) {
+        showToast(await readErrorMessage(res, 'Failed to upload profile picture.'), 'error');
+        return;
+      }
+      setPictureFailed(false);
+      setPictureVersion(Date.now());
+      showToast('Profile picture updated successfully!', 'success');
+    } catch (error) {
+      console.warn('[AdminDashboard] Profile picture upload error:', error);
+      showToast('Could not upload the picture. Check your connection and try again.', 'error');
+    } finally {
+      setIsUploadingPicture(false);
+    }
+  };
+
+  const handleRemovePicture = async () => {
+    if (adminId === undefined) return;
+    setIsUploadingPicture(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/profile/picture/${adminId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        showToast(await readErrorMessage(res, 'Failed to remove profile picture.'), 'error');
+        return;
+      }
+      setPictureFailed(true);
+      showToast('Profile picture removed.', 'success');
+    } catch (error) {
+      console.warn('[AdminDashboard] Profile picture remove error:', error);
+      showToast('Could not remove the picture. Please try again.', 'error');
+    } finally {
+      setIsUploadingPicture(false);
+    }
+  };
+
   const handleLogout = () => {
     setIsProfileModalOpen(false);
     clearAuthSession();
@@ -171,262 +294,285 @@ export default function AdminDashboardScreen() {
       />
 
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-        {/* Header Title & Admin Avatar (Clickable Profile Settings) */}
-        <View style={styles.headerRow}>
-          <Text style={styles.headerTitle}>Admin Dashboard</Text>
-          <TouchableOpacity
-            style={styles.avatarRow}
-            onPress={() => setIsProfileModalOpen(true)}
-            activeOpacity={0.8}
-          >
-            <View style={styles.verifiedIcon}>
-              <Text style={{ fontSize: 14, color: Colors.successText }}>✓</Text>
+        <View style={adminLayout.content}>
+          {/* Header Title & Admin Avatar (Clickable Profile Settings) */}
+          <AdminScreenHeader
+            title="Admin Dashboard"
+            subtitle="Platform overview"
+            right={
+              <TouchableOpacity
+                style={styles.avatarButton}
+                onPress={() => setIsProfileModalOpen(true)}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Open profile and settings"
+              >
+                <View style={styles.avatarBox}>
+                  {pictureUri ? (
+                    <Image
+                      source={{ uri: pictureUri }}
+                      style={styles.avatarImage}
+                      onError={() => setPictureFailed(true)}
+                    />
+                  ) : (
+                    <Text style={styles.avatarText}>{initialOf(adminName)}</Text>
+                  )}
+                </View>
+                <View style={styles.verifiedBadge}>
+                  <AdminIcon name="checkmark" size={10} color={Colors.surface} />
+                </View>
+              </TouchableOpacity>
+            }
+          />
+
+          {/* 6 KPI Metric Cards */}
+          {isLoadingKpis ? (
+            <>
+              <SkeletonCard height={80} />
+              <SkeletonCard height={80} />
+              <SkeletonCard height={80} />
+            </>
+          ) : (
+            <View style={styles.statGrid}>
+              <AdminStatCard style={styles.statItem} label="Total Users" value={kpis.totalUsers} icon="people-outline" tone="info" />
+              <AdminStatCard style={styles.statItem} label="Active Freelancers" value={kpis.activeFreelancers} icon="briefcase-outline" tone="success" />
+              <AdminStatCard style={styles.statItem} label="Active Clients" value={kpis.activeClients} icon="business-outline" tone="info" />
+              <AdminStatCard
+                style={styles.statItem}
+                label="Total Vol"
+                value={<Text style={styles.statValueLong}>{`$${kpis.totalVolumeEscrow?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</Text>}
+                icon="wallet-outline"
+                tone="success"
+              />
+              <AdminStatCard style={styles.statItem} label="Disputes Pending" value={kpis.disputesPending} icon="scale-outline" tone="warning" />
+              <AdminStatCard
+                style={styles.statItem}
+                label="Security Alerts"
+                value={kpis.securityAlertsCritical}
+                icon="shield-checkmark-outline"
+                tone="danger"
+                badge="Critical"
+              />
             </View>
-            <View style={styles.avatarBox}>
-              <Text style={styles.avatarText}>
-                {adminName ? adminName.charAt(0).toUpperCase() : 'A'}
-              </Text>
-            </View>
-          </TouchableOpacity>
-        </View>
+          )}
 
-        {/* 6 KPI Metric Cards Grid (2x3 Layout) */}
-        {isLoadingKpis ? (
-          <>
-            <SkeletonCard height={80} />
-            <SkeletonCard height={80} />
-            <SkeletonCard height={80} />
-          </>
-        ) : (
-          <>
-            <View style={styles.gridRow}>
-              <View style={styles.gridCard}>
-                <Text style={styles.cardLabel}>Total Users</Text>
-                <Text style={styles.cardValue}>{kpis.totalUsers}</Text>
-              </View>
+          {/* Recent Transactions Log Section */}
+          <View style={styles.sectionRow}>
+            <Text style={adminType.sectionTitle}>Recent Transactions</Text>
+            <TouchableOpacity
+              onPress={() => router.push('/admin-transactions')}
+              style={styles.seeAllBtn}
+              accessibilityRole="button"
+            >
+              <Text style={styles.seeAllText}>See All</Text>
+              <AdminIcon name="chevron-forward" size={14} color={Colors.primaryDark} />
+            </TouchableOpacity>
+          </View>
 
-              <View style={[styles.gridCard, styles.cardLightGreen]}>
-                <Text style={styles.cardLabelGreen}>Active Freelancers</Text>
-                <Text style={styles.cardValue}>{kpis.activeFreelancers}</Text>
-              </View>
-            </View>
-
-            <View style={styles.gridRow}>
-              <View style={styles.gridCard}>
-                <Text style={styles.cardLabel}>Active Clients</Text>
-                <Text style={styles.cardValue}>{kpis.activeClients}</Text>
-              </View>
-
-              <View style={[styles.gridCard, styles.cardLightGreen]}>
-                <Text style={styles.cardLabelGreen}>Total Vol</Text>
-                <Text style={styles.cardValue}>${kpis.totalVolumeEscrow?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
-              </View>
-            </View>
-
-            <View style={styles.gridRow}>
-              <View style={[styles.gridCard, styles.cardYellow]}>
-                <Text style={styles.cardLabelYellow}>Disputes Pending</Text>
-                <Text style={styles.cardValueYellow}>{kpis.disputesPending}</Text>
-              </View>
-
-              <View style={[styles.gridCard, styles.cardRed]}>
-                <View style={styles.criticalHeader}>
-                  <Text style={styles.cardLabelRed}>Security Alerts</Text>
-                  <View style={styles.criticalBadge}>
-                    <Text style={styles.criticalText}>Critical</Text>
+          {isLoadingActivity ? (
+            <>
+              <SkeletonCard height={70} />
+              <SkeletonCard height={70} />
+            </>
+          ) : recentActivity.transactions.length === 0 ? (
+            <AdminCard>
+              <AdminEmptyState icon="receipt-outline" title="No recent transactions" />
+            </AdminCard>
+          ) : (
+            <View style={styles.rowList}>
+              {recentActivity.transactions.map((txn: any, index: number) => (
+                <TouchableOpacity
+                  key={index}
+                  activeOpacity={0.85}
+                  style={styles.rowCard}
+                  onPress={() => router.push('/admin-transactions')}
+                >
+                  <View style={[styles.iconTile, { backgroundColor: toneColors.success.bg }]}>
+                    <AdminIcon name="cash-outline" size={20} color={toneColors.success.fg} />
                   </View>
-                </View>
-                <Text style={styles.cardValueRed}>{kpis.securityAlertsCritical}</Text>
-              </View>
+                  <View style={styles.rowText}>
+                    <Text style={adminType.cardTitle} numberOfLines={1}>#{txn.id}</Text>
+                    <Text style={styles.rowSub} numberOfLines={1}>{txn.title}</Text>
+                  </View>
+                  <View style={styles.rowRight}>
+                    <Text style={styles.amount}>{formatAdminMoney(txn.amount)}</Text>
+                    <StatusPill label={txn.status} tone={txn.status === 'Escrow' ? 'success' : 'info'} />
+                  </View>
+                </TouchableOpacity>
+              ))}
             </View>
-          </>
-        )}
+          )}
 
-        {/* Recent Transactions Log Section */}
-        <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>Recent Transactions</Text>
-          <TouchableOpacity onPress={() => router.push('/admin-transactions')}>
-            <Text style={styles.seeAllText}>See All</Text>
-          </TouchableOpacity>
+          {/* Urgent Security & Dispute Alerts Section */}
+          <AdminSectionHeader title="Urgent Alerts" />
+
+          {isLoadingActivity ? (
+            <>
+              <SkeletonCard height={70} />
+              <SkeletonCard height={70} />
+            </>
+          ) : recentActivity.alerts.length === 0 ? (
+            <AdminCard>
+              <AdminEmptyState icon="checkmark-circle-outline" title="No urgent alerts" />
+            </AdminCard>
+          ) : (
+            <View style={styles.rowList}>
+              {recentActivity.alerts.map((alert: any, index: number) => {
+                if (alert.type === 'security') {
+                  return (
+                    <AlertRow
+                      key={index}
+                      tone="danger"
+                      icon="shield-checkmark-outline"
+                      title={alert.title}
+                      description={alert.description}
+                      onPress={() => handleAlertReview(alert)}
+                    />
+                  );
+                } else if (alert.type === 'dispute') {
+                  return (
+                    <AlertRow
+                      key={index}
+                      tone="warning"
+                      icon="scale-outline"
+                      title={alert.title}
+                      description={alert.description}
+                      onPress={() => handleAlertReview(alert)}
+                    />
+                  );
+                } else {
+                  return (
+                    <AlertRow
+                      key={index}
+                      tone="success"
+                      icon="checkmark-circle-outline"
+                      title={alert.title}
+                      description={alert.description}
+                      onPress={() => handleAlertReview(alert)}
+                    />
+                  );
+                }
+              })}
+            </View>
+          )}
         </View>
-
-        {isLoadingActivity ? (
-          <>
-            <SkeletonCard height={70} />
-            <SkeletonCard height={70} />
-          </>
-        ) : recentActivity.transactions.map((txn: any, index: number) => (
-          <TouchableOpacity
-            key={index}
-            style={styles.txnCard}
-            onPress={() => router.push('/admin-transactions')}
-          >
-            <View style={styles.txnIconBox}>
-              <Text style={{ fontSize: 16 }}>💵</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.txnId}>#{txn.id}</Text>
-              <Text style={styles.txnSub}>{txn.title}</Text>
-            </View>
-            <View style={{ alignItems: 'flex-end' }}>
-              <Text style={styles.txnAmount}>{txn.amount}</Text>
-              <View style={txn.status === 'Escrow' ? styles.tagEscrow : styles.tagReleased}>
-                <Text style={txn.status === 'Escrow' ? styles.tagTextEscrow : styles.tagTextReleased}>{txn.status}</Text>
-              </View>
-            </View>
-          </TouchableOpacity>
-        ))}
-
-        {/* Urgent Security & Dispute Alerts Section */}
-        <Text style={styles.sectionTitle}>Urgent Alerts</Text>
-
-        {isLoadingActivity ? (
-          <>
-            <SkeletonCard height={70} />
-            <SkeletonCard height={70} />
-          </>
-        ) : recentActivity.alerts.map((alert: any, index: number) => {
-          if (alert.type === 'security') {
-            return (
-              <TouchableOpacity
-                key={index}
-                style={styles.alertCardRed}
-                onPress={() => handleAlertReview(alert)}
-              >
-                <View style={styles.alertIconRed}>
-                  <Text style={{ fontSize: 16 }}>🛡️</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.alertTitleRed}>{alert.title}</Text>
-                  <Text style={styles.alertSubRed}>{alert.description}</Text>
-                </View>
-              </TouchableOpacity>
-            );
-          } else if (alert.type === 'dispute') {
-            return (
-              <TouchableOpacity
-                key={index}
-                style={styles.alertCardYellow}
-                onPress={() => handleAlertReview(alert)}
-              >
-                <View style={styles.alertIconYellow}>
-                  <Text style={{ fontSize: 16 }}>⚖️</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.alertTitleYellow}>{alert.title}</Text>
-                  <Text style={styles.alertSubYellow}>{alert.description}</Text>
-                </View>
-              </TouchableOpacity>
-            );
-          } else {
-            return (
-              <TouchableOpacity
-                key={index}
-                style={styles.alertCardGreen}
-                onPress={() => handleAlertReview(alert)}
-              >
-                <View style={styles.alertIconGreen}>
-                  <Text style={{ fontSize: 16 }}>✅</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.alertTitleGreen}>{alert.title}</Text>
-                  <Text style={styles.alertSubGreen}>{alert.description}</Text>
-                </View>
-              </TouchableOpacity>
-            );
-          }
-        })}
       </ScrollView>
 
       {/* ADMIN PROFILE & LOGOUT MODAL */}
-      <Modal
+      <AdminModal
         visible={isProfileModalOpen}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setIsProfileModalOpen(false)}
+        onClose={() => setIsProfileModalOpen(false)}
+        title="Admin Profile & Settings"
+        icon="person-circle-outline"
+        tone="neutral"
+        footer={
+          <>
+            <AdminButton
+              label="Close"
+              variant="secondary"
+              onPress={() => setIsProfileModalOpen(false)}
+            />
+            <AdminButton
+              label="Save Profile Changes"
+              icon="save-outline"
+              onPress={handleUpdateProfile}
+              loading={isUpdatingProfile}
+            />
+          </>
+        }
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>👤 Admin Profile & Settings</Text>
-              <TouchableOpacity onPress={() => setIsProfileModalOpen(false)}>
-                <Text style={styles.closeIcon}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={{ maxHeight: 440 }}>
-              <View style={styles.profileAvatarBox}>
-                <View style={styles.largeAvatar}>
-                  <Text style={styles.largeAvatarText}>
-                    {adminName ? adminName.charAt(0).toUpperCase() : 'A'}
-                  </Text>
-                </View>
-                <Text style={styles.profileName}>{adminName}</Text>
-                <Text style={styles.profileEmail}>{adminEmail}</Text>
-                <View style={styles.adminRoleBadge}>
-                  <Text style={styles.adminRoleBadgeText}>⚡ SYSTEM ADMIN</Text>
-                </View>
-              </View>
-
-              <Text style={styles.sectionHeaderTitle}>Edit Profile Details</Text>
-
-              <Text style={styles.inputLabel}>Full Name</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="System Admin"
-                placeholderTextColor={Colors.neutralLight}
-                value={adminName}
-                onChangeText={setAdminName}
-              />
-
-              <Text style={styles.inputLabel}>Email Address</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="admin@freelance.com"
-                placeholderTextColor={Colors.neutralLight}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                value={adminEmail}
-                onChangeText={setAdminEmail}
-              />
-
-              <Text style={styles.inputLabel}>New Password (Optional)</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="Leave blank to keep current password"
-                placeholderTextColor={Colors.neutralLight}
-                secureTextEntry
-                value={adminPassword}
-                onChangeText={setAdminPassword}
-              />
-
-              <TouchableOpacity
-                style={[styles.saveProfileBtn, isUpdatingProfile && { opacity: 0.7 }]}
-                onPress={handleUpdateProfile}
-                disabled={isUpdatingProfile}
-                activeOpacity={0.8}
-              >
-                {isUpdatingProfile ? (
+        <View style={styles.profileHero}>
+          <TouchableOpacity
+            style={styles.largeAvatarWrap}
+            onPress={handleChoosePicture}
+            disabled={isUploadingPicture}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Change profile photo"
+          >
+            <View style={styles.largeAvatar}>
+              {pictureUri ? (
+                <Image
+                  source={{ uri: pictureUri }}
+                  style={styles.largeAvatarImage}
+                  onError={() => setPictureFailed(true)}
+                />
+              ) : (
+                <Text style={styles.largeAvatarText}>{initialOf(adminName)}</Text>
+              )}
+              {isUploadingPicture && (
+                <View style={styles.avatarUploadingOverlay}>
                   <ActivityIndicator color={Colors.surface} size="small" />
-                ) : (
-                  <Text style={styles.saveProfileBtnText}>💾 Save Profile Changes</Text>
-                )}
-              </TouchableOpacity>
-
-              <View style={styles.modalDivider} />
-
-              <Text style={styles.sectionHeaderTitle}>Session Controls</Text>
+                </View>
+              )}
+            </View>
+            <View style={styles.cameraBadge}>
+              <AdminIcon name="camera-outline" size={14} color={Colors.surface} />
+            </View>
+          </TouchableOpacity>
+          <View style={styles.pictureActionsRow}>
+            <TouchableOpacity
+              onPress={handleChoosePicture}
+              disabled={isUploadingPicture}
+              style={styles.pictureAction}
+              accessibilityRole="button"
+            >
+              <AdminIcon name="camera-outline" size={14} color={Colors.primaryDark} />
+              <Text style={styles.pictureActionText}>
+                {pictureUri ? 'Change Photo' : 'Upload Photo'}
+              </Text>
+            </TouchableOpacity>
+            {pictureUri ? (
               <TouchableOpacity
-                style={styles.logoutBtn}
-                onPress={handleLogout}
-                activeOpacity={0.8}
+                onPress={handleRemovePicture}
+                disabled={isUploadingPicture}
+                style={styles.pictureAction}
+                accessibilityRole="button"
               >
-                <Text style={styles.logoutBtnText}>🚪 Sign Out / Logout</Text>
+                <AdminIcon name="trash-outline" size={14} color={Colors.errorText} />
+                <Text style={[styles.pictureActionText, { color: Colors.errorText }]}>Remove</Text>
               </TouchableOpacity>
-            </ScrollView>
+            ) : null}
+          </View>
+          <Text style={styles.profileName}>{adminName}</Text>
+          <Text style={styles.profileEmail}>{adminEmail}</Text>
+          <View style={styles.roleBadge}>
+            <AdminIcon name="flash-outline" size={12} color={Colors.primaryDark} />
+            <Text style={styles.roleBadgeText}>SYSTEM ADMIN</Text>
           </View>
         </View>
-      </Modal>
+
+        <AdminSectionTitle>Edit Profile Details</AdminSectionTitle>
+
+        <AdminField
+          label="Full Name"
+          placeholder="System Admin"
+          value={adminName}
+          onChangeText={setAdminName}
+        />
+
+        <AdminField
+          label="Email Address"
+          placeholder="admin@freelance.com"
+          keyboardType="email-address"
+          autoCapitalize="none"
+          value={adminEmail}
+          onChangeText={setAdminEmail}
+        />
+
+        <AdminField
+          label="New Password (Optional)"
+          placeholder="Leave blank to keep current password"
+          secureTextEntry
+          value={adminPassword}
+          onChangeText={setAdminPassword}
+        />
+
+        <AdminSectionTitle>Session Controls</AdminSectionTitle>
+        <AdminActionList>
+          <AdminActionRow icon="log-out-outline" label="Sign Out / Logout" tone="danger" onPress={handleLogout} last />
+        </AdminActionList>
+      </AdminModal>
 
       <AdminTabBar activeTab="dashboard" />
     </SafeAreaView>
@@ -434,236 +580,156 @@ export default function AdminDashboardScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  container: {
-    flex: 1,
-  },
+  safeArea: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1 },
   contentContainer: {
-    padding: Theme.spacing.md,
-    paddingBottom: 80,
+    padding: adminSpace.lg,
+    paddingTop: adminSpace.xl,
+    paddingBottom: adminLayout.bottomClearance,
   },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  avatarButton: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
+  avatarBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: Colors.dark,
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: Theme.spacing.lg,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: Colors.surface,
   },
-  headerTitle: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: Colors.dark,
-  },
-  avatarRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  verifiedIcon: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: Colors.successBg,
+  avatarImage: { width: 44, height: 44 },
+  avatarText: { color: Colors.surface, fontWeight: '800', fontSize: 16 },
+  verifiedBadge: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: Colors.primary,
+    borderWidth: 2,
+    borderColor: Colors.background,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  avatarBox: {
+  statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: adminSpace.md },
+  statItem: { flexBasis: '31%', flexGrow: 1, minWidth: 150 },
+  sectionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: adminSpace.xl,
+    marginBottom: adminSpace.md,
+  },
+  seeAllBtn: { flexDirection: 'row', alignItems: 'center', gap: 2, minHeight: 44, justifyContent: 'center' },
+  seeAllText: { fontSize: 13, fontWeight: '700', color: Colors.primaryDark },
+  statValueLong: { fontSize: 17, fontWeight: '800', color: Colors.dark, letterSpacing: -0.3 },
+  rowList: { gap: adminSpace.sm },
+  rowCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: adminSpace.md,
+    minHeight: 64,
+    padding: adminSpace.md + 2,
+    backgroundColor: Colors.surface,
+    borderRadius: adminRadius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  iconTile: {
     width: 40,
     height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.dark,
+    borderRadius: adminRadius.md,
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
   },
-  avatarText: {
-    color: Colors.surface,
-    fontWeight: '800',
-    fontSize: 14,
-  },
-  gridRow: {
-    flexDirection: 'row',
-    gap: Theme.spacing.sm,
-    marginBottom: Theme.spacing.sm,
-  },
-  gridCard: {
-    flex: 1,
-    backgroundColor: Colors.surface,
-    borderRadius: Theme.borderRadius.md,
-    padding: Theme.spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    ...Theme.shadows.card,
-  },
-  cardLightGreen: {
-    backgroundColor: Colors.successBg,
-    borderColor: Colors.primaryLight,
-  },
-  cardYellow: {
-    backgroundColor: Colors.warningBg,
-    borderColor: Colors.warning,
-  },
-  cardRed: {
-    backgroundColor: Colors.errorBg,
-    borderColor: Colors.error,
-  },
-  cardLabel: { fontSize: 12, color: Colors.neutralMedium, fontWeight: '500', marginBottom: 4 },
-  cardLabelGreen: { fontSize: 12, color: Colors.primaryDark, fontWeight: '600', marginBottom: 4 },
-  cardLabelYellow: { fontSize: 12, color: Colors.warningText, fontWeight: '600', marginBottom: 4 },
-  cardLabelRed: { fontSize: 12, color: Colors.errorText, fontWeight: '600' },
-  cardValue: { fontSize: 22, fontWeight: '800', color: Colors.dark },
-  cardValueYellow: { fontSize: 22, fontWeight: '800', color: Colors.warningText },
-  cardValueRed: { fontSize: 22, fontWeight: '800', color: Colors.errorText },
-  criticalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  criticalBadge: { backgroundColor: Colors.error, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-  criticalText: { color: Colors.surface, fontSize: 9, fontWeight: '800' },
-  sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: Theme.spacing.md, marginBottom: Theme.spacing.sm },
-  sectionTitle: { fontSize: 16, fontWeight: '800', color: Colors.dark, marginVertical: Theme.spacing.xs },
-  seeAllText: { fontSize: 13, fontWeight: '700', color: Colors.primary },
-  txnCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: Theme.borderRadius.md,
-    padding: Theme.spacing.md,
-    marginBottom: Theme.spacing.xs,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  txnIconBox: { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.successBg, justifyContent: 'center', alignItems: 'center', marginRight: Theme.spacing.sm },
-  txnId: { fontSize: 14, fontWeight: '700', color: Colors.dark },
-  txnSub: { fontSize: 11, color: Colors.neutralMedium, marginTop: 2 },
-  txnAmount: { fontSize: 15, fontWeight: '800', color: Colors.dark, marginBottom: 2 },
-  tagEscrow: { backgroundColor: Colors.successBg, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-  tagTextEscrow: { fontSize: 10, fontWeight: '700', color: Colors.primaryDark },
-  tagReleased: { backgroundColor: Colors.infoBg, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-  tagTextReleased: { fontSize: 10, fontWeight: '700', color: Colors.infoText },
-  alertCardRed: {
-    backgroundColor: Colors.errorBg,
-    borderWidth: 1,
-    borderColor: Colors.error,
-    borderRadius: Theme.borderRadius.md,
-    padding: Theme.spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: Theme.spacing.xs,
-  },
-  alertIconRed: { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.errorBg, justifyContent: 'center', alignItems: 'center', marginRight: Theme.spacing.sm },
-  alertTitleRed: { fontSize: 14, fontWeight: '700', color: Colors.errorText },
-  alertSubRed: { fontSize: 11, color: Colors.errorText, marginTop: 2 },
-  alertCardYellow: {
-    backgroundColor: Colors.warningBg,
-    borderWidth: 1,
-    borderColor: Colors.warning,
-    borderRadius: Theme.borderRadius.md,
-    padding: Theme.spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: Theme.spacing.sm,
-  },
-  alertIconYellow: { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.warningBg, justifyContent: 'center', alignItems: 'center', marginRight: Theme.spacing.sm },
-  alertTitleYellow: { fontSize: 14, fontWeight: '700', color: Colors.warningText },
-  alertSubYellow: { fontSize: 11, color: Colors.warningText, marginTop: 2 },
-  alertCardGreen: {
-    backgroundColor: Colors.successBg,
-    borderWidth: 1,
-    borderColor: Colors.primaryLight,
-    borderRadius: Theme.borderRadius.md,
-    padding: Theme.spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: Theme.spacing.sm,
-  },
-  alertIconGreen: { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.successBg, justifyContent: 'center', alignItems: 'center', marginRight: Theme.spacing.sm },
-  alertTitleGreen: { fontSize: 14, fontWeight: '700', color: Colors.primaryDark },
-  alertSubGreen: { fontSize: 11, color: Colors.primaryDark, marginTop: 2 },
-  tabIconActive: { opacity: 1, transform: [{ scale: 1.1 }] },
+  rowText: { flex: 1 },
+  rowSub: { ...adminType.caption, fontSize: 12, marginTop: 2 },
+  rowRight: { alignItems: 'flex-end', gap: 4 },
+  amount: { fontSize: 15, fontWeight: '800', color: Colors.dark },
 
-  // Profile Modal Styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: Theme.spacing.md,
-  },
-  modalContent: {
-    width: '100%',
-    maxWidth: 460,
-    backgroundColor: Colors.surface,
-    borderRadius: Theme.borderRadius.lg,
-    padding: Theme.spacing.lg,
-    ...Theme.shadows.modal,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Theme.spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-    paddingBottom: Theme.spacing.sm,
-  },
-  modalTitle: { fontSize: 18, fontWeight: '800', color: Colors.dark },
-  closeIcon: { fontSize: 18, fontWeight: '700', color: Colors.neutralMedium },
-  profileAvatarBox: { alignItems: 'center', marginVertical: Theme.spacing.sm },
+  // Profile modal
+  profileHero: { alignItems: 'center', paddingBottom: adminSpace.sm },
+  largeAvatarWrap: { width: 84, height: 84, marginBottom: adminSpace.sm },
   largeAvatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     backgroundColor: Colors.dark,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: Theme.spacing.xs,
+    overflow: 'hidden',
   },
-  largeAvatarText: { color: Colors.surface, fontSize: 24, fontWeight: '800' },
-  profileName: { fontSize: 18, fontWeight: '800', color: Colors.dark },
-  profileEmail: { fontSize: 13, color: Colors.neutralMedium, marginTop: 2 },
-  adminRoleBadge: {
-    backgroundColor: Colors.primaryLight,
-    paddingHorizontal: Theme.spacing.sm,
-    paddingVertical: 4,
-    borderRadius: Theme.borderRadius.full,
-    marginTop: Theme.spacing.xs,
+  largeAvatarImage: { width: 80, height: 80 },
+  largeAvatarText: { color: Colors.surface, fontSize: 30, fontWeight: '800' },
+  avatarUploadingOverlay: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(16,24,39,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  adminRoleBadgeText: { fontSize: 11, fontWeight: '800', color: Colors.primaryDark },
-  sectionHeaderTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: Colors.dark,
-    marginTop: Theme.spacing.md,
-    marginBottom: Theme.spacing.xs,
-  },
-  inputLabel: { fontSize: 12, fontWeight: '700', color: Colors.neutralMedium, marginTop: Theme.spacing.xs, marginBottom: 4 },
-  modalInput: {
-    height: 44,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: Theme.borderRadius.md,
-    paddingHorizontal: Theme.spacing.md,
-    fontSize: 14,
-    color: Colors.dark,
-    backgroundColor: Colors.background,
-  },
-  saveProfileBtn: {
+  cameraBadge: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: Colors.primary,
-    paddingVertical: Theme.spacing.sm + 4,
-    borderRadius: Theme.borderRadius.md,
+    borderWidth: 2,
+    borderColor: Colors.surface,
+    justifyContent: 'center',
     alignItems: 'center',
-    marginTop: Theme.spacing.md,
-    ...Theme.shadows.card,
   },
-  saveProfileBtnText: { color: Colors.surface, fontSize: 14, fontWeight: '700' },
-  modalDivider: { height: 1, backgroundColor: Colors.border, marginVertical: Theme.spacing.md },
-  logoutBtn: {
-    backgroundColor: Colors.errorBg,
-    borderWidth: 1,
-    borderColor: Colors.error,
-    paddingVertical: Theme.spacing.sm + 4,
-    borderRadius: Theme.borderRadius.md,
+  pictureActionsRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: adminSpace.sm },
+  pictureAction: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 36, paddingHorizontal: adminSpace.sm },
+  pictureActionText: { fontSize: 13, fontWeight: '700', color: Colors.primaryDark },
+  profileName: { fontSize: 18, fontWeight: '800', color: Colors.dark, marginTop: adminSpace.xs },
+  profileEmail: { fontSize: 13, color: MUTED_TEXT, marginTop: 2 },
+  roleBadge: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: Theme.spacing.xs,
+    gap: 5,
+    backgroundColor: Colors.successBg,
+    paddingHorizontal: adminSpace.md,
+    paddingVertical: 5,
+    borderRadius: adminRadius.pill,
+    marginTop: adminSpace.sm,
   },
-  logoutBtnText: { color: Colors.errorText, fontSize: 14, fontWeight: '800' },
+  roleBadgeText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.5, color: Colors.primaryDark },
 });
+
+const initialOf = (name: string) => (name ? name.charAt(0).toUpperCase() : 'A');
+
+function AlertRow({
+  tone,
+  icon,
+  title,
+  description,
+  ...touchProps
+}: TouchableOpacityProps & {
+  tone: Tone;
+  icon: AdminIconName;
+  title: string;
+  description: string;
+}) {
+  const t = toneColors[tone];
+  return (
+    <TouchableOpacity
+      activeOpacity={0.85}
+      style={[styles.rowCard, { borderLeftWidth: 4, borderLeftColor: t.solid }]}
+      {...touchProps}
+    >
+      <View style={[styles.iconTile, { backgroundColor: t.bg }]}>
+        <AdminIcon name={icon} size={20} color={t.fg} />
+      </View>
+      <View style={styles.rowText}>
+        <Text style={adminType.cardTitle}>{title}</Text>
+        <Text style={styles.rowSub}>{description}</Text>
+      </View>
+      <AdminIcon name="chevron-forward" size={16} color={MUTED_TEXT} />
+    </TouchableOpacity>
+  );
+}

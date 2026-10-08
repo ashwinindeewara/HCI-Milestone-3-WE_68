@@ -239,7 +239,8 @@ public class AdminService {
         String projectTitle = d.getProject() != null ? d.getProject() : "Arbitration Case";
 
         boolean isSuspensionAppeal = (d.getIssueType() != null && d.getIssueType().equalsIgnoreCase("Account Suspension"))
-                || (d.getProject() != null && d.getProject().toLowerCase().contains("account suspension"));
+                || (d.getProject() != null && (d.getProject().toLowerCase().contains("account suspension") || d.getProject().toLowerCase().contains("suspension appeal")))
+                || (d.getStatusType() != null && d.getStatusType().equalsIgnoreCase("review"));
 
         if (!isSuspensionAppeal) {
             boolean isSplit = resolution != null && (resolution.toUpperCase().contains("SPLIT_50_50") || resolution.contains("50/50") || resolution.toLowerCase().contains("equal escrow split"));
@@ -374,9 +375,12 @@ public class AdminService {
             m.put("target", a.getIpAddress() != null ? a.getIpAddress() : "127.0.0.1");
 
             String rawSev = a.getStatus() != null ? a.getStatus().toUpperCase() : "MEDIUM";
-            String severity = "Medium";
-            String severityType = "medium";
-            if (rawSev.contains("HIGH") || rawSev.contains("CRITICAL") || rawSev.contains("FLAGGED")) {
+            String severity;
+            String severityType;
+            if (rawSev.contains("REVIEWED") || rawSev.contains("DISMISSED")) {
+                severity = "Reviewed";
+                severityType = "reviewed";
+            } else if (rawSev.contains("HIGH") || rawSev.contains("CRITICAL") || rawSev.contains("FLAGGED")) {
                 severity = "High";
                 severityType = "high";
             } else if (rawSev.contains("MED") || rawSev.contains("WARN")) {
@@ -572,7 +576,13 @@ public class AdminService {
     }
 
     public void deleteSecurityAlert(String id) {
-        reviewSecurityAlert(id);
+        try {
+            Long logId = Long.parseLong(id);
+            securityLogRepository.deleteById(logId);
+            logAdminAudit("SECURITY_ALERT_DELETED", id, "Deleted security alert log ID: " + id);
+        } catch (Exception e) {
+            System.err.println("Failed to delete security log: " + e.getMessage());
+        }
     }
 
     public Transaction flagTransaction(String id, Map<String, String> payload) {
@@ -693,9 +703,6 @@ public class AdminService {
             throw new com.freelance.backend.exception.BadRequestException("IP address is required");
         }
         String ip = ipAddress.trim();
-        if (ip.equals("127.0.0.1") || ip.equals("0:0:0:0:0:0:0:1") || ip.equals("::1")) {
-            throw new com.freelance.backend.exception.BadRequestException("Cannot block localhost");
-        }
 
         String r = reason != null ? reason : "Security threat detected by admin";
 

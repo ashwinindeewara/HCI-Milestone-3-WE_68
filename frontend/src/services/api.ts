@@ -15,9 +15,9 @@ const GET_BASE_URL = () => {
     return envUrl;
   }
   if (Platform.OS === 'android') {
-    return 'http://10.0.2.2:8083/api';
+    return 'http://10.0.2.2:8080/api';
   }
-  return 'http://localhost:8083/api';
+  return 'http://localhost:8080/api';
 };
 
 export const API_BASE_URL = GET_BASE_URL();
