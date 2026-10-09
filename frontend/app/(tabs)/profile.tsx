@@ -127,6 +127,26 @@ export default function FreelancerProfileScreen() {
   const [newSkillText, setNewSkillText] = useState('');
   const [saveToast, setSaveToast] = useState(false);
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+  const [deleteAccountModalVisible, setDeleteAccountModalVisible] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+
+  const handleDeleteAccount = async () => {
+    const email = getCurrentUser()?.email || profile.email;
+    if (!email) return;
+    setDeletingAccount(true);
+    try {
+      await FreelancerApiService.deleteAccount(email);
+      setDeleteAccountModalVisible(false);
+      setLogoutModalVisible(false);
+      clearAuthSession();
+      router.replace('/login');
+    } catch {
+      setDeletingAccount(false);
+      setDeleteAccountModalVisible(false);
+      setSaveToast(false);
+      alert('We could not delete your account. Please try again.');
+    }
+  };
 
   // Fetch live profile from Spring Boot Backend on mount and focus
   useFocusEffect(
@@ -630,8 +650,47 @@ export default function FreelancerProfileScreen() {
               </TouchableOpacity>
 
               <TouchableOpacity
+                style={styles.modalDeleteBtn}
+                onPress={() => setDeleteAccountModalVisible(true)}
+              >
+                <Text style={styles.modalDeleteBtnText}>🗑️ Delete Profile</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
                 style={styles.modalCancelBtn}
                 onPress={() => setLogoutModalVisible(false)}
+              >
+                <Text style={styles.modalCancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
+        <Modal
+          visible={deleteAccountModalVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => !deletingAccount && setDeleteAccountModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Delete Profile?</Text>
+              <Text style={styles.modalSub}>
+                This permanently deletes your freelancer account and profile. This action cannot be undone.
+              </Text>
+              <TouchableOpacity
+                style={styles.modalDeleteConfirmBtn}
+                disabled={deletingAccount}
+                onPress={handleDeleteAccount}
+              >
+                <Text style={styles.modalDeleteConfirmText}>
+                  {deletingAccount ? 'Deleting...' : 'Yes, Delete Profile'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                disabled={deletingAccount}
+                onPress={() => setDeleteAccountModalVisible(false)}
               >
                 <Text style={styles.modalCancelBtnText}>Cancel</Text>
               </TouchableOpacity>
@@ -1179,6 +1238,34 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#991B1B',
+  },
+  modalDeleteBtn: {
+    width: '100%',
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#FFF7ED',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  modalDeleteBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#C2410C',
+  },
+  modalDeleteConfirmBtn: {
+    width: '100%',
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#DC2626',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  modalDeleteConfirmText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   modalCancelBtn: {
     width: '100%',

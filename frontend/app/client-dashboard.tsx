@@ -14,6 +14,8 @@ import { useLocalSearchParams } from 'expo-router';
 import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
 import { getSavedUserData } from '../src/services/authService';
+import { getUserSession } from '../src/services/storage';
+import { calculateMilestoneProgress, FreelancerApiService, getCurrentUser } from '../src/services/api';
 
 export default function ClientDashboardScreen() {
 
@@ -21,13 +23,17 @@ export default function ClientDashboardScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [upcomingProjects, setUpcomingProjects] = useState<any[]>([]);
   const [metrics, setMetrics] = useState({
     activeProjects: 3,
     pendingApprovals: 2,
     pendingPayments: 5600,
-    upcomingDeadlines: 4,
+    upcomingDeadlines: 0,
   });
   const currentUser = getSavedUserData();
+  const session = getUserSession();
+  const currentRole = String(session?.role || currentUser?.role || 'FREELANCER').toUpperCase();
 
   const getInitials = (fullName: string) => {
     return fullName
@@ -52,11 +58,59 @@ export default function ClientDashboardScreen() {
     return 'Good Night';
   };
 
+  const getDueDate = (project: any) => {
+    const value = project?.dueDate || project?.endDate;
+    if (!value) return null;
+    const date = new Date(`${String(value).slice(0, 10)}T00:00:00`);
+    return Number.isNaN(date.getTime()) ? null : date;
+  };
+
+  const formatDueDate = (project: any) => {
+    const date = getDueDate(project);
+    return date
+      ? date.toLocaleDateString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' })
+      : 'No deadline';
+  };
+
   const loadData = async () => {
     try {
-      //await ContractService.getDashboardMetrics();
+      const response = await FreelancerApiService.getClientProjects(
+        getCurrentUser()?.fullName || currentUser?.fullName
+      );
+      const clientProjects = Array.isArray(response.data) ? response.data : [];
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const deadlines = clientProjects
+        .filter((project: any) => {
+          const dueDate = getDueDate(project);
+          const status = String(project.status || '').toUpperCase();
+          return dueDate && dueDate >= today && status !== 'COMPLETED';
+        })
+        .sort((a: any, b: any) => getDueDate(a)!.getTime() - getDueDate(b)!.getTime());
+      setUpcomingProjects(deadlines);
+      setMetrics((current) => ({
+        ...current,
+        upcomingDeadlines: deadlines.length,
+      }));
+      const projectsWithProgress = await Promise.all(
+        clientProjects.slice(0, 2).map(async (project: any) => {
+          let progress = project.completionPercentage || 0;
+          try {
+            const milestoneResponse = await FreelancerApiService.getProjectMilestones(project.id);
+            if (Array.isArray(milestoneResponse.data)) {
+              progress = calculateMilestoneProgress(milestoneResponse.data);
+            }
+          } catch {
+            // Keep the persisted project value if milestone refresh is unavailable.
+          }
+          return { ...project, completionPercentage: progress };
+        })
+      );
+      setProjects(projectsWithProgress);
     } catch {
-      // Demo state fallback
+      setProjects([]);
+      setUpcomingProjects([]);
+      setMetrics((current) => ({ ...current, upcomingDeadlines: 0 }));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -64,8 +118,15 @@ export default function ClientDashboardScreen() {
   };
 
   useEffect(() => {
+    if (currentRole !== 'CLIENT') {
+      router.replace({
+        pathname: '/(tabs)/dashboard',
+        params: { role: currentRole },
+      });
+      return;
+    }
     loadData();
-  }, []);
+  }, [currentRole]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -101,16 +162,6 @@ export default function ClientDashboardScreen() {
               </View>
             </View>
 
-            {/* Bell Notification Badge */}
-            <TouchableOpacity
-              style={styles.bellBtn}
-              onPress={() => router.push('/(tabs)/notifications')}
-            >
-              <Text style={{ fontSize: 20 }}>🔔</Text>
-              <View style={styles.badgeDot}>
-                <Text style={styles.badgeText}>3</Text>
-              </View>
-            </TouchableOpacity>
           </View>
 
           {/* 2x2 Metric Summary Grid (Matching Screenshot 1) */}
@@ -146,7 +197,7 @@ export default function ClientDashboardScreen() {
           <View style={styles.quickActionsRow}>
             <TouchableOpacity
               style={styles.actionPillWhite}
-              onPress={() => router.push('/(tabs)/contracts')}
+              onPress={() => router.push('/client-find-talent')}
             >
               <Text style={styles.actionPillIcon}>🔍</Text>
               <Text style={styles.actionPillTextDark}>Find Talents</Text>
@@ -154,7 +205,7 @@ export default function ClientDashboardScreen() {
 
             <TouchableOpacity
               style={styles.actionPillWhite}
-              onPress={() => router.push('/(tabs)/escrow')}
+              onPress={() => router.push('/client-contracts')}
             >
               <Text style={styles.actionPillIcon}>+</Text>
               <Text style={styles.actionPillTextDark}>Disputes</Text>
@@ -162,7 +213,7 @@ export default function ClientDashboardScreen() {
 
             <TouchableOpacity
               style={styles.actionPillGreen}
-              onPress={() => router.push('/freelancer-disputes')}
+              onPress={() => router.push('/client-contracts')}
             >
               <Text style={styles.actionPillTextWhite}>Milestones</Text>
             </TouchableOpacity>
@@ -176,60 +227,59 @@ export default function ClientDashboardScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Project Card 1: Saas Dashboard Design */}
-          <TouchableOpacity
-            style={styles.projectCard}
-            onPress={() => router.push('/(tabs)/contracts')}
-            activeOpacity={0.85}
-          >
-            <View style={styles.projectCardHeader}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.projectTitle}>Saas Dashboard Design</Text>
-                <Text style={styles.clientName}>Freelancer: Sarah Johnson</Text>
+          {projects.map((project) => (
+            <TouchableOpacity
+              key={project.id}
+              style={styles.projectCard}
+              onPress={() => router.push('/client-contracts')}
+              activeOpacity={0.85}
+            >
+              <View style={styles.projectCardHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.projectTitle}>{project.title}</Text>
+                  <Text style={styles.clientName}>Freelancer: {project.freelancerName}</Text>
+                </View>
+                <View style={styles.escrowTag}>
+                  <Text style={styles.escrowTagText}>
+                    {project.inEscrowAmount ? `$${project.inEscrowAmount.toLocaleString()} Escrowed` : '$0 Escrowed'}
+                  </Text>
+                </View>
               </View>
-              <View style={styles.escrowTag}>
-                <Text style={styles.escrowTagText}>$4,800 Escrowed</Text>
+              <View style={styles.milestoneProgressRow}>
+                <Text style={styles.milestoneLabel}>{project.statusBadge || 'Project Progress'}</Text>
+                <Text style={styles.progressPercent}>{project.completionPercentage || 0}%</Text>
               </View>
-            </View>
-
-            <View style={styles.milestoneProgressRow}>
-              <Text style={styles.milestoneLabel}>Milestone: Interactive Prototype</Text>
-              <Text style={styles.progressPercent}>80%</Text>
-            </View>
-
-            {/* Green Progress Bar */}
-            <View style={styles.progressBarTrack}>
-              <View style={[styles.progressBarFill, { width: '80%' }]} />
-            </View>
-
-          </TouchableOpacity>
-
-          {/* Project Card 2: Mobile App Contract */}
-          <TouchableOpacity
-            style={styles.projectCard}
-            onPress={() => router.push('/(tabs)/contracts')}
-            activeOpacity={0.85}
-          >
-            <View style={styles.projectCardHeader}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.projectTitle}>iOS Mobile App Dev</Text>
-                <Text style={styles.clientName}>Freelancer: David Kim</Text>
+              <View style={styles.progressBarTrack}>
+                <View style={[styles.progressBarFill, { width: `${project.completionPercentage || 0}%` }]} />
               </View>
-              <View style={styles.escrowTag}>
-                <Text style={styles.escrowTagText}>$3,800 Escrowed</Text>
-              </View>
-            </View>
+            </TouchableOpacity>
+          ))}
 
-            <View style={styles.milestoneProgressRow}>
-              <Text style={styles.milestoneLabel}>Milestone: API Setup & Auth</Text>
-              <Text style={styles.progressPercent}>100%</Text>
-            </View>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>Upcoming Deadlines</Text>
+          </View>
 
-            {/* Green Progress Bar */}
-            <View style={styles.progressBarTrack}>
-              <View style={[styles.progressBarFill, { width: '100%' }]} />
-            </View>
-          </TouchableOpacity>
+          {upcomingProjects.length > 0 ? (
+            upcomingProjects.map((project) => (
+              <TouchableOpacity
+                key={`deadline-${project.id}`}
+                style={styles.deadlineCard}
+                onPress={() => router.push('/client-contracts')}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.deadlineIcon}>⏰</Text>
+                <View style={styles.deadlineContent}>
+                  <Text style={styles.deadlineTitle}>{project.title || 'Project deadline'}</Text>
+                  <Text style={styles.deadlineDescription}>
+                    {project.statusBadge || 'Project milestone'}
+                  </Text>
+                </View>
+                <Text style={styles.deadlineDate}>{formatDueDate(project)}</Text>
+              </TouchableOpacity>
+            ))
+          ) : (
+            <Text style={styles.emptyDeadlineText}>No upcoming project deadlines.</Text>
+          )}
 
           {/* Recent Activity List Section */}
           <View style={styles.sectionHeaderRow}>
@@ -355,32 +405,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: Colors.dark,
   },
-  bellBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  badgeDot: {
-    position: 'absolute',
-    top: 4,
-    right: 4,
-    backgroundColor: Colors.error,
-    borderRadius: 8,
-    width: 16,
-    height: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  badgeText: {
-    color: Colors.surface,
-    fontSize: 10,
-    fontWeight: '700',
-  },
   gridRow: {
     flexDirection: 'row',
     gap: Theme.spacing.sm,
@@ -486,6 +510,47 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
     ...Theme.shadows.card,
+  },
+  deadlineCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+    borderRadius: Theme.borderRadius.md,
+    padding: Theme.spacing.md,
+    marginBottom: Theme.spacing.sm,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  deadlineIcon: {
+    fontSize: 20,
+    marginRight: Theme.spacing.sm,
+  },
+  deadlineContent: {
+    flex: 1,
+  },
+  deadlineTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.dark,
+  },
+  deadlineDescription: {
+    fontSize: 12,
+    color: Colors.neutralMedium,
+    marginTop: 2,
+  },
+  deadlineDate: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.primaryDark,
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: Theme.borderRadius.sm,
+  },
+  emptyDeadlineText: {
+    color: Colors.neutralMedium,
+    fontSize: 13,
+    marginBottom: Theme.spacing.md,
   },
   projectCardHeader: {
     flexDirection: 'row',

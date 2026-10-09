@@ -23,7 +23,7 @@ public class ClientService {
         this.userRepository = userRepository;
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public ClientProfileResponse getClientProfile(Long userId) {
 
         // Get user
@@ -34,8 +34,12 @@ public class ClientService {
         // Get client profile
         ClientProfile profile = clientProfileRepository
                 .findByUserId(userId)
-                .orElseThrow(() ->
-                        new RuntimeException("Client profile not found"));
+                .orElseGet(() -> {
+                    ClientProfile newProfile = new ClientProfile();
+                    newProfile.setUser(user);
+                    newProfile.setMemberSince(java.time.LocalDate.now());
+                    return clientProfileRepository.save(newProfile);
+                });
 
         // Build response
         ClientProfileResponse response = new ClientProfileResponse();
@@ -73,8 +77,12 @@ public class ClientService {
 
         ClientProfile profile = clientProfileRepository
                 .findByUserId(userId)
-                .orElseThrow(() ->
-                        new RuntimeException("Client profile not found"));
+                .orElseGet(() -> {
+                    ClientProfile newProfile = new ClientProfile();
+                    newProfile.setUser(user);
+                    newProfile.setMemberSince(java.time.LocalDate.now());
+                    return clientProfileRepository.save(newProfile);
+                });
 
         profile.setLocation(request.getLocation());
         profile.setCompanyName(request.getCompanyName());

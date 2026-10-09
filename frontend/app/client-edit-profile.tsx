@@ -33,46 +33,7 @@ interface ClientProfileData {
   memberSince?: number | string;
   projectsPosted?: number;
 
-  skills?: string[];
 }
-
-/*
- * These values should match your backend SkillType enum.
- *
- * Example backend:
- *
- * public enum SkillType {
- *     FIGMA,
- *     UI_DESIGN,
- *     UX_RESEARCH,
- *     PROTOTYPING,
- *     DESIGN_SYSTEMS,
- *     GRAPHIC_DESIGN,
- *     WEB_DESIGN,
- *     PRODUCT_DESIGN
- * }
- */
-const SKILL_OPTIONS = [
-  'FIGMA',
-  'UI_DESIGN',
-  'UX_RESEARCH',
-  'PROTOTYPING',
-  'DESIGN_SYSTEMS',
-  'GRAPHIC_DESIGN',
-  'WEB_DESIGN',
-  'PRODUCT_DESIGN',
-];
-
-const formatSkillName = (skill: string) => {
-  return skill
-    .toLowerCase()
-    .split('_')
-    .map(
-      (word) =>
-        word.charAt(0).toUpperCase() + word.slice(1)
-    )
-    .join(' ');
-};
 
 export default function ClientEditProfileScreen() {
   const router = useRouter();
@@ -87,7 +48,6 @@ export default function ClientEditProfileScreen() {
   const [location, setLocation] = useState('');
   const [companyName, setCompanyName] = useState('');
   const [about, setAbout] = useState('');
-  const [skills, setSkills] = useState<string[]>([]);
 
   /*
    * Get currently logged-in user and load
@@ -128,8 +88,6 @@ export default function ClientEditProfileScreen() {
       setLocation(data.location || '');
       setCompanyName(data.companyName || '');
       setAbout(data.about || '');
-      setSkills(data.skills || []);
-
     } catch (error: any) {
       console.error(
         'Failed to load client profile:',
@@ -144,23 +102,6 @@ export default function ClientEditProfileScreen() {
     } finally {
       setLoading(false);
     }
-  };
-
-  /*
-   * Add/remove a skill.
-   */
-  const toggleSkill = (skill: string) => {
-    setSkills((currentSkills) => {
-      const exists = currentSkills.includes(skill);
-
-      if (exists) {
-        return currentSkills.filter(
-          (item) => item !== skill
-        );
-      }
-
-      return [...currentSkills, skill];
-    });
   };
 
   /*
@@ -194,7 +135,6 @@ export default function ClientEditProfileScreen() {
         location: location.trim(),
         companyName: companyName.trim(),
         about: about.trim(),
-        skills,
       };
 
       console.log('UPDATE CLIENT PROFILE:', requestBody );
@@ -498,69 +438,6 @@ export default function ClientEditProfileScreen() {
 
           </View>
 
-          {/* ================= SKILLS ================= */}
-
-          <View style={styles.section}>
-
-            <Text style={styles.sectionTitle}>
-              Skills
-            </Text>
-
-            <Text style={styles.sectionDescription}>
-              Select the skills that best describe you
-              as a client.
-            </Text>
-
-            <View style={styles.skillsContainer}>
-
-              {SKILL_OPTIONS.map((skill) => {
-
-                const selected =
-                  skills.includes(skill);
-
-                return (
-                  <TouchableOpacity
-                    key={skill}
-                    onPress={() =>
-                      toggleSkill(skill)
-                    }
-                    activeOpacity={0.8}
-                    style={[
-                      styles.skillChip,
-                      selected &&
-                        styles.skillChipSelected,
-                    ]}
-                  >
-
-                    {selected && (
-                      <Ionicons
-                        name="checkmark"
-                        size={12}
-                        color={Colors.primary}
-                        style={
-                          styles.skillCheck
-                        }
-                      />
-                    )}
-
-                    <Text
-                      style={[
-                        styles.skillText,
-                        selected &&
-                          styles.skillTextSelected,
-                      ]}
-                    >
-                      {formatSkillName(skill)}
-                    </Text>
-
-                  </TouchableOpacity>
-                );
-              })}
-
-            </View>
-
-          </View>
-
           {/* ================= SAVE BUTTON ================= */}
 
           <TouchableOpacity
@@ -693,7 +570,7 @@ export default function ClientEditProfileScreen() {
           <TouchableOpacity
             style={styles.tabItem}
             onPress={() =>
-              router.push('/(tabs)/find-talent')
+              router.push('/client-find-talent')
             }
             activeOpacity={0.8}
           >

@@ -25,7 +25,6 @@ interface ClientProfileData {
   companyName?: string;
   about?: string;
   status?: string;
-  skills?: string[];
   projectsPosted?: number;
   memberSince?: string | number;
   createdAt?: string;
@@ -74,7 +73,6 @@ export default function ClientProfileScreen() {
     about: profile?.about || 'Creative UI/UX Designer with a strong command of Figma, usability research, and modern design workflows. Dedicated to crafting accessible, user-tested interfaces that delight users and drive business goals',
     status: profile?.status || 'Available',
     projectsPosted: profile?.projectsPosted ?? 0,
-    skills: profile?.skills,
   };
 
   const getInitials = (name?: string) => {
@@ -136,7 +134,7 @@ export default function ClientProfileScreen() {
   };
 
   const handleFindTalent = () => {
-    router.push('/(tabs)/find-talent');
+    router.push('/client-find-talent');
   };
 
   const handlePayments = () => {
@@ -295,28 +293,6 @@ export default function ClientProfileScreen() {
             <Text style={styles.aboutText}>
               {clientProfile.about}
             </Text>
-          </View>
-
-          {/* ================= SKILLS ================= */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>
-              Skills
-            </Text>
-
-            <View style={styles.skillsContainer}>
-              {clientProfile.skills?.map(
-                (skill, index) => (
-                  <View
-                    key={`${skill}-${index}`}
-                    style={styles.skillChip}
-                  >
-                    <Text style={styles.skillText}>
-                      {formatSkillName(skill)}
-                    </Text>
-                  </View>
-                )
-              )}
-            </View>
           </View>
 
           {/* ================= EDIT PROFILE ================= */}

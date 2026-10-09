@@ -160,7 +160,7 @@ export default function ClientFindTalentScreen() {
 
   const handleInvite = (talent: Freelancer) => {
     router.push({
-      pathname: '/(tabs)/create-project',
+      pathname: '/client-create-project',
       params: {
         talentId: String(talent.id),
       },

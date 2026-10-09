@@ -106,6 +106,20 @@ export default function TabsLayout() {
           headerTitle: 'Project Files',
         }}
       />
+      <Tabs.Screen
+        name="create-project"
+        options={{
+          href: null,
+          headerTitle: 'Create Project',
+        }}
+      />
+      <Tabs.Screen
+        name="talent-profile"
+        options={{
+          href: null,
+          headerTitle: 'Talent Profile',
+        }}
+      />
     </Tabs>
   );
 }

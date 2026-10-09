@@ -13,7 +13,7 @@ import {
 import { useRouter } from 'expo-router';
 import Colors from '../../src/constants/colors';
 import Theme from '../../src/constants/theme';
-import { FreelancerApiService, getCurrentUser } from '../../src/services/api';
+import { calculateMilestoneProgress, FreelancerApiService, getCurrentUser } from '../../src/services/api';
 
 interface ProjectDisplayItem {
   id: string;
@@ -47,8 +47,18 @@ export default function ContractsScreen() {
       const res = await FreelancerApiService.getFreelancerProjects(activeName, activeEmail);
       if (res.data && Array.isArray(res.data)) {
         if (res.data.length > 0) {
-          const formatted: ProjectDisplayItem[] = res.data.map((p: any) => {
-            const isCompleted = p.status === 'COMPLETED' || (p.completionPercentage ?? 0) >= 100;
+          const formatted: ProjectDisplayItem[] = await Promise.all(res.data.map(async (p: any) => {
+            const contractId = p.contractId || p.id;
+            let progress = p.completionPercentage ?? 0;
+            try {
+              const milestoneResponse = await FreelancerApiService.getContractMilestones(contractId);
+              if (Array.isArray(milestoneResponse.data)) {
+                progress = calculateMilestoneProgress(milestoneResponse.data);
+              }
+            } catch {
+              // Keep the persisted project value if milestone refresh is unavailable.
+            }
+            const isCompleted = p.status === 'COMPLETED' || progress >= 100;
             const escrowText = isCompleted
               ? 'Completed & Paid'
               : p.inEscrowAmount
@@ -57,16 +67,16 @@ export default function ContractsScreen() {
 
             return {
               id: p.id,
-              contractId: p.contractId || p.id,
+              contractId,
               title: p.title,
               client: p.clientName,
               milestone: p.statusBadge || (isCompleted ? 'Final Delivery' : 'In Progress'),
-              progress: p.completionPercentage ?? (isCompleted ? 100 : 0),
+              progress,
               escrowTag: escrowText,
               dueDate: p.dueDate || 'Due soon',
               status: isCompleted ? 'Completed' : 'Active',
             };
-          });
+          }));
           setProjects(formatted);
         } else {
           setProjects([]);

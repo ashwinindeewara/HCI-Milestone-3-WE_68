@@ -41,9 +41,18 @@ public class UserController {
         return ResponseEntity.ok(userService.updateUserRole(id, role));
     }
 
-    @DeleteMapping("/{id}")
+    @DeleteMapping("/{id:\\d+}")
     public ResponseEntity<?> deleteUser(@PathVariable Long id) {
         userService.deleteUser(id);
         return ResponseEntity.ok().build();
+    }
+
+    @DeleteMapping("/delete-by-email")
+    public ResponseEntity<?> deleteUserByEmail(@RequestParam String email) {
+        if (email == null || email.isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
+        userService.deleteUserByEmail(email);
+        return ResponseEntity.noContent().build();
     }
 }

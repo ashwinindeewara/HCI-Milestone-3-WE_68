@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,44 +10,42 @@ import {
 import { useRouter } from 'expo-router';
 import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
+import { FreelancerApiService, calculateMilestoneProgress, getCurrentUser } from '../src/services/api';
 
 export default function ClientContractsScreen() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState('All');
 
-  const projects = [
-    {
-      id: '1',
-      title: 'E-Commerce Redesign',
-      freelancer: 'Anne kyle',
-      milestone: 'UI Design Phase',
-      progress: 65,
-      escrowTag: '$2,400 In Escrow',
-      dueDate: 'Due Oct 15, 2024',
-      status: 'Active',
-    },
-    {
-      id: '2',
-      title: 'Saas Dashboard Design',
-      freelancer: 'Sarah Johnson',
-      milestone: 'Interactive Prototype',
-      progress: 80,
-      escrowTag: '$4,800 Escrowed',
-      dueDate: 'Due Nov 01, 2024',
-      status: 'Active',
-    },
-    {
-      id: '3',
-      title: 'Marketing Brand Strategy',
-      freelancer: 'David Kim',
-      milestone: 'Api Setup & Auth',
-      progress: 100,
-      escrowTag: '$8, 000 Escrowed',
-      dueDate: 'Due Sep 30, 2024',
-      status: 'Completed',
-    },
-  ];
+  const [projects, setProjects] = useState<any[]>([]);
+
+  useEffect(() => {
+    const loadProjects = async () => {
+      try {
+        const response = await FreelancerApiService.getClientProjects(getCurrentUser()?.fullName);
+        const loaded = await Promise.all((response.data || []).map(async (project: any) => {
+          let progress = project.completionPercentage || 0;
+          try {
+            const milestones = await FreelancerApiService.getProjectMilestones(project.id);
+            if (Array.isArray(milestones.data)) progress = calculateMilestoneProgress(milestones.data);
+          } catch {}
+          return {
+            ...project,
+            freelancer: project.freelancerName,
+            progress,
+            status: progress >= 100 ? 'Completed' : project.status === 'PENDING' ? 'Pending' : 'Active',
+            escrowTag: project.inEscrowAmount ? `$${project.inEscrowAmount.toLocaleString()} In Escrow` : '$0 In Escrow',
+            milestone: project.currentMilestoneTitle || 'Project milestones',
+            dueDate: project.dueDate ? `Due ${project.dueDate}` : 'Due soon',
+          };
+        }));
+        setProjects(loaded);
+      } catch {
+        setProjects([]);
+      }
+    };
+    loadProjects();
+  }, []);
 
   const filteredProjects = projects.filter((p) => {
     const matchesFilter =
@@ -111,7 +109,7 @@ export default function ClientContractsScreen() {
             <TouchableOpacity
               key={item.id}
               style={styles.projectCard}
-              onPress={() => router.push({ pathname: '/client-milestone-review', params: { contractId: `C-10${item.id}` } })}
+              onPress={() => router.push({ pathname: '/client-milestone-review', params: { contractId: item.contractId || item.id } })}
               activeOpacity={0.85}
             >
               <View style={styles.cardHeader}>
