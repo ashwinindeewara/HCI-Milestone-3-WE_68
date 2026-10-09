@@ -10,4 +10,5 @@ import java.util.List;
 public interface DisputeMessageRepository extends JpaRepository<DisputeMessage, Long> {
     List<DisputeMessage> findByDisputeIdOrderByCreatedAtAsc(String disputeId);
     List<DisputeMessage> findByDisputeIdOrderByIdAsc(String disputeId);
+    void deleteByDisputeId(String disputeId);
 }
