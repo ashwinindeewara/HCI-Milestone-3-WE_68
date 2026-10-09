@@ -614,7 +614,7 @@ export default function ClientDashboardScreen() {
               <Text style={styles.tabLabel}>Find Talent</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-reports')}>
+            <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-payment-list')}>
               <Text style={styles.tabIcon}>💳</Text>
               <Text style={styles.tabLabel}>Payments</Text>
             </TouchableOpacity>
