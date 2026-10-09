@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -7,6 +7,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -17,6 +18,14 @@ import apiClient from '../src/services/api';
 import { getSavedUserData } from '../src/services/authService';
 
 type Raw = Record<string, any>;
+
+type ClientContract = {
+  id: string;
+  projectId: string;
+  title: string;
+  freelancerName: string;
+  totalBudget: number;
+};
 
 type DisputeCase = {
   id: string;
@@ -73,13 +82,24 @@ const mapDispute = (item: Raw, index: number): DisputeCase => {
     id: firstText(item.id, item.disputeId, `dispute-${index + 1}`),
     contractId,
     projectId,
-    projectTitle: firstText(item.projectTitle, item.projectName, item.title, item.project?.title, item.contract?.title, 'Untitled project'),
+    projectTitle: firstText(item.projectTitle, item.projectName, item.project?.title, (typeof item.project === 'string' ? item.project : ''), item.title, item.contract?.title, 'Untitled project'),
     freelancerName: firstText(item.freelancerName, item.freelancer?.fullName, item.freelancer?.name, 'Freelancer not assigned'),
     status: normalizeStatus(item.status ?? item.disputeStatus),
     filedDate: firstText(item.filedAt, item.filedDate, item.createdAt, item.createdDate),
     disputedAmount: amountValue(item.disputedAmount ?? item.amount ?? item.claimAmount),
-    reason: firstText(item.reason, item.category, item.title, 'Project dispute'),
+    reason: firstText(item.reason, item.issueType, item.category, item.title, 'Project dispute'),
     description: firstText(item.description, item.details, item.statement, item.reasonDescription),
+  };
+};
+
+const mapContract = (item: Raw): ClientContract => {
+  const id = firstText(item.id, item.contractId);
+  return {
+    id,
+    projectId: firstText(item.projectId, item.project?.id, id ? `PRJ-${id}` : ''),
+    title: firstText(item.title, item.projectTitle, item.projectName, 'Untitled project'),
+    freelancerName: firstText(item.freelancerName, item.freelancer?.fullName, item.freelancer?.name, 'Freelancer'),
+    totalBudget: amountValue(item.totalBudget ?? item.budget),
   };
 };
 
@@ -87,14 +107,24 @@ export default function ClientDisputesScreen() {
   const router = useRouter();
   const savedUser = getSavedUserData();
   const clientName = firstText(savedUser?.company, savedUser?.fullName, savedUser?.email);
+  const clientEmail = firstText(savedUser?.email);
 
   const [cases, setCases] = useState<DisputeCase[]>([]);
+  const [contracts, setContracts] = useState<ClientContract[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
+  const [fileModalVisible, setFileModalVisible] = useState(false);
   const [caseModalVisible, setCaseModalVisible] = useState(false);
   const [selectedCase, setSelectedCase] = useState<DisputeCase | null>(null);
+  const [selectedContractId, setSelectedContractId] = useState('');
+  const [projectDropdownOpen, setProjectDropdownOpen] = useState(false);
+  const [reason, setReason] = useState('Payment or deliverable issue');
+  const [disputeAmount, setDisputeAmount] = useState('');
+  const [description, setDescription] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState('');
 
   const loadData = useCallback(async (isRefresh = false) => {
     if (!clientName) {
@@ -109,17 +139,15 @@ export default function ClientDisputesScreen() {
     setErrorMessage('');
 
     try {
-      // Expected backend endpoint: GET /api/disputes/client/{clientName}
+      // Client-scoped endpoint backed by disputes.client_name.
       const response = await apiClient.get(
         `/disputes/client/${encodeURIComponent(clientName)}`,
         { timeout: 15000 },
       );
+      console.log('[ClientDisputes] Client-scoped disputes response:', response.data);
       const mapped = unwrapList(response.data).map(mapDispute);
       setCases(mapped);
     } catch (error: any) {
-      console.error('[ClientDisputes] Failed to load disputes:', error);
-      console.error('URL:', error?.config?.url);
-      console.error('Base URL:', error?.config?.baseURL);
       console.error('Status:', error?.response?.status);
       console.error('Response:', error?.response?.data);
       setErrorMessage(
@@ -145,6 +173,101 @@ export default function ClientDisputesScreen() {
     [cases],
   );
 
+  const selectedContract = useMemo(
+    () => contracts.find((item) => item.id === selectedContractId) ?? null,
+    [contracts, selectedContractId],
+  );
+
+  const openFileModal = async () => {
+    setFormError('');
+    setSelectedContractId('');
+    setProjectDropdownOpen(false);
+    setDisputeAmount('');
+    setDescription('');
+    setFileModalVisible(true);
+
+    if (!clientName) {
+      setFormError('Could not identify the logged-in client. Please sign in again.');
+      return;
+    }
+
+    try {
+      // Reuse existing client-contracts endpoint to populate the project selector.
+      const response = await apiClient.get(
+        `/contracts/client/${encodeURIComponent(clientName)}`,
+        { timeout: 15000 },
+      );
+      const loadedContracts = unwrapList(response.data)
+        .map(mapContract)
+        .filter((item) => item.id && item.title);
+      setContracts(loadedContracts);
+      if (loadedContracts.length === 0) {
+        setFormError('No projects were returned for this client. Create a project before filing a dispute.');
+      }
+    } catch (error: any) {
+      console.error('[ClientDisputes] Failed to load client contracts:', error);
+      setFormError(error?.response?.data?.message ?? 'Could not load your projects. Please try again.');
+    }
+  };
+
+  const submitDispute = async () => {
+    setFormError('');
+    if (!selectedContract) {
+      setFormError('Select the project related to this dispute.');
+      return;
+    }
+    if (!reason.trim()) {
+      setFormError('Enter a reason for the dispute.');
+      return;
+    }
+    if (!description.trim()) {
+      setFormError('Describe the issue so the mediation team can review it.');
+      return;
+    }
+    const amount = Number(disputeAmount);
+    if (disputeAmount.trim() && (!Number.isFinite(amount) || amount < 0)) {
+      setFormError('Enter a valid disputed amount, or leave it blank.');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      // Expected backend endpoint: POST /api/disputes
+      const response = await apiClient.post('/disputes', {
+        clientName,
+        clientEmail,
+        contractId: selectedContract.id,
+        projectId: selectedContract.projectId,
+        project: selectedContract.title,
+        freelancerName: selectedContract.freelancerName,
+        issueType: reason.trim(),
+        description: description.trim(),
+        amount: disputeAmount.trim() ? amount : 0,
+      }, { timeout: 15000 });
+
+      setFileModalVisible(false);
+      const newCase = response.data ? mapDispute(response.data) : null;
+      if (newCase?.id) setCases((current) => [newCase, ...current]);
+      await loadData(true);
+      if (!newCase?.id) {
+        // Still show the case list after a successful response; the server may only return 204.
+      }
+      console.log(response.data);
+    } catch (error: any) {
+        console.log(response.data);
+      console.error('[ClientDisputes] Failed to file dispute:', error);
+      setFormError(
+        error?.response?.data?.message ??
+        error?.response?.data?.error ??
+        (error?.response?.status === 404
+          ? 'The backend filing endpoint is not available yet. Add POST /api/disputes.'
+          : error?.message ?? 'Unable to file this dispute. Please try again.'),
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const openCase = (item: DisputeCase) => {
     setSelectedCase(item);
     setCaseModalVisible(true);
@@ -163,7 +286,7 @@ export default function ClientDisputesScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Go back">
+        <TouchableOpacity style={styles.backButton} onPress={() => router.push('/client-dashboard')} accessibilityRole="button" accessibilityLabel="Go back">
           <Ionicons name="arrow-back" size={19} color="#101828" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Disputes</Text>
@@ -175,13 +298,7 @@ export default function ClientDisputesScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadData(true)} tintColor={Colors.primary} />}
         showsVerticalScrollIndicator={false}
       >
-        <TouchableOpacity
-          style={styles.fileDisputeCard}
-          onPress={() => router.push('/client-create-dispute')}
-          activeOpacity={0.85}
-          accessibilityRole="button"
-          accessibilityLabel="File a dispute"
-        >
+        <TouchableOpacity style={styles.fileDisputeCard} onPress={openFileModal} activeOpacity={0.85}>
           <View style={styles.alertIconWrap}>
             <View style={styles.alertDot} />
           </View>
@@ -204,10 +321,10 @@ export default function ClientDisputesScreen() {
             <ActivityIndicator color={Colors.primary} size="small" />
             <Text style={styles.stateText}>Loading your disputes...</Text>
           </View>
-        ) : errorMessage && activeCases.length > 0 ? (
+        ) : errorMessage ? (
           <View style={styles.stateCard}>
             <Ionicons name="alert-circle-outline" size={24} color="#D92D20" />
-            <Text style={styles.stateTitle}>Unable to refresh disputes</Text>
+            <Text style={styles.stateTitle}>Unable to load disputes</Text>
             <Text style={styles.stateText}>{errorMessage}</Text>
             <TouchableOpacity style={styles.retryButton} onPress={() => loadData()}>
               <Text style={styles.retryButtonText}>Retry</Text>
@@ -217,6 +334,7 @@ export default function ClientDisputesScreen() {
           <View style={styles.emptyCard}>
             <View style={styles.emptyIcon}><Ionicons name="shield-checkmark-outline" size={25} color="#16A34A" /></View>
             <Text style={styles.stateTitle}>No active disputes</Text>
+            <Text style={styles.stateText}>Your open mediation cases will appear here. Use “File a Dispute” if you need help resolving a project issue.</Text>
           </View>
         ) : (
           <View style={styles.caseList}>
@@ -252,6 +370,127 @@ export default function ClientDisputesScreen() {
           </View>
         )}
       </ScrollView>
+
+      <Modal visible={fileModalVisible} transparent animationType="slide" onRequestClose={() => setFileModalVisible(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>File a Dispute</Text>
+                <Text style={styles.modalSubtitle}>Tell us which project needs mediation.</Text>
+              </View>
+              <TouchableOpacity onPress={() => setFileModalVisible(false)} style={styles.modalClose} accessibilityLabel="Close form">
+                <Ionicons name="close" size={19} color="#344054" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              <Text style={styles.fieldLabel}>Project</Text>
+              {contracts.length === 0 ? (
+                <Text style={styles.noProjectsText}>Loading projects or no projects are available.</Text>
+              ) : (
+                <View style={styles.projectDropdownContainer}>
+                  <TouchableOpacity
+                    style={[styles.projectDropdownTrigger, projectDropdownOpen && styles.projectDropdownTriggerOpen]}
+                    onPress={() => setProjectDropdownOpen((open) => !open)}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Choose a project"
+                    accessibilityState={{ expanded: projectDropdownOpen }}
+                  >
+                    <View style={styles.projectDropdownSelectedText}>
+                      <Text
+                        style={selectedContract ? styles.projectDropdownLabel : styles.projectDropdownPlaceholder}
+                        numberOfLines={1}
+                      >
+                        {selectedContract ? selectedContract.title : 'Select a project'}
+                      </Text>
+                      {selectedContract ? (
+                        <Text style={styles.projectChoiceSubtitle} numberOfLines={1}>
+                          {selectedContract.freelancerName}
+                        </Text>
+                      ) : null}
+                    </View>
+                    <Ionicons
+                      name={projectDropdownOpen ? 'chevron-up' : 'chevron-down'}
+                      size={17}
+                      color="#667085"
+                    />
+                  </TouchableOpacity>
+
+                  {projectDropdownOpen && (
+                    <View style={styles.projectDropdownMenu}>
+                      <ScrollView nestedScrollEnabled style={styles.projectDropdownList} keyboardShouldPersistTaps="handled">
+                        {contracts.map((contract) => {
+                          const selected = selectedContractId === contract.id;
+                          return (
+                            <TouchableOpacity
+                              key={contract.id}
+                              style={[styles.projectDropdownOption, selected && styles.projectDropdownOptionSelected]}
+                              onPress={() => {
+                                setSelectedContractId(contract.id);
+                                setProjectDropdownOpen(false);
+                                if (!disputeAmount && contract.totalBudget > 0) {
+                                  setDisputeAmount(String(contract.totalBudget));
+                                }
+                              }}
+                              activeOpacity={0.8}
+                            >
+                              <View style={styles.projectDropdownSelectedText}>
+                                <Text style={styles.projectDropdownLabel} numberOfLines={1}>{contract.title}</Text>
+                                <Text style={styles.projectChoiceSubtitle} numberOfLines={1}>{contract.freelancerName}</Text>
+                              </View>
+                              {selected ? <Ionicons name="checkmark" size={17} color={Colors.primary} /> : null}
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </ScrollView>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              <Text style={styles.fieldLabel}>Reason</Text>
+              <TextInput
+                value={reason}
+                onChangeText={setReason}
+                placeholder="e.g. Missed project deadline"
+                placeholderTextColor="#98A2B3"
+                style={styles.input}
+              />
+
+              <Text style={styles.fieldLabel}>Disputed Amount (USD)</Text>
+              <TextInput
+                value={disputeAmount}
+                onChangeText={setDisputeAmount}
+                keyboardType="decimal-pad"
+                placeholder="0.00"
+                placeholderTextColor="#98A2B3"
+                style={styles.input}
+              />
+
+              <Text style={styles.fieldLabel}>Describe the issue</Text>
+              <TextInput
+                value={description}
+                onChangeText={setDescription}
+                placeholder="Add details to help the mediation team review your case..."
+                placeholderTextColor="#98A2B3"
+                style={[styles.input, styles.multilineInput]}
+                multiline
+                textAlignVertical="top"
+              />
+
+              {formError ? <Text style={styles.formError}>{formError}</Text> : null}
+              <TouchableOpacity style={[styles.submitButton, submitting && styles.buttonDisabled]} onPress={submitDispute} disabled={submitting}>
+                {submitting ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.submitButtonText}>Submit Dispute</Text>}
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.cancelButton} onPress={() => setFileModalVisible(false)}>
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       <Modal visible={caseModalVisible} transparent animationType="fade" onRequestClose={() => setCaseModalVisible(false)}>
         <View style={styles.modalBackdrop}>
@@ -344,12 +583,31 @@ const styles = StyleSheet.create({
   retryButton: { marginTop: 5, paddingHorizontal: 20, paddingVertical: 8, borderRadius: 7, backgroundColor: Colors.primary },
   retryButtonText: { color: '#FFFFFF', fontSize: 10, fontWeight: '800' },
   modalBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(16,24,40,0.40)' },
+  modalSheet: { maxHeight: '88%', backgroundColor: '#FFFFFF', borderTopLeftRadius: 18, borderTopRightRadius: 18, paddingHorizontal: 16, paddingTop: 17, paddingBottom: 20 },
   caseDetailsSheet: { backgroundColor: '#FFFFFF', marginHorizontal: 18, padding: 16, borderRadius: 15, maxHeight: '85%' },
   modalHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 },
   modalTitle: { color: '#101828', fontSize: 16, fontWeight: '900' },
+  modalSubtitle: { color: '#667085', fontSize: 10, marginTop: 4 },
   modalClose: { width: 30, height: 30, borderRadius: 15, backgroundColor: '#F2F4F7', alignItems: 'center', justifyContent: 'center' },
+  fieldLabel: { marginTop: 10, marginBottom: 6, color: '#344054', fontSize: 10, fontWeight: '800' },
+  noProjectsText: { color: '#667085', fontSize: 10, lineHeight: 15 },
+  projectDropdownContainer: { position: 'relative', zIndex: 10 },
+  projectDropdownTrigger: { minHeight: 43, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingHorizontal: 11, paddingVertical: 8, borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 8, backgroundColor: '#FFFFFF' },
+  projectDropdownTriggerOpen: { borderColor: Colors.primary },
+  projectDropdownSelectedText: { flex: 1, minWidth: 0 },
+  projectDropdownLabel: { color: '#101828', fontSize: 11, fontWeight: '700' },
+  projectDropdownPlaceholder: { color: '#98A2B3', fontSize: 11 },
+  projectDropdownMenu: { marginTop: 4, borderWidth: 1, borderColor: '#EAECF0', borderRadius: 8, backgroundColor: '#FFFFFF', overflow: 'hidden' },
+  projectDropdownList: { maxHeight: 180 },
+  projectDropdownOption: { minHeight: 45, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 11, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F2F4F7' },
+  projectDropdownOptionSelected: { backgroundColor: '#F0FDF4' },
+  projectChoiceSubtitle: { color: '#667085', fontSize: 9, marginTop: 3 },
+  input: { minHeight: 40, borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 9, color: '#101828', fontSize: 11, backgroundColor: '#FFFFFF' },
+  multilineInput: { minHeight: 88 },
+  formError: { color: '#B42318', fontSize: 10, lineHeight: 15, marginTop: 10 },
   submitButton: { minHeight: 43, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.primary, borderRadius: 9, marginTop: 15, paddingHorizontal: 12 },
   submitButtonText: { color: '#FFFFFF', fontSize: 11, fontWeight: '800' },
+  buttonDisabled: { opacity: 0.6 },
   cancelButton: { minHeight: 38, alignItems: 'center', justifyContent: 'center', marginTop: 7, borderRadius: 9, borderWidth: 1, borderColor: '#EAECF0' },
   cancelButtonText: { color: '#344054', fontSize: 10, fontWeight: '800' },
   caseDetailsTitle: { color: '#101828', fontSize: 13, fontWeight: '900', marginBottom: 10 },
@@ -358,4 +616,3 @@ const styles = StyleSheet.create({
   detailValue: { flex: 1, color: '#101828', fontSize: 10, fontWeight: '700' },
   caseDescription: { color: '#475467', fontSize: 10, lineHeight: 16, marginTop: 12 },
 });
-

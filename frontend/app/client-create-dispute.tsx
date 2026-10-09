@@ -63,6 +63,7 @@ export default function CreateDisputeScreen() {
         description,
         evidenceFile: uploadedFile,
       });
+      router.back()
     } catch {
       // Offline fallback state
     } finally {
