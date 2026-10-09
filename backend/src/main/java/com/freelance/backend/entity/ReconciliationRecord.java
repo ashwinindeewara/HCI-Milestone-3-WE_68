@@ -27,7 +27,6 @@ public class ReconciliationRecord {
 
     private Double amount;
 
-
     @Column(nullable = false)
     private String status; // MATCHED, UNMATCHED, PENDING, DISCREPANCY
 
@@ -41,22 +40,26 @@ public class ReconciliationRecord {
 
     public ReconciliationRecord() {}
 
+    // Fully loaded constructor
     public ReconciliationRecord(String referenceNo, String batchId, Double expectedAmount, Double receivedAmount, String status, String transactionDate, String notes) {
         this.referenceNo = referenceNo;
         this.batchId = batchId;
         this.expectedAmount = expectedAmount;
         this.receivedAmount = receivedAmount;
+        this.amount = expectedAmount;
         this.difference = (receivedAmount != null && expectedAmount != null) ? receivedAmount - expectedAmount : 0.0;
         this.status = status;
         this.transactionDate = transactionDate;
         this.notes = notes;
     }
 
+    // Simplified constructor
     public ReconciliationRecord(String referenceNo, String batchId, Double expectedAmount, String status, String transactionDate, String notes) {
         this.referenceNo = referenceNo;
         this.batchId = batchId;
         this.expectedAmount = expectedAmount;
         this.receivedAmount = expectedAmount;
+        this.amount = expectedAmount;
         this.difference = 0.0;
         this.status = status;
         this.transactionDate = transactionDate;
@@ -102,6 +105,7 @@ public class ReconciliationRecord {
 
     public void setExpectedAmount(Double expectedAmount) {
         this.expectedAmount = expectedAmount;
+        this.amount = expectedAmount;
         recalculateDifference();
     }
 
@@ -131,7 +135,6 @@ public class ReconciliationRecord {
         Double exp = getExpectedAmount();
         this.difference = (rec != null && exp != null) ? rec - exp : 0.0;
     }
-
 
     public String getStatus() {
         return status;
@@ -165,4 +168,3 @@ public class ReconciliationRecord {
         this.createdAt = createdAt;
     }
 }
-

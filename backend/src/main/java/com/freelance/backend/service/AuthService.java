@@ -26,13 +26,17 @@ public class AuthService {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private com.freelance.backend.repository.FreelancerProfileRepository profileRepository;
+
     private final Map<String, String> resetCodeStore = new ConcurrentHashMap<>();
 
     /**
      * Hashes password using SHA-256
      */
     private String hashPassword(String rawPassword) {
-        if (rawPassword == null) rawPassword = "";
+        if (rawPassword == null)
+            rawPassword = "";
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] hash = digest.digest(rawPassword.getBytes(StandardCharsets.UTF_8));
@@ -53,25 +57,41 @@ public class AuthService {
         }
 
         String cleanEmail = request.getEmail().trim().toLowerCase();
-        String password = request.getPassword() != null && !request.getPassword().isBlank() ? request.getPassword() : "Password123!";
-        String fullName = request.getFullName() != null && !request.getFullName().isBlank() ? request.getFullName() : cleanEmail.split("@")[0];
+        String password = request.getPassword() != null && !request.getPassword().isBlank() ? request.getPassword()
+                : "Password123!";
+        String fullName = request.getFullName() != null && !request.getFullName().isBlank() ? request.getFullName()
+                : cleanEmail.split("@")[0];
         UserRole role = request.getRole() != null ? request.getRole() : UserRole.FREELANCER;
 
         User user = userRepository.findByEmail(cleanEmail)
-            .orElseGet(() -> userRepository.findAll().stream()
-                .filter(u -> u.getEmail() != null && u.getEmail().equalsIgnoreCase(cleanEmail))
-                .findFirst()
-                .orElse(null));
+                .orElseGet(() -> userRepository.findAll().stream()
+                        .filter(u -> u.getEmail() != null && u.getEmail().equalsIgnoreCase(cleanEmail))
+                        .findFirst()
+                        .orElse(null));
 
         if (user == null) {
             user = new User(fullName, cleanEmail, hashPassword(password), role, "Active");
-            try {
-                user = userRepository.save(user);
-            } catch (Exception e) {
-                // Ignore DB error for duplicate key or auto-generation
+        } else {
+            user.setPassword(hashPassword(password));
+            user.setFullName(fullName);
+            if (role != null) {
+                user.setRole(role);
             }
         }
+        
+        try {
+            user = userRepository.save(user);
+        } catch (Exception e) {
+            // Ignore DB error for duplicate key or auto-generation
+        }
 
+        if (role == UserRole.FREELANCER && user != null && user.getEmail() != null) {
+            if (!profileRepository.existsByEmail(user.getEmail())) {
+                com.freelance.backend.entity.FreelancerProfile freshProfile =
+                    new com.freelance.backend.entity.FreelancerProfile(user.getEmail(), user.getFullName());
+                profileRepository.save(freshProfile);
+            }
+        }
         String mockJwt = "jwt_token_" + UUID.randomUUID().toString();
         Long id = (user != null && user.getId() != null) ? user.getId() : System.currentTimeMillis();
         String name = (user != null && user.getFullName() != null) ? user.getFullName() : fullName;
@@ -79,13 +99,12 @@ public class AuthService {
         logger.info("Registration successful for user ID: {}, email: {}", id, cleanEmail);
 
         return new AuthResponse(
-            mockJwt,
-            id,
-            name,
-            cleanEmail,
-            finalRole,
-            "Registration successful!"
-        );
+                mockJwt,
+                id,
+                name,
+                cleanEmail,
+                finalRole,
+                "Registration successful!");
     }
 
     public AuthResponse loginUser(LoginRequest request) {
@@ -97,6 +116,14 @@ public class AuthService {
             logger.warn("Login failed: Email address is missing or blank.");
             throw new BadRequestException("Email address is required.");
         }
+        if (!request.getEmail().contains("@") || !request.getEmail().contains(".")) {
+            logger.warn("Login failed: Invalid email format: {}", request.getEmail());
+            throw new BadRequestException("Please provide a valid email address.");
+        }
+        if (request.getPassword() == null || request.getPassword().isBlank()) {
+            logger.warn("Login failed: Password is missing or blank.");
+            throw new BadRequestException("Password is required.");
+        }
 
         String cleanEmail = request.getEmail().trim().toLowerCase();
         if ("chathuniimalsha.com".equals(cleanEmail)) {
@@ -105,45 +132,29 @@ public class AuthService {
         logger.info("Attempting login verification for email: {}", cleanEmail);
 
         final String targetEmail = cleanEmail;
-        String password = request.getPassword() != null ? request.getPassword() : "";
+        String password = request.getPassword();
 
-        User user = userRepository.findByEmail(targetEmail)
-            .orElseGet(() -> userRepository.findAll().stream()
-                .filter(u -> u.getEmail() != null && u.getEmail().equalsIgnoreCase(targetEmail))
-                .findFirst()
-                .orElse(null));
+        User user = userRepository.findByEmailIgnoreCase(targetEmail)
+                .orElseGet(() -> userRepository.findAll().stream()
+                        .filter(u -> u.getEmail() != null && u.getEmail().equalsIgnoreCase(targetEmail))
+                        .findFirst()
+                        .orElse(null));
 
         if (user == null) {
-            UserRole role = UserRole.FREELANCER;
-            if (targetEmail.contains("admin")) role = UserRole.ADMIN;
-            else if (targetEmail.contains("staff")) role = UserRole.PAYMENT_STAFF;
-            else if (targetEmail.contains("client")) role = UserRole.CLIENT;
-
-            String name = targetEmail.split("@")[0];
-            if (name.length() > 0) {
-                name = name.substring(0, 1).toUpperCase() + name.substring(1);
-            }
-
-            user = new User(name, targetEmail, hashPassword(password.isBlank() ? "Password123!" : password), role, "Active");
-            try {
-                user = userRepository.save(user);
-            } catch (Exception e) {
-                // Fallback
-            }
-        } else if (user.getPassword() != null && !user.getPassword().isBlank()) {
-            String hashedPassword = hashPassword(password);
-            boolean isDemoUser = user.getEmail().contains("design.com") || user.getEmail().contains("freelance.com") || user.getEmail().contains("gmail.com");
-            boolean passwordMatches = user.getPassword().equals(hashedPassword)
-                    || user.getPassword().equals(password)
-                    || (isDemoUser && ("supersecret".equalsIgnoreCase(password) || "Password123!".equalsIgnoreCase(password)));
-
-            if (!passwordMatches) {
-                logger.warn("Login failed: Password mismatch for user email: {}", targetEmail);
-                throw new BadRequestException("Invalid email address or password.");
-            }
+            logger.warn("Login failed: User not found for email: {}", targetEmail);
+            throw new BadRequestException("Invalid email address or password.");
         }
 
-        if (user != null && user.getStatus() != null && "Suspended".equalsIgnoreCase(user.getStatus().trim())) {
+        String hashedPassword = hashPassword(password);
+        boolean passwordMatches = (user.getPassword() != null && user.getPassword().equals(hashedPassword))
+                || (user.getPassword() != null && user.getPassword().equals(password));
+
+        if (!passwordMatches) {
+            logger.warn("Login failed: Password mismatch for user email: {}", targetEmail);
+            throw new BadRequestException("Invalid email address or password.");
+        }
+
+        if (user.getStatus() != null && "Suspended".equalsIgnoreCase(user.getStatus().trim())) {
             throw new BadRequestException("Your account has been suspended by an administrator. Please contact support.");
         }
 
@@ -154,13 +165,12 @@ public class AuthService {
         logger.info("Login successful for user ID: {}, email: {}, role: {}", id, targetEmail, userRole);
 
         return new AuthResponse(
-            mockJwt,
-            id,
-            name,
-            targetEmail,
-            userRole,
-            "Login successful!"
-        );
+                mockJwt,
+                id,
+                name,
+                targetEmail,
+                userRole,
+                "Login successful!");
     }
 
     public ResponseEntity<?> verifyOtp(String email, String otp) {
@@ -172,13 +182,12 @@ public class AuthService {
         UserRole role = user != null ? user.getRole() : UserRole.FREELANCER;
 
         return ResponseEntity.ok(new AuthResponse(
-            "jwt_token_otp_" + UUID.randomUUID().toString(),
-            id,
-            name,
-            reqEmail,
-            role,
-            "OTP verified successfully!"
-        ));
+                "jwt_token_otp_" + UUID.randomUUID().toString(),
+                id,
+                name,
+                reqEmail,
+                role,
+                "OTP verified successfully!"));
     }
 
     public Map<String, Object> forgotPassword(ForgotPasswordRequest request) {
@@ -186,15 +195,15 @@ public class AuthService {
             throw new BadRequestException("Email address is required.");
         }
         String email = request.getEmail().trim().toLowerCase();
-        String resetCode = String.format("%06d", (int)(Math.random() * 900000) + 100000);
+        String resetCode = String.format("%06d", (int) (Math.random() * 900000) + 100000);
 
         resetCodeStore.put(email, resetCode);
 
         User user = userRepository.findByEmail(email)
-            .orElseGet(() -> userRepository.findAll().stream()
-                .filter(u -> u.getEmail() != null && u.getEmail().equalsIgnoreCase(email))
-                .findFirst()
-                .orElse(null));
+                .orElseGet(() -> userRepository.findAll().stream()
+                        .filter(u -> u.getEmail() != null && u.getEmail().equalsIgnoreCase(email))
+                        .findFirst()
+                        .orElse(null));
 
         if (user != null) {
             user.setResetCode(resetCode);
@@ -230,15 +239,16 @@ public class AuthService {
         String storedCode = resetCodeStore.get(email);
 
         User user = userRepository.findByEmail(email)
-            .orElseGet(() -> userRepository.findAll().stream()
-                .filter(u -> u.getEmail() != null && u.getEmail().equalsIgnoreCase(email))
-                .findFirst()
-                .orElse(null));
+                .orElseGet(() -> userRepository.findAll().stream()
+                        .filter(u -> u.getEmail() != null && u.getEmail().equalsIgnoreCase(email))
+                        .findFirst()
+                        .orElse(null));
 
         if (user == null) {
-            user = new User(email.split("@")[0], email, hashPassword(request.getNewPassword()), UserRole.FREELANCER, "Active");
+            user = new User(email.split("@")[0], email, hashPassword(request.getNewPassword()), UserRole.FREELANCER,
+                    "Active");
         } else {
-            if (storedCode != null && !storedCode.equalsIgnoreCase(code) && !"123456".equals(code) && !code.equals(user.getResetCode())) {
+            if (storedCode != null && !storedCode.equalsIgnoreCase(code) && !code.equals(user.getResetCode())) {
                 throw new BadRequestException("Invalid verification code. Please check your email and try again.");
             }
             user.setPassword(hashPassword(request.getNewPassword()));
@@ -266,13 +276,17 @@ public class AuthService {
         }
 
         String email = request.getEmail().trim().toLowerCase();
-        String name = request.getName() != null && !request.getName().isBlank() ? request.getName().trim() : email.split("@")[0];
-        
+        String name = request.getName() != null && !request.getName().isBlank() ? request.getName().trim()
+                : email.split("@")[0];
+
         // Strict Google Account Validation
         String domain = email.substring(email.indexOf("@") + 1);
-        String[] invalidDomains = new String[]{"gmail.om", "gmail.co", "gmail.cm", "gmail.c", "gmai.com", "gmal.com", "gamil.com", "fake.com", "temp.com", "test.com", "invalid.com", "disposable.com", "tempmail.com", "mailinator.com", "example.com"};
+        String[] invalidDomains = new String[] { "gmail.om", "gmail.co", "gmail.cm", "gmail.c", "gmai.com", "gmal.com",
+                "gamil.com", "fake.com", "temp.com", "test.com", "invalid.com", "disposable.com", "tempmail.com",
+                "mailinator.com", "example.com" };
         boolean isInvalidFake = false;
-        if (!email.contains("@") || !email.contains(".") || email.indexOf("@") < 1 || email.lastIndexOf(".") < email.indexOf("@") + 2) {
+        if (!email.contains("@") || !email.contains(".") || email.indexOf("@") < 1
+                || email.lastIndexOf(".") < email.indexOf("@") + 2) {
             isInvalidFake = true;
         } else {
             for (String inv : invalidDomains) {
@@ -283,16 +297,17 @@ public class AuthService {
             }
         }
         if (isInvalidFake) {
-            throw new BadRequestException("Invalid Google Account: '" + email + "' is not a recognized Google address. Please sign in with a valid Google or G-Suite email account.");
+            throw new BadRequestException("Invalid Google Account: '" + email
+                    + "' is not a recognized Google address. Please sign in with a valid Google or G-Suite email account.");
         }
 
         UserRole targetRole = request.getRole() != null ? request.getRole() : UserRole.FREELANCER;
 
         User user = userRepository.findByEmail(email)
-            .orElseGet(() -> userRepository.findAll().stream()
-                .filter(u -> u.getEmail() != null && u.getEmail().equalsIgnoreCase(email))
-                .findFirst()
-                .orElse(null));
+                .orElseGet(() -> userRepository.findAll().stream()
+                        .filter(u -> u.getEmail() != null && u.getEmail().equalsIgnoreCase(email))
+                        .findFirst()
+                        .orElse(null));
 
         if (user == null) {
             if (name.length() > 0) {
@@ -305,7 +320,8 @@ public class AuthService {
                 // Ignore DB exception
             }
         } else {
-            // Update existing user's role to the requested targetRole for multi-role login support
+            // Update existing user's role to the requested targetRole for multi-role login
+            // support
             user.setRole(targetRole);
             try {
                 user = userRepository.save(user);
@@ -315,7 +331,8 @@ public class AuthService {
         }
 
         if (user != null && user.getStatus() != null && "Suspended".equalsIgnoreCase(user.getStatus().trim())) {
-            throw new BadRequestException("Your account has been suspended by an administrator. Please contact support.");
+            throw new BadRequestException(
+                    "Your account has been suspended by an administrator. Please contact support.");
         }
 
         String mockJwt = "jwt_google_token_" + UUID.randomUUID().toString();
@@ -323,12 +340,11 @@ public class AuthService {
         String fullName = (user != null && user.getFullName() != null) ? user.getFullName() : name;
 
         return new AuthResponse(
-            mockJwt,
-            id,
-            fullName,
-            email,
-            targetRole,
-            "Google authentication successful!"
-        );
+                mockJwt,
+                id,
+                fullName,
+                email,
+                targetRole,
+                "Google authentication successful!");
     }
 }

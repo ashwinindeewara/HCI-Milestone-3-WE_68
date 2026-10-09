@@ -67,10 +67,16 @@ export default function RegisterScreen() {
         password: password,
         role: getRoleEnum(role),
       });
-      router.push('/account-created');
+      router.push({
+        pathname: '/account-created',
+        params: { email: email.trim().toLowerCase(), password: password }
+      });
     } catch (error: any) {
       console.warn('Registration notice:', error?.message);
-      router.push('/account-created');
+      router.push({
+        pathname: '/account-created',
+        params: { email: email.trim().toLowerCase(), password: password }
+      });
     } finally {
       setIsSubmitting(false);
     }

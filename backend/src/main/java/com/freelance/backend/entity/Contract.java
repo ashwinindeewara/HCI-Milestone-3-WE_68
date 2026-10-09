@@ -21,6 +21,9 @@ public class Contract {
     @Column(nullable = false)
     private String freelancerName;
 
+    @Column(name = "freelancer_email")
+    private String freelancerEmail;
+
     @Column(nullable = false)
     private Double totalBudget;
 
@@ -30,7 +33,25 @@ public class Contract {
     private String startDate;
     private String endDate;
 
-    @OneToMany(mappedBy = "contract", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @Column(columnDefinition = "TEXT")
+    private String description;
+
+    private String paymentTerms;
+
+    @Column(columnDefinition = "TEXT")
+    private String keyDeliverables;
+
+    private String signatoryName;
+    private String signedDate;
+    private Boolean isSigned = false;
+    private Integer completionPercentage = 0;
+    private Double inEscrowAmount = 0.0;
+    private String currentMilestoneTitle;
+    private String activeStatusBadge;
+    private String dueDate;
+    private String timeline;
+
+    @OneToMany(mappedBy = "contract", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
     private List<Milestone> milestones = new ArrayList<>();
 
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -77,6 +98,14 @@ public class Contract {
         return freelancerName;
     }
 
+    public String getFreelancerEmail() {
+        return freelancerEmail;
+    }
+
+    public void setFreelancerEmail(String freelancerEmail) {
+        this.freelancerEmail = freelancerEmail;
+    }
+
     public void setFreelancerName(String freelancerName) {
         this.freelancerName = freelancerName;
     }
@@ -111,6 +140,102 @@ public class Contract {
 
     public void setEndDate(String endDate) {
         this.endDate = endDate;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    public String getPaymentTerms() {
+        return paymentTerms;
+    }
+
+    public void setPaymentTerms(String paymentTerms) {
+        this.paymentTerms = paymentTerms;
+    }
+
+    public String getKeyDeliverables() {
+        return keyDeliverables;
+    }
+
+    public void setKeyDeliverables(String keyDeliverables) {
+        this.keyDeliverables = keyDeliverables;
+    }
+
+    public String getSignatoryName() {
+        return signatoryName;
+    }
+
+    public void setSignatoryName(String signatoryName) {
+        this.signatoryName = signatoryName;
+    }
+
+    public String getSignedDate() {
+        return signedDate;
+    }
+
+    public void setSignedDate(String signedDate) {
+        this.signedDate = signedDate;
+    }
+
+    public Boolean getIsSigned() {
+        return isSigned;
+    }
+
+    public void setIsSigned(Boolean isSigned) {
+        this.isSigned = isSigned;
+    }
+
+    public Integer getCompletionPercentage() {
+        return completionPercentage;
+    }
+
+    public void setCompletionPercentage(Integer completionPercentage) {
+        this.completionPercentage = completionPercentage;
+    }
+
+    public Double getInEscrowAmount() {
+        return inEscrowAmount;
+    }
+
+    public void setInEscrowAmount(Double inEscrowAmount) {
+        this.inEscrowAmount = inEscrowAmount;
+    }
+
+    public String getCurrentMilestoneTitle() {
+        return currentMilestoneTitle;
+    }
+
+    public void setCurrentMilestoneTitle(String currentMilestoneTitle) {
+        this.currentMilestoneTitle = currentMilestoneTitle;
+    }
+
+    public String getActiveStatusBadge() {
+        return activeStatusBadge;
+    }
+
+    public void setActiveStatusBadge(String activeStatusBadge) {
+        this.activeStatusBadge = activeStatusBadge;
+    }
+
+    public String getDueDate() {
+        return dueDate;
+    }
+
+    public void setDueDate(String dueDate) {
+        this.dueDate = dueDate;
+    }
+
+    public String getTimeline() {
+        return timeline;
+    }
+
+    public void setTimeline(String timeline) {
+        this.timeline = timeline;
     }
 
     public List<Milestone> getMilestones() {

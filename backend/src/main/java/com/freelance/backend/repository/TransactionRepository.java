@@ -8,13 +8,20 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
-@Repository
 public interface TransactionRepository extends JpaRepository<Transaction, String> {
+    
     List<Transaction> findByType(String type);
+
     List<Transaction> findByStatus(String status);
+
     List<Transaction> findByStatusIgnoreCase(String status);
+
     List<Transaction> findByStatusInIgnoreCase(Collection<String> statuses);
+
     Long countByStatusIgnoreCase(String status);
+
     List<Transaction> findByContractId(String contractId);
     Optional<Transaction> findByReferenceNo(String referenceNo);
+
+    List<Transaction> findByContractIdIn(List<String> contractIds);
 }

@@ -4,19 +4,36 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TextInput,
   TouchableOpacity,
   SafeAreaView,
-  Modal,
-  ActivityIndicator,
+  useWindowDimensions,
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import SkeletonCard from '../src/components/SkeletonCard';
 import Colors from '../src/constants/colors';
 import AdminTabBar from '../src/components/AdminTabBar';
 import AdminToast, { ToastType } from '../src/components/AdminToast';
-import Theme from '../src/constants/theme';
+import UserAvatar from '../src/components/UserAvatar';
 import apiClient from '../src/services/api';
+import {
+  AdminCard,
+  AdminScreenHeader,
+  AdminSearchBar,
+  AdminChips,
+  AdminButton,
+  AdminEmptyState,
+  AdminIcon,
+  StatusPill,
+} from '../src/components/AdminUI';
+import AdminModal, {
+  AdminField,
+  AdminChoiceGroup,
+  AdminTag,
+  AdminActionList,
+  AdminActionRow,
+  AdminNotice,
+} from '../src/components/AdminModal';
+import { Tone, toneColors, adminLayout, adminRadius, adminSpace, adminType, MUTED_TEXT } from '../src/constants/adminTheme';
 
 export default function AdminUserManagementScreen() {
   const queryClient = useQueryClient();
@@ -63,14 +80,9 @@ export default function AdminUserManagementScreen() {
         }
       } catch (error) {
         console.warn('[AdminUsers] Users endpoint connection error:', error);
+        throw error;
       }
-      return [
-        { id: '1', name: 'Chathuni Imalsha', email: 'chathuniimalsha.com', role: 'Freelancer', rawRole: 'FREELANCER', status: 'Active', joined: 'Sep 01, 2026' },
-        { id: '2', name: 'Ruwan Sadeepa', email: 'ruwansadeepa67@gmail.com', role: 'Client', rawRole: 'CLIENT', status: 'Active', joined: 'Sep 05, 2026' },
-        { id: '3', name: 'Amaya Perera', email: 'amayaperera2003@gmail.com', role: 'Freelancer', rawRole: 'FREELANCER', status: 'Suspended', joined: 'Sep 10, 2026' },
-        { id: '4', name: 'Akila Deshan', email: 'akiladesh99@gmail.com', role: 'Client', rawRole: 'CLIENT', status: 'Active', joined: 'Sep 12, 2026' },
-        { id: '5', name: 'System Admin', email: 'admin@freelance.com', role: 'Admin', rawRole: 'ADMIN', status: 'Active', joined: 'Aug 15, 2026' }
-      ];
+      return [];
     },
     retry: 2,
     retryDelay: 1000,
@@ -145,8 +157,8 @@ export default function AdminUserManagementScreen() {
       resetForm();
       showToast('User account updated successfully!', 'success');
     },
-    onError: () => {
-      showToast('Failed to update user account details.', 'error');
+    onError: (err: any) => {
+      showToast(err.response?.data?.message || 'Failed to update user account details.', 'error');
     }
   });
 
@@ -286,143 +298,78 @@ export default function AdminUserManagementScreen() {
       />
 
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-        {/* Title Header with Add User Button & Export CSV */}
-        <View style={styles.headerRow}>
-          <View>
-            <Text style={styles.headerTitle}>User Management</Text>
-            <Text style={styles.headerSubtitle}>{users.length} registered accounts</Text>
-          </View>
-          <View style={{ flexDirection: 'row', gap: Theme.spacing.xs, alignItems: 'center' }}>
-            <TouchableOpacity style={styles.exportBtn} onPress={handleExportCSV} activeOpacity={0.8}>
-              <Text style={styles.exportBtnText}>📥 Export CSV</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.addBtn} onPress={openCreateModal} activeOpacity={0.8}>
-              <Text style={styles.addBtnText}>+ Add New User</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        <View style={adminLayout.content}>
+          <ScreenHeaderWithActions title="User Management" subtitle={`${users.length} registered accounts`}>
+            <AdminButton label="Export CSV" icon="download-outline" variant="secondary" onPress={handleExportCSV} />
+            <AdminButton label="Add New User" icon="add" onPress={openCreateModal} />
+          </ScreenHeaderWithActions>
 
-        {/* Search Input Bar */}
-        <View style={styles.searchBar}>
-          <Text style={{ fontSize: 16, marginRight: 8 }}>🔍</Text>
-          <TextInput
-            style={styles.searchInput}
+          <AdminSearchBar
             placeholder="Search by name, email, or user ID..."
-            placeholderTextColor={Colors.neutralLight}
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
-          {searchQuery ? (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Text style={{ color: Colors.neutralMedium, fontWeight: '700' }}>✕</Text>
-            </TouchableOpacity>
-          ) : null}
-        </View>
 
-        {/* Filter Chips Horizontal Scroll Container */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={{ marginBottom: Theme.spacing.lg }}
-          contentContainerStyle={styles.filterChipsRow}
-        >
-          {['All', 'Active', 'Suspended', 'Freelancers', 'Clients', 'Admins & Staff'].map((filter) => {
-            const isSelected = activeFilter === filter;
-            return (
-              <TouchableOpacity
-                key={filter}
-                style={[styles.chip, isSelected && styles.chipActive]}
-                onPress={() => {
-                  setActiveFilter(filter);
-                  setVisibleLimit(4);
-                }}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>
-                  {filter}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+          <AdminChips
+            style={styles.filters}
+            options={FILTERS}
+            value={activeFilter}
+            onChange={(filter) => {
+              setActiveFilter(filter);
+              setVisibleLimit(4);
+            }}
+          />
 
-        {/* User Cards List */}
-        <View style={styles.userList}>
           {isLoading ? (
-            <>
+            <ResponsiveGrid>
               <SkeletonCard height={120} />
               <SkeletonCard height={120} />
               <SkeletonCard height={120} />
-            </>
+            </ResponsiveGrid>
           ) : filteredUsers.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <Text style={{ fontSize: 32, marginBottom: 8 }}>👥</Text>
-              <Text style={styles.emptyTitle}>No Users Found</Text>
-              <Text style={styles.emptySub}>Try adjusting your search query or filter chip.</Text>
-            </View>
+            <AdminCard>
+              <AdminEmptyState
+                icon="people-outline"
+                title="No Users Found"
+                message="Try adjusting your search query or filter chip."
+              />
+            </AdminCard>
           ) : (
-            filteredUsers.slice(0, visibleLimit).map((user: any) => (
-              <View key={user.id} style={styles.userCard}>
-                <View style={styles.cardTopRow}>
-                  <View style={styles.avatarBox}>
-                    <Text style={styles.avatarText}>{user.name ? user.name.charAt(0).toUpperCase() : 'U'}</Text>
-                  </View>
-
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.userName}>{user.name}</Text>
-                    <Text style={styles.userEmail}>{user.email}</Text>
-                  </View>
-
-                  <View style={styles.badgesCol}>
-                    <View
-                      style={[
-                        styles.roleTag,
-                        user.role === 'Freelancer' ? styles.tagGreen : styles.tagBlue,
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.roleText,
-                          user.role === 'Freelancer' ? styles.textGreen : styles.textBlue,
-                        ]}
-                      >
-                        {user.role}
-                      </Text>
-                    </View>
-
-                    <View
-                      style={[
-                        styles.statusTag,
-                        user.status === 'Active' ? styles.tagActive : styles.tagSuspended,
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.statusText,
-                          user.status === 'Active' ? styles.textActive : styles.textSuspended,
-                        ]}
-                      >
-                        {user.status}
-                      </Text>
+            <ResponsiveGrid>
+              {filteredUsers.slice(0, visibleLimit).map((user: any) => (
+                <AdminCard key={user.id} style={styles.cell}>
+                  <View style={styles.cardTopRow}>
+                    <UserAvatar
+                      userId={user.id}
+                      name={user.name}
+                      size={44}
+                      hasPicture={String(user.rawRole).toUpperCase() === 'ADMIN'}
+                      style={{ marginRight: adminSpace.md }}
+                    />
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={styles.userName} numberOfLines={1}>{user.name}</Text>
+                      <Text style={styles.userEmail} numberOfLines={1}>{user.email}</Text>
                     </View>
                   </View>
-                </View>
 
-                <View style={styles.cardFooter}>
-                  <Text style={styles.joinedText}>Joined {user.joined}</Text>
-                  <View style={styles.actionsRow}>
-                    <TouchableOpacity
-                      style={styles.manageBtn}
+                  <View style={styles.tagsRow}>
+                    <AdminTag label={user.role} tone={roleTone(user.rawRole)} />
+                    <StatusPill label={user.status} tone={user.status === 'Active' ? 'success' : 'danger'} />
+                    <Text style={styles.joinedText}>Joined {user.joined}</Text>
+                  </View>
+
+                  <View style={styles.cardFooter}>
+                    <AdminButton
+                      label="Manage"
+                      icon="settings-outline"
+                      variant="secondary"
+                      style={styles.footerBtn}
                       onPress={() => openDetailModal(user)}
-                    >
-                      <Text style={styles.manageText}>⚙️ Manage</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[
-                        styles.statusActionBtn,
-                        user.status === 'Active' ? styles.suspendBtn : styles.activateBtn,
-                      ]}
+                    />
+                    <SoftButton
+                      label={user.status === 'Active' ? 'Suspend' : 'Activate'}
+                      tone={user.status === 'Active' ? 'danger' : 'success'}
+                      icon={user.status === 'Active' ? 'ban-outline' : 'checkmark-circle-outline'}
                       onPress={() =>
                         toggleStatusMutation.mutate({
                           id: user.id,
@@ -430,583 +377,284 @@ export default function AdminUserManagementScreen() {
                         })
                       }
                       disabled={toggleStatusMutation.isPending}
-                    >
-                      <Text
-                        style={
-                          user.status === 'Active' ? styles.suspendText : styles.activateText
-                        }
-                      >
-                        {user.status === 'Active' ? 'Suspend' : 'Activate'}
-                      </Text>
-                    </TouchableOpacity>
+                    />
                   </View>
-                </View>
-              </View>
-            ))
+                </AdminCard>
+              ))}
+            </ResponsiveGrid>
+          )}
+
+          {filteredUsers.length > 4 && (
+            <View style={styles.loadMoreContainer}>
+              {visibleLimit < filteredUsers.length ? (
+                <AdminButton
+                  label={`Load More (+${filteredUsers.length - visibleLimit} remaining)`}
+                  onPress={() => setVisibleLimit((prev) => prev + 4)}
+                />
+              ) : (
+                <AdminButton label="Show Less" variant="secondary" onPress={() => setVisibleLimit(4)} />
+              )}
+            </View>
           )}
         </View>
-
-        {/* Load More Pagination Option for > 4 items */}
-        {filteredUsers.length > 4 && (
-          <View style={styles.loadMoreContainer}>
-            {visibleLimit < filteredUsers.length ? (
-              <TouchableOpacity
-                style={styles.loadMoreBtn}
-                onPress={() => setVisibleLimit((prev) => prev + 4)}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.loadMoreText}>
-                  Load More (+{filteredUsers.length - visibleLimit} remaining)
-                </Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                style={styles.loadMoreBtnOutline}
-                onPress={() => setVisibleLimit(4)}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.loadMoreTextOutline}>Show Less</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
       </ScrollView>
 
       {/* CREATE / EDIT USER MODAL */}
-      <Modal
+      <AdminModal
         visible={isFormModalOpen}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setIsFormModalOpen(false)}
+        onClose={() => setIsFormModalOpen(false)}
+        icon={formMode === 'create' ? 'person-add-outline' : 'create-outline'}
+        title={formMode === 'create' ? 'Create User Account' : 'Edit User Account'}
+        footer={
+          <>
+            <AdminButton label="Cancel" variant="secondary" onPress={() => setIsFormModalOpen(false)} />
+            <AdminButton
+              label={formMode === 'create' ? 'Create Account' : 'Save Changes'}
+              onPress={handleFormSubmit}
+              loading={createMutation.isPending || updateMutation.isPending}
+            />
+          </>
+        }
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {formMode === 'create' ? '➕ Create User Account' : '✏️ Edit User Account'}
-              </Text>
-              <TouchableOpacity onPress={() => setIsFormModalOpen(false)}>
-                <Text style={styles.closeIcon}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={{ maxHeight: 400 }}>
-              <Text style={styles.inputLabel}>Full Name</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="e.g. Sarah Jenkins"
-                placeholderTextColor={Colors.neutralLight}
-                value={formName}
-                onChangeText={setFormName}
-              />
-
-              <Text style={styles.inputLabel}>Email Address</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="e.g. sarah@example.com"
-                placeholderTextColor={Colors.neutralLight}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                value={formEmail}
-                onChangeText={setFormEmail}
-              />
-
-              {formMode === 'create' && (
-                <>
-                  <Text style={styles.inputLabel}>Password</Text>
-                  <TextInput
-                    style={styles.modalInput}
-                    placeholder="Enter default password"
-                    placeholderTextColor={Colors.neutralLight}
-                    secureTextEntry
-                    value={formPassword}
-                    onChangeText={setFormPassword}
-                  />
-                </>
-              )}
-
-              <Text style={styles.inputLabel}>Role</Text>
-              <View style={styles.radioGroup}>
-                {['FREELANCER', 'CLIENT', 'ADMIN', 'PAYMENT_STAFF'].map((r) => (
-                  <TouchableOpacity
-                    key={r}
-                    style={[styles.radioItem, formRole === r && styles.radioItemActive]}
-                    onPress={() => setFormRole(r)}
-                  >
-                    <Text style={[styles.radioText, formRole === r && styles.radioTextActive]}>
-                      {r.replace('_', ' ')}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <Text style={styles.inputLabel}>Account Status</Text>
-              <View style={styles.radioGroup}>
-                {['Active', 'Suspended'].map((s) => (
-                  <TouchableOpacity
-                    key={s}
-                    style={[styles.radioItem, formStatus === s && styles.radioItemActive]}
-                    onPress={() => setFormStatus(s)}
-                  >
-                    <Text style={[styles.radioText, formStatus === s && styles.radioTextActive]}>
-                      {s}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
-
-            <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={styles.cancelModalBtn}
-                onPress={() => setIsFormModalOpen(false)}
-              >
-                <Text style={styles.cancelModalText}>Cancel</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.submitModalBtn}
-                onPress={handleFormSubmit}
-                disabled={createMutation.isPending || updateMutation.isPending}
-              >
-                {createMutation.isPending || updateMutation.isPending ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <Text style={styles.submitModalText}>
-                    {formMode === 'create' ? 'Create Account' : 'Save Changes'}
-                  </Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        <AdminField
+          label="Full Name"
+          placeholder="e.g. Sarah Jenkins"
+          value={formName}
+          onChangeText={setFormName}
+        />
+        <AdminField
+          label="Email Address"
+          placeholder="e.g. sarah@example.com"
+          keyboardType="email-address"
+          autoCapitalize="none"
+          value={formEmail}
+          onChangeText={setFormEmail}
+        />
+        {formMode === 'create' && (
+          <AdminField
+            label="Password"
+            placeholder="Enter default password"
+            secureTextEntry
+            value={formPassword}
+            onChangeText={setFormPassword}
+          />
+        )}
+        <AdminChoiceGroup label="Role" options={ROLE_OPTIONS} value={formRole} onChange={setFormRole} />
+        <AdminChoiceGroup label="Account Status" options={['Active', 'Suspended']} value={formStatus} onChange={setFormStatus} />
+      </AdminModal>
 
       {/* USER DETAILS & MANAGE MODAL */}
-      <Modal
+      <AdminModal
         visible={isDetailModalOpen}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => setIsDetailModalOpen(false)}
+        onClose={() => setIsDetailModalOpen(false)}
+        icon="person-circle-outline"
+        title="User Account Profile"
+        footer={<AdminButton label="Close Profile" variant="secondary" onPress={() => setIsDetailModalOpen(false)} />}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            {selectedUser && (
-              <>
-                <View style={styles.modalHeader}>
-                  <Text style={styles.modalTitle}>User Account Profile</Text>
-                  <TouchableOpacity onPress={() => setIsDetailModalOpen(false)}>
-                    <Text style={styles.closeIcon}>✕</Text>
-                  </TouchableOpacity>
-                </View>
+        {selectedUser && (
+          <>
+            <View style={styles.detailProfileBox}>
+              <UserAvatar
+                key={selectedUser.id}
+                userId={selectedUser.id}
+                name={selectedUser.name}
+                size={64}
+                hasPicture={String(selectedUser.rawRole).toUpperCase() === 'ADMIN'}
+                style={{ marginBottom: 8 }}
+              />
+              <Text style={styles.detailName}>{selectedUser.name}</Text>
+              <Text style={styles.detailEmail}>{selectedUser.email}</Text>
+              <Text style={styles.detailId}>User ID: {selectedUser.id}</Text>
+              <View style={styles.detailTagsRow}>
+                <AdminTag label={selectedUser.role} tone={roleTone(selectedUser.rawRole)} />
+                <StatusPill label={selectedUser.status} tone={selectedUser.status === 'Active' ? 'success' : 'danger'} />
+              </View>
+            </View>
 
-                <View style={styles.detailProfileBox}>
-                  <View style={styles.detailAvatarBox}>
-                    <Text style={styles.detailAvatarText}>
-                      {selectedUser.name ? selectedUser.name.charAt(0).toUpperCase() : 'U'}
-                    </Text>
-                  </View>
-                  <Text style={styles.detailName}>{selectedUser.name}</Text>
-                  <Text style={styles.detailEmail}>{selectedUser.email}</Text>
-                  <Text style={styles.detailId}>User ID: {selectedUser.id}</Text>
-
-                  <View style={styles.detailTagsRow}>
-                    <View style={[styles.roleTag, selectedUser.role === 'Freelancer' ? styles.tagGreen : styles.tagBlue]}>
-                      <Text style={[styles.roleText, selectedUser.role === 'Freelancer' ? styles.textGreen : styles.textBlue]}>
-                        {selectedUser.role}
-                      </Text>
-                    </View>
-                    <View style={[styles.statusTag, selectedUser.status === 'Active' ? styles.tagActive : styles.tagSuspended]}>
-                      <Text style={[styles.statusText, selectedUser.status === 'Active' ? styles.textActive : styles.textSuspended]}>
-                        {selectedUser.status}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-
-                <View style={styles.detailActionsContainer}>
-                  <TouchableOpacity
-                    style={styles.detailActionItem}
-                    onPress={() => openEditModal(selectedUser)}
-                  >
-                    <Text style={styles.detailActionIcon}>✏️</Text>
-                    <Text style={styles.detailActionLabel}>Edit User Details</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.detailActionItem}
-                    onPress={() =>
-                      toggleStatusMutation.mutate({
-                        id: selectedUser.id,
-                        newStatus: selectedUser.status === 'Active' ? 'Suspended' : 'Active',
-                      })
-                    }
-                  >
-                    <Text style={styles.detailActionIcon}>
-                      {selectedUser.status === 'Active' ? '🚫' : '🟢'}
-                    </Text>
-                    <Text style={styles.detailActionLabel}>
-                      {selectedUser.status === 'Active' ? 'Suspend Account' : 'Activate Account'}
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.detailActionItem, { borderBottomWidth: 0 }]}
-                    onPress={() => {
-                      setIsDeleteModalOpen(true);
-                    }}
-                  >
-                    <Text style={styles.detailActionIcon}>🗑️</Text>
-                    <Text style={[styles.detailActionLabel, { color: Colors.errorText }]}>
-                      Delete Account Permanently
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                <TouchableOpacity
-                  style={styles.closeDetailBtn}
-                  onPress={() => setIsDetailModalOpen(false)}
-                >
-                  <Text style={styles.closeDetailText}>Close Profile</Text>
-                </TouchableOpacity>
-              </>
-            )}
-          </View>
-        </View>
-      </Modal>
+            <AdminActionList>
+              <AdminActionRow
+                icon="create-outline"
+                label="Edit User Details"
+                onPress={() => openEditModal(selectedUser)}
+              />
+              <AdminActionRow
+                icon={selectedUser.status === 'Active' ? 'ban-outline' : 'checkmark-circle-outline'}
+                tone={selectedUser.status === 'Active' ? 'warning' : 'success'}
+                label={selectedUser.status === 'Active' ? 'Suspend Account' : 'Activate Account'}
+                onPress={() =>
+                  toggleStatusMutation.mutate({
+                    id: selectedUser.id,
+                    newStatus: selectedUser.status === 'Active' ? 'Suspended' : 'Active',
+                  })
+                }
+              />
+              <AdminActionRow
+                icon="trash-outline"
+                tone="danger"
+                label="Delete Account Permanently"
+                last
+                onPress={() => {
+                  setIsDeleteModalOpen(true);
+                }}
+              />
+            </AdminActionList>
+          </>
+        )}
+      </AdminModal>
 
       {/* CONFIRM DELETE MODAL */}
-      <Modal
+      <AdminModal
         visible={isDeleteModalOpen}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => setIsDeleteModalOpen(false)}
+        onClose={() => setIsDeleteModalOpen(false)}
+        size="sm"
+        tone="danger"
+        icon="warning-outline"
+        title="Delete Account?"
+        footer={
+          <>
+            <AdminButton label="Cancel" variant="secondary" onPress={() => setIsDeleteModalOpen(false)} />
+            <AdminButton
+              label="Delete Permanently"
+              variant="danger"
+              onPress={() => deleteMutation.mutate(selectedUser.id)}
+              loading={deleteMutation.isPending}
+              disabled={!selectedUser}
+            />
+          </>
+        }
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            {selectedUser && (
-              <>
-                <View style={styles.warningIconBox}>
-                  <Text style={{ fontSize: 36 }}>⚠️</Text>
-                </View>
-                <Text style={styles.confirmTitle}>Delete Account?</Text>
-                <Text style={styles.confirmSub}>
-                  Are you sure you want to permanently delete{' '}
-                  <Text style={{ fontWeight: '700', color: Colors.dark }}>{selectedUser.name}</Text> ({selectedUser.email})?
-                  This action cannot be undone.
-                </Text>
-
-                <View style={styles.modalFooter}>
-                  <TouchableOpacity
-                    style={styles.cancelModalBtn}
-                    onPress={() => setIsDeleteModalOpen(false)}
-                  >
-                    <Text style={styles.cancelModalText}>Cancel</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.dangerModalBtn}
-                    onPress={() => deleteMutation.mutate(selectedUser.id)}
-                    disabled={deleteMutation.isPending}
-                  >
-                    {deleteMutation.isPending ? (
-                      <ActivityIndicator color="#fff" size="small" />
-                    ) : (
-                      <Text style={styles.dangerModalText}>Delete Permanently</Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              </>
-            )}
-          </View>
-        </View>
-      </Modal>
+        {selectedUser && (
+          <AdminNotice tone="danger">
+            Are you sure you want to permanently delete{' '}
+            <Text style={{ fontWeight: '800' }}>{selectedUser.name}</Text> ({selectedUser.email})?
+            This action cannot be undone.
+          </AdminNotice>
+        )}
+      </AdminModal>
 
       <AdminTabBar activeTab="users" />
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  container: {
-    flex: 1,
-  },
-  contentContainer: {
-    padding: Theme.spacing.md,
-    paddingBottom: 80,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Theme.spacing.md,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: Colors.dark,
-  },
-  headerSubtitle: {
-    fontSize: 13,
-    color: Colors.neutralMedium,
-    marginTop: 2,
-  },
-  exportBtn: {
-    paddingHorizontal: Theme.spacing.md,
-    paddingVertical: Theme.spacing.xs + 2,
-    borderRadius: Theme.borderRadius.md,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  exportBtnText: {
-    color: Colors.dark,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  addBtn: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: Theme.spacing.md,
-    paddingVertical: Theme.spacing.xs + 4,
-    borderRadius: Theme.borderRadius.md,
-    ...Theme.shadows.card,
-  },
-  addBtnText: {
-    color: Colors.surface,
-    fontWeight: '700',
-    fontSize: 13,
-  },
-  searchBar: {
-    height: 48,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: Theme.borderRadius.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Theme.spacing.md,
-    marginBottom: Theme.spacing.md,
-  },
-  searchInput: { flex: 1, fontSize: 14, color: Colors.dark },
-  filterChipsRow: { flexDirection: 'row', gap: Theme.spacing.xs, alignItems: 'center' },
-  chip: {
-    paddingHorizontal: Theme.spacing.md,
-    paddingVertical: Theme.spacing.xs + 2,
-    borderRadius: Theme.borderRadius.full,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  chipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  chipText: { fontSize: 13, color: Colors.neutralMedium, fontWeight: '500' },
-  chipTextActive: { color: Colors.surface, fontWeight: '700' },
-  userList: { gap: Theme.spacing.md },
-  emptyCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: Theme.borderRadius.lg,
-    padding: Theme.spacing.xl,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  emptyTitle: { fontSize: 16, fontWeight: '700', color: Colors.dark },
-  emptySub: { fontSize: 13, color: Colors.neutralMedium, textAlign: 'center', marginTop: 4 },
-  userCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: Theme.borderRadius.lg,
-    padding: Theme.spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    ...Theme.shadows.card,
-  },
-  cardTopRow: { flexDirection: 'row', alignItems: 'center', marginBottom: Theme.spacing.sm },
-  avatarBox: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.dark, justifyContent: 'center', alignItems: 'center', marginRight: Theme.spacing.md },
-  avatarText: { color: Colors.surface, fontSize: 16, fontWeight: '800' },
-  userName: { fontSize: 15, fontWeight: '700', color: Colors.dark },
-  userEmail: { fontSize: 12, color: Colors.neutralMedium, marginTop: 1 },
-  badgesCol: { alignItems: 'flex-end', gap: 4 },
-  roleTag: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-  tagGreen: { backgroundColor: Colors.successBg },
-  tagBlue: { backgroundColor: Colors.infoBg },
-  roleText: { fontSize: 10, fontWeight: '700' },
-  textGreen: { color: Colors.primaryDark },
-  textBlue: { color: Colors.infoText },
-  statusTag: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-  tagActive: { backgroundColor: Colors.successBg },
-  tagSuspended: { backgroundColor: Colors.errorBg },
-  statusText: { fontSize: 10, fontWeight: '700' },
-  textActive: { color: Colors.primaryDark },
-  textSuspended: { color: Colors.errorText },
-  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: Theme.spacing.sm },
-  joinedText: { fontSize: 12, color: Colors.neutralLight },
-  actionsRow: { flexDirection: 'row', gap: Theme.spacing.sm },
-  manageBtn: { paddingHorizontal: Theme.spacing.md, paddingVertical: Theme.spacing.xs, borderRadius: Theme.borderRadius.sm, borderWidth: 1, borderColor: Colors.border },
-  manageText: { fontSize: 12, fontWeight: '700', color: Colors.dark },
-  statusActionBtn: { paddingHorizontal: Theme.spacing.md, paddingVertical: Theme.spacing.xs, borderRadius: Theme.borderRadius.sm },
-  suspendBtn: { backgroundColor: Colors.errorBg },
-  suspendText: { fontSize: 12, fontWeight: '700', color: Colors.errorText },
-  activateBtn: { backgroundColor: Colors.successBg },
-  activateText: { fontSize: 12, fontWeight: '700', color: Colors.primaryDark },
+// Equal-width responsive columns (1 on phones, 2 on tablets, 3 on desktop); a last short row keeps card width.
+function ResponsiveGrid({ children }: { children: React.ReactNode }) {
+  const { width } = useWindowDimensions();
+  const cols = width >= 1000 ? 3 : width >= 640 ? 2 : 1;
+  const gap = adminSpace.md;
+  return (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -gap / 2 }}>
+      {React.Children.toArray(children).map((child, i) => (
+        <View key={i} style={{ width: `${100 / cols}%`, padding: gap / 2 }}>
+          {child}
+        </View>
+      ))}
+    </View>
+  );
+}
 
-  // Modal Styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: Theme.spacing.md,
-  },
-  modalContent: {
-    width: '100%',
-    maxWidth: 480,
-    backgroundColor: Colors.surface,
-    borderRadius: Theme.borderRadius.lg,
-    padding: Theme.spacing.lg,
-    ...Theme.shadows.modal,
-  },
-  modalHeader: {
+const FILTERS = ['All', 'Active', 'Suspended', 'Freelancers', 'Clients', 'Admins & Staff'];
+const ROLE_OPTIONS = ['FREELANCER', 'CLIENT', 'ADMIN', 'PAYMENT_STAFF'].map((r) => ({
+  value: r,
+  label: r.replace('_', ' '),
+}));
+
+const roleTone = (rawRole: any): Tone => {
+  const r = String(rawRole || '').toUpperCase();
+  if (r.includes('FREELANCER')) return 'success';
+  if (r.includes('CLIENT')) return 'info';
+  if (r.includes('PAYMENT') || r.includes('STAFF')) return 'warning';
+  return 'neutral';
+};
+
+// Header with actions: sits on the right on wide screens, wraps below the title on phones.
+function ScreenHeaderWithActions({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
+  const { width } = useWindowDimensions();
+  const wide = width >= 640;
+  if (wide) {
+    return <AdminScreenHeader title={title} subtitle={subtitle} right={children} />;
+  }
+  return (
+    <View style={{ marginBottom: adminSpace.xl }}>
+      <AdminScreenHeader title={title} subtitle={subtitle} />
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: adminSpace.sm, marginTop: -adminSpace.md }}>{children}</View>
+    </View>
+  );
+}
+
+// Soft tinted action button (status actions on cards).
+function SoftButton({
+  label,
+  tone,
+  icon,
+  onPress,
+  disabled,
+}: {
+  label: string;
+  tone: Tone;
+  icon: React.ComponentProps<typeof AdminIcon>['name'];
+  onPress: () => void;
+  disabled?: boolean;
+}) {
+  const t = toneColors[tone];
+  return (
+    <TouchableOpacity
+      {...{ onPress }}
+      disabled={disabled}
+      activeOpacity={0.85}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !!disabled }}
+      style={[styles.softBtn, { backgroundColor: t.bg, borderColor: t.border }, disabled && { opacity: 0.55 }]}
+    >
+      <AdminIcon name={icon} size={16} color={t.fg} />
+      <Text style={[styles.softBtnText, { color: t.fg }]}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
+const styles = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1 },
+  contentContainer: { padding: adminSpace.lg, paddingBottom: adminLayout.bottomClearance },
+  filters: { marginTop: adminSpace.md, marginBottom: adminSpace.lg },
+  cell: { flex: 1 },
+  cardTopRow: { flexDirection: 'row', alignItems: 'center' },
+  userName: adminType.cardTitle,
+  userEmail: { fontSize: 12, color: MUTED_TEXT, marginTop: 2 },
+  tagsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexWrap: 'wrap',
     alignItems: 'center',
-    marginBottom: Theme.spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-    paddingBottom: Theme.spacing.sm,
+    gap: adminSpace.sm,
+    marginTop: adminSpace.md,
   },
-  modalTitle: { fontSize: 18, fontWeight: '800', color: Colors.dark },
-  closeIcon: { fontSize: 18, fontWeight: '700', color: Colors.neutralMedium },
-  inputLabel: { fontSize: 13, fontWeight: '700', color: Colors.dark, marginTop: Theme.spacing.sm, marginBottom: 4 },
-  modalInput: {
-    height: 44,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: Theme.borderRadius.md,
-    paddingHorizontal: Theme.spacing.md,
-    fontSize: 14,
-    color: Colors.dark,
-    backgroundColor: Colors.background,
-  },
-  radioGroup: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginVertical: 6 },
-  radioItem: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-  },
-  radioItemActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  radioText: { fontSize: 12, fontWeight: '600', color: Colors.neutralMedium },
-  radioTextActive: { color: Colors.surface, fontWeight: '700' },
-  modalFooter: {
+  joinedText: { fontSize: 12, color: MUTED_TEXT },
+  cardFooter: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: Theme.spacing.sm,
-    marginTop: Theme.spacing.lg,
-    paddingTop: Theme.spacing.sm,
+    gap: adminSpace.sm,
+    marginTop: adminSpace.lg,
+    paddingTop: adminSpace.lg,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
   },
-  cancelModalBtn: {
-    paddingHorizontal: Theme.spacing.md,
-    paddingVertical: Theme.spacing.xs + 4,
-    borderRadius: Theme.borderRadius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  cancelModalText: { fontSize: 13, fontWeight: '700', color: Colors.neutralMedium },
-  submitModalBtn: {
-    paddingHorizontal: Theme.spacing.lg,
-    paddingVertical: Theme.spacing.xs + 4,
-    borderRadius: Theme.borderRadius.md,
-    backgroundColor: Colors.primary,
-  },
-  submitModalText: { fontSize: 13, fontWeight: '700', color: Colors.surface },
-  dangerModalBtn: {
-    paddingHorizontal: Theme.spacing.lg,
-    paddingVertical: Theme.spacing.xs + 4,
-    borderRadius: Theme.borderRadius.md,
-    backgroundColor: Colors.errorText,
-  },
-  dangerModalText: { fontSize: 13, fontWeight: '700', color: Colors.surface },
-
-  // Detail Modal specific
-  detailProfileBox: { alignItems: 'center', marginVertical: Theme.spacing.md },
-  detailAvatarBox: { width: 64, height: 64, borderRadius: 32, backgroundColor: Colors.dark, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
-  detailAvatarText: { color: Colors.surface, fontSize: 24, fontWeight: '800' },
-  detailName: { fontSize: 18, fontWeight: '800', color: Colors.dark },
-  detailEmail: { fontSize: 13, color: Colors.neutralMedium, marginTop: 2 },
-  detailId: { fontSize: 11, color: Colors.neutralLight, marginTop: 2 },
-  detailTagsRow: { flexDirection: 'row', gap: 8, marginTop: 8 },
-  detailActionsContainer: {
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: Theme.borderRadius.md,
-    backgroundColor: Colors.background,
-    marginVertical: Theme.spacing.md,
-  },
-  detailActionItem: {
+  footerBtn: { flex: 1 },
+  softBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    padding: Theme.spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  detailActionIcon: { fontSize: 16, marginRight: 12 },
-  detailActionLabel: { fontSize: 14, fontWeight: '600', color: Colors.dark },
-  closeDetailBtn: {
-    width: '100%',
-    paddingVertical: Theme.spacing.sm + 2,
-    borderRadius: Theme.borderRadius.md,
+    justifyContent: 'center',
+    gap: 8,
+    minHeight: 44,
+    paddingHorizontal: adminSpace.lg,
+    borderRadius: adminRadius.md,
     borderWidth: 1,
-    borderColor: Colors.border,
-    alignItems: 'center',
   },
-  closeDetailText: { fontSize: 14, fontWeight: '700', color: Colors.dark },
+  softBtnText: { fontSize: 14, fontWeight: '700' },
+  loadMoreContainer: { marginTop: adminSpace.xl, alignItems: 'center' },
 
-  // Confirm delete
-  warningIconBox: { alignItems: 'center', marginVertical: 8 },
-  confirmTitle: { fontSize: 18, fontWeight: '800', color: Colors.dark, textAlign: 'center' },
-  confirmSub: { fontSize: 13, color: Colors.neutralMedium, textAlign: 'center', marginVertical: 8, lineHeight: 18 },
-  loadMoreContainer: {
-    marginTop: Theme.spacing.md,
-    marginBottom: Theme.spacing.lg,
-    alignItems: 'center',
-  },
-  loadMoreBtn: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: Theme.spacing.xl,
-    paddingVertical: Theme.spacing.sm + 4,
-    borderRadius: Theme.borderRadius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Theme.shadows.card,
-  },
-  loadMoreText: {
-    color: Colors.surface,
-    fontWeight: '700',
-    fontSize: 13,
-  },
-  loadMoreBtnOutline: {
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    paddingHorizontal: Theme.spacing.xl,
-    paddingVertical: Theme.spacing.sm + 4,
-    borderRadius: Theme.borderRadius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadMoreTextOutline: {
-    color: Colors.neutralMedium,
-    fontWeight: '600',
-    fontSize: 13,
-  },
+  detailProfileBox: { alignItems: 'center', marginBottom: adminSpace.lg },
+  detailName: { fontSize: 18, fontWeight: '800', color: Colors.dark },
+  detailEmail: { fontSize: 13, color: MUTED_TEXT, marginTop: 2 },
+  detailId: { fontSize: 11, color: MUTED_TEXT, marginTop: 2 },
+  detailTagsRow: { flexDirection: 'row', gap: 8, marginTop: adminSpace.sm },
 });

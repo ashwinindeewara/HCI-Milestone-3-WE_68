@@ -20,6 +20,13 @@ export const Colors = {
   background: '#F9FAFB', // App Background
   surface: '#FFFFFF', // Card / Modal Surface
 
+  // Text Hierarchy
+  text: {
+    primary: '#0F172A',
+    secondary: '#64748B',
+    muted: '#94A3B8',
+  },
+
   // Status & Feedback Colors
   warning: '#F6A928', // Warning / Pending
   warningBg: '#FEF3C7',

@@ -13,12 +13,19 @@ import org.springframework.web.bind.annotation.*;
 @CrossOrigin(origins = "*")
 public class EscrowController {
 
-    @Autowired
-    private EscrowService escrowService;
+    private final EscrowService escrowService;
+
+    public EscrowController(EscrowService escrowService) {
+        this.escrowService = escrowService;
+    }
 
     @GetMapping("/summary")
-    public ResponseEntity<EscrowSummaryDTO> getEscrowSummary() {
-        return ResponseEntity.ok(escrowService.getEscrowSummary());
+    public ResponseEntity<EscrowSummaryDTO> getEscrowSummary(
+            @RequestParam(required = false) String freelancerName,
+            @RequestParam(required = false) String email
+    ) {
+        String identifier = (email != null && !email.isBlank()) ? email : freelancerName;
+        return ResponseEntity.ok(escrowService.getEscrowSummary(identifier));
     }
 
     @PostMapping("/fund")

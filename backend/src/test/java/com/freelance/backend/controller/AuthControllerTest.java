@@ -61,7 +61,7 @@ public class AuthControllerTest {
 
     @Test
     public void testLoginFailureNonExistentUser() throws Exception {
-        LoginRequest loginRequest = new LoginRequest("nonexistent@domain.com", "randompass");
+        LoginRequest loginRequest = new LoginRequest("definitely_nonexistent_user_999@domain.com", "randompass");
 
         mockMvc.perform(post("/api/v1/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)

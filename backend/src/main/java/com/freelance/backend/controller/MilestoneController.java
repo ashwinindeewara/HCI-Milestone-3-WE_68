@@ -15,8 +15,11 @@ import java.util.List;
 @CrossOrigin(origins = "*")
 public class MilestoneController {
 
-    @Autowired
-    private MilestoneService milestoneService;
+    private final MilestoneService milestoneService;
+
+    public MilestoneController(MilestoneService milestoneService) {
+        this.milestoneService = milestoneService;
+    }
 
     @GetMapping("/contract/{contractId}")
     public ResponseEntity<List<Milestone>> getMilestonesByContract(@PathVariable String contractId) {
@@ -43,5 +46,10 @@ public class MilestoneController {
     @GetMapping("/{milestoneId}/deliverables")
     public ResponseEntity<List<Deliverable>> getDeliverables(@PathVariable String milestoneId) {
         return ResponseEntity.ok(milestoneService.getDeliverablesForMilestone(milestoneId));
+    }
+    @DeleteMapping("/deliverables/{deliverableId}")
+    public ResponseEntity<Void> deleteDeliverable(@PathVariable String deliverableId) {
+        milestoneService.deleteDeliverable(deliverableId);
+        return ResponseEntity.noContent().build();
     }
 }

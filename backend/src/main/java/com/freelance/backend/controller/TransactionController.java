@@ -14,20 +14,28 @@ import java.util.List;
 @CrossOrigin(origins = "*")
 public class TransactionController {
 
-    @Autowired
-    private TransactionService transactionService;
+    private final TransactionService transactionService;
+
+    public TransactionController(TransactionService transactionService) {
+        this.transactionService = transactionService;
+    }
 
     @GetMapping
     public ResponseEntity<List<Transaction>> getTransactions(
             @RequestParam(required = false) String status,
-            @RequestParam(required = false) String type) {
-        return ResponseEntity.ok(transactionService.getAllTransactions(status, type));
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) String freelancerName,
+            @RequestParam(required = false) String email
+    ) {
+        String identifier = (email != null && !email.isBlank()) ? email : freelancerName;
+        return ResponseEntity.ok(transactionService.getAllTransactions(status, type, identifier));
     }
 
     @GetMapping("/metrics")
     public ResponseEntity<StaffDashboardMetricsDTO> getStaffDashboardMetrics() {
         return ResponseEntity.ok(transactionService.getStaffDashboardMetrics());
     }
+
 
     @GetMapping("/{id}")
     public ResponseEntity<Transaction> getTransactionById(@PathVariable String id) {

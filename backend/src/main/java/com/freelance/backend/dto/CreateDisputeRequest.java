@@ -7,6 +7,11 @@ public class CreateDisputeRequest {
     private String evidenceFile;
     private Double amount;
     private String parties;
+    private String clientName;
+    private String freelancerName;
+    private String freelancerEmail;
+    private String contractId;
+    private String priority = "Medium";
 
     public CreateDisputeRequest() {}
 
@@ -56,5 +61,45 @@ public class CreateDisputeRequest {
 
     public void setParties(String parties) {
         this.parties = parties;
+    }
+
+    public String getClientName() {
+        return clientName;
+    }
+
+    public void setClientName(String clientName) {
+        this.clientName = clientName;
+    }
+
+    public String getFreelancerName() {
+        return freelancerName;
+    }
+
+    public void setFreelancerName(String freelancerName) {
+        this.freelancerName = freelancerName;
+    }
+
+    public String getFreelancerEmail() {
+        return freelancerEmail;
+    }
+
+    public void setFreelancerEmail(String freelancerEmail) {
+        this.freelancerEmail = freelancerEmail;
+    }
+
+    public String getContractId() {
+        return contractId;
+    }
+
+    public void setContractId(String contractId) {
+        this.contractId = contractId;
+    }
+
+    public String getPriority() {
+        return priority;
+    }
+
+    public void setPriority(String priority) {
+        this.priority = priority;
     }
 }

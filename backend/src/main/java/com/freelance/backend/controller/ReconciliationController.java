@@ -16,8 +16,11 @@ import java.util.List;
 @CrossOrigin(origins = "*")
 public class ReconciliationController {
 
-    @Autowired
-    private ReconciliationService reconciliationService;
+    private final ReconciliationService reconciliationService;
+
+    public ReconciliationController(ReconciliationService reconciliationService) {
+        this.reconciliationService = reconciliationService;
+    }
 
     @GetMapping
     public ResponseEntity<List<ReconciliationRecord>> getReconciliationRecords(@RequestParam(required = false) String status) {
@@ -55,4 +58,3 @@ public class ReconciliationController {
         return ResponseEntity.ok(reconciliationService.runReconciliation());
     }
 }
-
