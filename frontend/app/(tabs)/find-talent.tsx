@@ -8,51 +8,36 @@ import {
   TouchableOpacity,
   Alert,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import Colors from '../../src/constants/colors';
 import Theme from '../../src/constants/theme';
+import { TALENT_PROFILES } from '../../src/constants/talentProfiles';
 
 export default function FindTalentScreen() {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedSkill, setSelectedSkill] = useState('Figma');
+  const [selectedSkill, setSelectedSkill] = useState('All');
 
-  const talents = [
-    {
-      id: '1',
-      name: 'Amaya Perera',
-      verified: true,
-      role: 'UI/UX Designer',
-      rating: 4.8,
-      jobsCount: 18,
-      hourlyRate: '$65/hr',
-      skills: ['Figma', 'UI Design', 'UX'],
-      availability: 'Available',
-    },
-    {
-      id: '2',
-      name: 'Vihaga Edirisinghe',
-      verified: true,
-      role: 'Frontend Developer',
-      rating: 4.9,
-      jobsCount: 32,
-      hourlyRate: '$80/hr',
-      skills: ['Figma', 'UI Design', 'UX'],
-      availability: 'Available',
-    },
-    {
-      id: '3',
-      name: 'Piyumi Kavindya',
-      verified: true,
-      role: 'Product Designer',
-      rating: 4.7,
-      jobsCount: 15,
-      hourlyRate: '$70/hr',
-      skills: ['Figma', 'UI Design', 'UX'],
-      availability: 'Available',
-    },
-  ];
+  const talents = TALENT_PROFILES;
 
-  const handleInvite = (name: string) => {
-    Alert.alert('Invite Talent', `Invitation sent to ${name} for your project contract.`);
+  const filteredTalents = talents.filter((talent) => {
+    const query = searchQuery.trim().toLowerCase();
+    const matchesSearch = !query ||
+      talent.name.toLowerCase().includes(query) ||
+      talent.role.toLowerCase().includes(query) ||
+      talent.skills.some((skill) => skill.toLowerCase().includes(query));
+    const matchesSkill = selectedSkill === 'All' ||
+      (selectedSkill === 'Available' && talent.availability === 'Available') ||
+      talent.role.toLowerCase().includes(selectedSkill.toLowerCase()) ||
+      talent.skills.some((skill) => skill.toLowerCase().includes(selectedSkill.toLowerCase()));
+    return matchesSearch && matchesSkill;
+  });
+
+  const handleInvite = (talent: (typeof talents)[number]) => {
+    router.push({
+      pathname: '/(tabs)/create-project',
+      params: { talentId: talent.id },
+    });
   };
 
   return (
@@ -77,7 +62,7 @@ export default function FindTalentScreen() {
 
       {/* Filter Skill Chips */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsRow}>
-        {['Figma', 'UI Design', 'Available', 'React', 'Rating'].map((skill) => {
+        {['All', 'UI Design', 'Frontend', 'Product Design', 'Available'].map((skill) => {
           const isSelected = selectedSkill === skill;
           return (
             <TouchableOpacity
@@ -96,7 +81,7 @@ export default function FindTalentScreen() {
 
       {/* Talent Cards List (Matching Screenshot 3) */}
       <View style={styles.talentList}>
-        {talents.map((item) => (
+        {filteredTalents.map((item) => (
           <View key={item.id} style={styles.talentCard}>
             {/* Top Info Row */}
             <View style={styles.cardTopRow}>
@@ -139,14 +124,17 @@ export default function FindTalentScreen() {
               <View style={styles.buttonsRow}>
                 <TouchableOpacity
                   style={styles.viewProfileBtn}
-                  onPress={() => Alert.alert('Talent Profile', `Viewing ${item.name}'s portfolio.`)}
+                  onPress={() => router.push({
+                    pathname: '/(tabs)/talent-profile',
+                    params: { id: item.id },
+                  })}
                 >
                   <Text style={styles.viewProfileText}>View Profile</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
                   style={styles.inviteBtn}
-                  onPress={() => handleInvite(item.name)}
+                  onPress={() => handleInvite(item)}
                 >
                   <Text style={styles.inviteText}>Invite</Text>
                 </TouchableOpacity>
@@ -154,7 +142,11 @@ export default function FindTalentScreen() {
             </View>
           </View>
         ))}
+        {filteredTalents.length === 0 && (
+          <Text style={styles.emptyText}>No talent matches your search.</Text>
+        )}
       </View>
+
     </ScrollView>
   );
 }
@@ -220,6 +212,11 @@ const styles = StyleSheet.create({
   },
   talentList: {
     gap: Theme.spacing.md,
+  },
+  emptyText: {
+    color: Colors.neutralMedium,
+    textAlign: 'center',
+    paddingVertical: Theme.spacing.lg,
   },
   talentCard: {
     backgroundColor: Colors.surface,

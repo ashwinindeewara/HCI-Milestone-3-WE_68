@@ -25,6 +25,15 @@ public class FreelancerProfileService {
     @Autowired
     private FileStorageService fileStorageService;
 
+    public List<FreelancerProfile> getAllFreelancerProfiles() {
+        return profileRepository.findAll();
+    }
+
+    public FreelancerProfile getProfileById(Long id) {
+        return profileRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Freelancer profile not found with id: " + id));
+    }
+
     public FreelancerProfile getDefaultProfile() {
         return profileRepository.findAll().stream().findFirst()
                 .orElseGet(() -> new FreelancerProfile("freelancer@example.com", "Freelancer"));
