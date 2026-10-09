@@ -316,6 +316,8 @@ export const FreelancerApiService = {
     apiClient.post(`/milestones/${milestoneId}/deliverables`, data),
   getDeliverables: (milestoneId: string) => apiClient.get(`/milestones/${milestoneId}/deliverables`),
   getDeliverable: (id: string) => apiClient.get(`/deliverables/${id}`),
+    updateDeliverable: (id: string, data: { fileName: string; fileSize?: string; notes?: string }) =>
+      apiClient.put(`/deliverables/${id}`, data),
     deleteDeliverable: (id: string) => apiClient.delete(`/deliverables/${id}`),
   approveDeliverable: (id: string) => apiClient.post(`/deliverables/${id}/approve`),
   rejectDeliverable: (id: string, feedback?: string) =>
@@ -328,7 +330,21 @@ export const FreelancerApiService = {
     const targetEmail = email || user?.email || '';
     return apiClient.get('/disputes', { params: { ...(name ? { freelancerName: name } : {}), ...(targetEmail ? { email: targetEmail } : {}) } });
   },
-  getDispute: (id: string) => apiClient.get(`/disputes/${id}`),
+  getClientDisputes: (clientName?: string, email?: string) =>
+    apiClient.get('/disputes', {
+      params: {
+        ...(clientName ? { clientName } : {}),
+        ...(email ? { clientEmail: email } : {}),
+      },
+    }),
+  getDispute: (id: string, viewerName?: string, viewerEmail?: string, role?: string) =>
+    apiClient.get(`/disputes/${id}`, {
+      params: {
+        ...(viewerName ? { viewerName } : {}),
+        ...(viewerEmail ? { viewerEmail } : {}),
+        ...(role ? { role } : {}),
+      },
+    }),
   createDispute: (data: {
     project: string;
     issueType: string;
@@ -342,6 +358,13 @@ export const FreelancerApiService = {
     priority?: string;
     evidenceFile?: string;
   }) => apiClient.post('/disputes', data),
+  updateDispute: (id: string, data: {
+    project: string;
+    issueType: string;
+    description: string;
+    evidenceFile?: string;
+  }) => apiClient.put(`/disputes/${id}`, data),
+  deleteDispute: (id: string) => apiClient.delete(`/disputes/${id}`),
   addDisputeMessage: (disputeId: string, data: { senderName: string; senderRole: string; message: string }) =>
     apiClient.post(`/disputes/${disputeId}/messages`, data),
   resolveDispute: (id: string, data: { status: string; statusType?: string; resolutionNote?: string }) =>
