@@ -1,7 +1,6 @@
 package com.freelance.backend.controller;
 
-import com.freelance.backend.dto.ClientProfileResponse;
-import com.freelance.backend.dto.ClientProfileUpdateRequest;
+import com.freelance.backend.dto.UserProfileDTO;
 import com.freelance.backend.service.ClientService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -16,15 +15,26 @@ public class ClientController {
     private ClientService clientService;
 
     @GetMapping("/{id}/profile")
-    public ResponseEntity<ClientProfileResponse> getClientProfile( @PathVariable Long id) {
-        return ResponseEntity.ok( clientService.getClientProfile(id));
+    public ResponseEntity<UserProfileDTO> getClientProfile(@PathVariable Long id) {
+        return ResponseEntity.ok(clientService.getClientProfile(id));
     }
 
     @PutMapping("/{id}/profile")
-    public ResponseEntity<ClientProfileResponse> updateClientProfile(
+    public ResponseEntity<UserProfileDTO> updateClientProfile(
             @PathVariable Long id,
-            @RequestBody ClientProfileUpdateRequest request) {
+            @RequestBody UserProfileDTO request) {
+        return ResponseEntity.ok(clientService.updateClientProfile(id, request));
+    }
 
-        return ResponseEntity.ok( clientService.updateClientProfile(id, request) );
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteClientProfile(@PathVariable Long id) {
+        clientService.deleteClientProfile(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/delete-by-email")
+    public ResponseEntity<Void> deleteClientProfileByEmail(@RequestParam String email) {
+        clientService.deleteClientProfileByEmail(email);
+        return ResponseEntity.noContent().build();
     }
 }

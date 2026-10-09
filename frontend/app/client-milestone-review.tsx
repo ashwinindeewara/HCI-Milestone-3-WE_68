@@ -381,31 +381,39 @@ export default function ClientMilestoneReviewScreen() {
 
   const updateMilestoneStatus = async (status: 'APPROVED' | 'CHANGES_REQUESTED', reason?: string) => {
     if (!contract || !milestone) return;
+
+    if (status === 'APPROVED') {
+      router.push({
+        pathname: '/client-confirm-payment',
+        params: {
+          contractId: contract.id,
+          milestoneId: milestone.id,
+          amount: String(milestone.amount),
+          title: milestone.title,
+          freelancerName: contract.freelancerName,
+          freelancerEmail: contract.freelancerEmail || '',
+        },
+      });
+      return;
+    }
+
     setActionLoading(true);
     try {
-      const activeProjId = projectId || `PRJ-${contract.id}`;
-      let updatedStatus: string = status;
+      let updatedStatus: string = 'CHANGES_REQUESTED';
 
       try {
-        const response = await apiClient.patch(
-          `/projects/${encodeURIComponent(activeProjId)}/milestones/${encodeURIComponent(milestone.id)}/status`,
-          reason ? { reason } : {},
-          { params: { status }, timeout: 8000 },
+        await apiClient.post(
+          `/milestones/${encodeURIComponent(milestone.id)}/request-changes`,
+          { reason: reason || 'Revisions requested by client.' },
+          { timeout: 8000 }
         );
-        updatedStatus = asString(response.data?.status, status);
       } catch (err) {
-        console.info('[MilestoneReview] Patch endpoint failed, updating via ContractService fallback', err);
-        if (status === 'APPROVED') {
-          await ContractService.releasePayment(milestone.id);
-          updatedStatus = 'RELEASED';
-        } else {
-          updatedStatus = 'CHANGES_REQUESTED';
-        }
+        console.info('[MilestoneReview] Backend request-changes failed, using fallback notification', err);
       }
 
       const updatedMilestone = { ...milestone, status: updatedStatus };
       const updatedContractMilestones = contract.milestones.map((m) =>
-        m.id === milestone.id ? updatedMilestone : m,
+        m.id === milestone.id ? updatedMilestone : m
       );
 
       setMilestone(updatedMilestone);
@@ -414,18 +422,14 @@ export default function ClientMilestoneReviewScreen() {
       setChangesReason('');
 
       Alert.alert(
-        status === 'APPROVED' ? 'Milestone Approved & Released' : 'Changes Requested',
-        status === 'APPROVED'
-          ? 'The milestone has been approved and escrow payment released to freelancer.'
-          : 'Your change request has been sent to the freelancer.',
+        'Changes Requested',
+        `Your revision request for "${milestone.title}" has been sent to ${contract.freelancerName}.`
       );
     } catch (error: any) {
-      console.error('[MilestoneReview] Status update failed:', error);
+      console.error('[MilestoneReview] Request changes failed:', error);
       Alert.alert(
-        'Unable to update milestone',
-        error?.response?.data?.message ??
-          error?.message ??
-          'Check milestone service connection.',
+        'Unable to send change request',
+        error?.response?.data?.message ?? error?.message ?? 'Check network connection.'
       );
     } finally {
       setActionLoading(false);
@@ -519,6 +523,19 @@ export default function ClientMilestoneReviewScreen() {
     return styles.badgeTextNeutral;
   };
 
+  const handleGoBack = () => {
+    try {
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace('/client-dashboard');
+      }
+    } catch (e) {
+      console.warn('[MilestoneReview] Navigation goBack error, falling back to dashboard:', e);
+      router.replace('/client-dashboard');
+    }
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.stateScreen}>
@@ -536,7 +553,7 @@ export default function ClientMilestoneReviewScreen() {
         <TouchableOpacity style={styles.primaryButton} onPress={loadReview}>
           <Text style={styles.primaryButtonText}>Retry</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backButton} onPress={handleGoBack}>
           <Text style={styles.backButtonText}>Go back</Text>
         </TouchableOpacity>
       </SafeAreaView>
@@ -558,7 +575,7 @@ export default function ClientMilestoneReviewScreen() {
           <View style={styles.header}>
             <TouchableOpacity
               style={styles.headerBack}
-              onPress={() => router.back()}
+              onPress={handleGoBack}
               accessibilityRole="button"
               accessibilityLabel="Go back"
             >

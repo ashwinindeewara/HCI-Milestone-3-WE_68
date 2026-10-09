@@ -266,6 +266,64 @@ public class MilestoneService {
     }
 
     @Transactional
+    public Milestone requestMilestoneChanges(String milestoneId, String reason) {
+        Milestone milestone = getMilestoneById(milestoneId);
+        milestone.setStatus("CHANGES_REQUESTED");
+        milestoneRepository.save(milestone);
+
+        String feedback = (reason != null && !reason.isBlank()) ? reason.trim() : "Revisions requested by client.";
+
+        List<Deliverable> deliverables = deliverableRepository.findByMilestoneId(milestoneId);
+        for (Deliverable d : deliverables) {
+            d.setStatus("REJECTED");
+            d.setFeedback(feedback);
+            deliverableRepository.save(d);
+        }
+
+        String contractId = milestone.getContractId();
+        if (contractId != null) {
+            recalculateProjectProgress(contractId);
+
+            String formattedProjId = contractId.startsWith("PRJ-") ? contractId : "PRJ-" + contractId;
+            contractRepository.findById(contractId).ifPresent(c -> {
+                Notification notif = new Notification(
+                        "Revision Requested: " + milestone.getTitle(),
+                        "Client requested changes for " + milestone.getTitle() + ": " + feedback,
+                        "Revision Needed",
+                        "review",
+                        milestone.getAmount() != null ? "$" + String.format("%,.0f", milestone.getAmount()) : "$2,000",
+                        "Deliverables",
+                        "/project-details?id=" + formattedProjId,
+                        "View Project Overview",
+                        true,
+                        "Just now",
+                        "DELIVERABLE_REJECTED",
+                        milestone.getId(),
+                        "Client has requested revisions on milestone '" + milestone.getTitle() + "'. Feedback provided: \"" + feedback + "\". Please revise and re-upload your files."
+                );
+                notif.setRecipientName(c.getFreelancerName());
+                notif.setSenderName(c.getClientName());
+                if (c.getFreelancerEmail() != null && !c.getFreelancerEmail().isBlank()) {
+                    notif.setRecipientEmail(c.getFreelancerEmail().trim());
+                } else {
+                    findUserEmail(c.getFreelancerName()).ifPresent(notif::setRecipientEmail);
+                }
+                notificationRepository.save(notif);
+
+                projectService.logActivity(
+                        formattedProjId,
+                        contractId,
+                        "DELIVERABLE_REJECTED",
+                        "Revision requested for " + milestone.getTitle() + ": " + feedback,
+                        c.getClientName()
+                );
+            });
+        }
+
+        return milestone;
+    }
+
+    @Transactional
     public Deliverable rejectDeliverable(String deliverableId, String feedback) {
         Deliverable deliverable = getDeliverableById(deliverableId);
         deliverable.setStatus("REJECTED");
@@ -276,42 +334,7 @@ public class MilestoneService {
                 .orElse(null);
 
         if (milestone != null) {
-            milestone.setStatus("IN_PROGRESS");
-            milestoneRepository.save(milestone);
-            recalculateProjectProgress(milestone.getContractId());
-
-            String contractId = milestone.getContractId();
-            if (contractId != null) {
-                contractRepository.findById(contractId).ifPresent(c -> {
-                    Notification notif = new Notification(
-                            "Deliverable Revision Requested: " + milestone.getTitle(),
-                            "Client requested changes for " + milestone.getTitle() + ": " + deliverable.getFeedback(),
-                            "Revision Needed",
-                            "review",
-                            milestone.getAmount() != null ? "$" + String.format("%,.0f", milestone.getAmount()) : "$2,000",
-                            "Deliverables",
-                            "/project-details?id=" + contractId,
-                            "View Milestone & Resubmit",
-                            true,
-                            "Just now",
-                            "DELIVERABLE_REJECTED",
-                            milestone.getId(),
-                            "Client has requested revisions on milestone '" + milestone.getTitle() + "'. Feedback provided: \"" + deliverable.getFeedback() + "\". Please revise and re-upload your files."
-                    );
-                    notif.setRecipientName(c.getFreelancerName());
-                    notif.setSenderName(c.getClientName());
-                    findUserEmail(c.getFreelancerName()).ifPresent(notif::setRecipientEmail);
-                    notificationRepository.save(notif);
-
-                    projectService.logActivity(
-                            "PRJ-" + contractId,
-                            contractId,
-                            "DELIVERABLE_REJECTED",
-                            "Revision requested for " + milestone.getTitle() + ": " + deliverable.getFeedback(),
-                            c.getClientName()
-                    );
-                });
-            }
+            requestMilestoneChanges(milestone.getId(), feedback);
         }
 
         return saved;
@@ -321,6 +344,13 @@ public class MilestoneService {
         if (fullName == null || fullName.isBlank()) {
             return java.util.Optional.empty();
         }
-        return userRepository.findByFullNameIgnoreCase(fullName.trim()).map(User::getEmail);
+        var found = userRepository.findByFullNameIgnoreCase(fullName.trim());
+        if (found.isPresent()) {
+            return found.map(User::getEmail);
+        }
+        return userRepository.findAll().stream()
+                .filter(u -> u.getFullName() != null && u.getFullName().toLowerCase().contains(fullName.trim().toLowerCase()))
+                .map(User::getEmail)
+                .findFirst();
     }
 }

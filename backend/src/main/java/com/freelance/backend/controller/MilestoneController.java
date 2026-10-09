@@ -47,6 +47,26 @@ public class MilestoneController {
     public ResponseEntity<List<Deliverable>> getDeliverables(@PathVariable String milestoneId) {
         return ResponseEntity.ok(milestoneService.getDeliverablesForMilestone(milestoneId));
     }
+    @PostMapping("/{id}/request-changes")
+    public ResponseEntity<Milestone> requestChanges(
+            @PathVariable String id,
+            @RequestBody(required = false) java.util.Map<String, String> payload
+    ) {
+        String reason = payload != null ? payload.get("reason") : "Revisions requested by client.";
+        return ResponseEntity.ok(milestoneService.requestMilestoneChanges(id, reason));
+    }
+
+    @PostMapping("/{id}/approve")
+    public ResponseEntity<Milestone> approveMilestone(@PathVariable String id) {
+        List<Deliverable> deliverables = milestoneService.getDeliverablesForMilestone(id);
+        if (!deliverables.isEmpty()) {
+            milestoneService.approveDeliverable(deliverables.get(0).getId());
+        } else {
+            milestoneService.updateMilestoneStatus(id, "COMPLETED");
+        }
+        return ResponseEntity.ok(milestoneService.getMilestoneById(id));
+    }
+
     @DeleteMapping("/deliverables/{deliverableId}")
     public ResponseEntity<Void> deleteDeliverable(@PathVariable String deliverableId) {
         milestoneService.deleteDeliverable(deliverableId);

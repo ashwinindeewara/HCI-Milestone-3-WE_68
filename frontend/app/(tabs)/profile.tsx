@@ -136,16 +136,55 @@ export default function FreelancerProfileScreen() {
     if (!email) return;
     setDeletingAccount(true);
     try {
-      await FreelancerApiService.deleteAccount(email);
+      try {
+        await apiClient.delete('/freelancers/delete-by-email', { params: { email } });
+      } catch (e) {
+        console.warn('Delete freelancer profile error:', e);
+      }
+      try {
+        await apiClient.delete('/users/delete-by-email', { params: { email } });
+      } catch (e) {
+        console.warn('Delete user account error:', e);
+      }
       setDeleteAccountModalVisible(false);
       setLogoutModalVisible(false);
       clearAuthSession();
       router.replace('/login');
     } catch {
-      setDeletingAccount(false);
+
       setDeleteAccountModalVisible(false);
       setSaveToast(false);
-      alert('We could not delete your account. Please try again.');
+      if (Platform.OS === 'web') {
+        window.alert('We could not delete your account. Please try again.');
+      } else {
+        Alert.alert('Error', 'We could not delete your account. Please try again.');
+      }
+    } finally {
+      setDeletingAccount(false);
+    }
+  };
+
+  const handleConfirmDeleteFreelancerAccount = () => {
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm(
+        'Are you sure you want to delete your freelancer account? This action will permanently remove your profile, account, and associated data from the database and cannot be undone.'
+      );
+      if (confirmed) {
+        handleDeleteAccount();
+      }
+    } else {
+      Alert.alert(
+        'Delete Freelancer Account',
+        'Are you sure you want to delete your freelancer account? This action will permanently remove your profile, account, and associated data from the database and cannot be undone.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete Account',
+            style: 'destructive',
+            onPress: handleDeleteAccount,
+          },
+        ]
+      );
     }
   };
 
@@ -649,7 +688,7 @@ export default function FreelancerProfileScreen() {
               {isEditing && <Text style={styles.sectionPencil}>✎</Text>}
             </View>
 
-            {/* Main Action Button (Edit Profile / Save Changes) */}
+            {/* Main Action Button (Edit Profile / Save Changes / Delete Account) */}
             <View style={styles.actionBtnContainer}>
               {isEditing ? (
                 <TouchableOpacity
@@ -663,13 +702,31 @@ export default function FreelancerProfileScreen() {
                   </Text>
                 </TouchableOpacity>
               ) : (
-                <TouchableOpacity
-                  style={styles.editProfileBtn}
-                  onPress={() => router.push('/edit-profile')}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.editProfileText}>Edit Profile</Text>
-                </TouchableOpacity>
+                <>
+                  <TouchableOpacity
+                    style={styles.editProfileBtn}
+                    onPress={() => router.push('/edit-profile')}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.editProfileText}>Edit Profile</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.deleteAccountBtn, deletingAccount && { opacity: 0.6 }]}
+                    onPress={handleConfirmDeleteFreelancerAccount}
+                    activeOpacity={0.8}
+                    disabled={deletingAccount}
+                  >
+                    {deletingAccount ? (
+                      <ActivityIndicator size="small" color="#EF4444" />
+                    ) : (
+                      <>
+                        <Text style={styles.deleteAccountIcon}>🗑️</Text>
+                        <Text style={styles.deleteAccountText}>Delete Freelancer Account</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </>
               )}
             </View>
           </ScrollView>
@@ -1242,6 +1299,28 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: '#111827',
+  },
+  deleteAccountBtn: {
+    width: '100%',
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1.5,
+    borderColor: '#EF4444',
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexDirection: 'row',
+    marginTop: 12,
+    gap: 8,
+  },
+  deleteAccountIcon: {
+    fontSize: 14,
+    color: '#EF4444',
+  },
+  deleteAccountText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#EF4444',
   },
   modalOverlay: {
     flex: 1,

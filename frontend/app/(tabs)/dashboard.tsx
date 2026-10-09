@@ -262,8 +262,26 @@ Executed on:                    ${new Date().toLocaleDateString('en-US', { year:
         const activeCount = syncedProjects.filter((p: any) => p.status === 'ACTIVE' || p.status === 'IN_PROGRESS').length;
         const totalEscrow = syncedProjects.reduce((acc: number, p: any) => acc + (p.inEscrowAmount || 0), 0);
 
+        // Fetch cleared available earnings from escrow summary / localStorage
+        let availableEarnings = isChathuni ? 9800 : 0;
+        if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+          try {
+            const k = `escrow_avail_${activeEmail || activeName || 'default'}`;
+            const s = localStorage.getItem(k);
+            if (s) availableEarnings = parseFloat(s);
+          } catch (e) {}
+        }
+
+        try {
+          const escRes = await apiClient.get('/escrow/summary', { params: { email: activeEmail, freelancerName: activeName } });
+          if (escRes.data && escRes.data.releasedAmount != null) {
+            availableEarnings = escRes.data.releasedAmount;
+          }
+        } catch (e) {}
+
         setMetrics((prev) => ({
           ...prev,
+          totalEarnings: availableEarnings,
           activeProjects: activeCount,
           pendingMilestones: pendingMilestoneCount,
           pendingEscrow: totalEscrow,

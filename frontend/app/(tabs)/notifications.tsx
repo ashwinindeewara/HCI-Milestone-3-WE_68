@@ -181,10 +181,14 @@ export default function NotificationsScreen() {
       prev.map((n) => (n.id === item.id ? { ...n, unread: false } : n))
     );
     apiClient.patch(`/notifications/${item.id}/read`).catch(() => {});
-    router.push({
-      pathname: '/notification-details',
-      params: { id: item.id.toString() },
-    });
+    if (item.actionUrl) {
+      router.push(item.actionUrl as any);
+    } else {
+      router.push({
+        pathname: '/notification-details',
+        params: { id: item.id.toString() },
+      });
+    }
   };
 
   const filteredNotifications = notifications.filter((item) => {

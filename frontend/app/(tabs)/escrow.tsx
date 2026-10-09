@@ -482,7 +482,8 @@ export default function EscrowScreen() {
             : 'Debit Card';
 
       // Deduct from available balance
-      setAvailableBalance((prev) => Math.max(0, prev - amountVal));
+      const newAvail = Math.max(0, availableBalance - amountVal);
+      setAvailableBalance(newAvail);
       setTotalWithdrawn((prev) => prev + amountVal);
 
       // Add payout transaction to ledger
@@ -498,6 +499,33 @@ export default function EscrowScreen() {
       };
 
       setHistory((prev) => [newTx, ...prev]);
+
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+        try {
+          const u = getCurrentUser();
+          const k = `escrow_avail_${u?.email || u?.fullName || 'default'}`;
+          localStorage.setItem(k, String(newAvail));
+
+          const historyKey = `escrow_history_${u?.email || u?.fullName || 'default'}`;
+          const existingHistory = JSON.parse(localStorage.getItem(historyKey) || '[]');
+          localStorage.setItem(historyKey, JSON.stringify([newTx, ...existingHistory]));
+        } catch (e) {}
+      }
+
+      // Record transaction on backend if reachable
+      try {
+        const u = getCurrentUser();
+        apiClient.post('/transactions', {
+          projectTitle: 'Payout Withdrawal',
+          description: `Transferred to ${destinationLabel}`,
+          amount: -amountVal,
+          type: 'WITHDRAW',
+          status: 'WITHDRAWN',
+          freelancerName: u?.fullName || '',
+          email: u?.email || '',
+        }).catch(() => {});
+      } catch (e) {}
+
       setIsProcessingWithdrawal(false);
       setWithdrawModalVisible(false);
       setWithdrawAmount('');

@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   Image,
+  Platform,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -36,6 +39,7 @@ export default function ClientProfileScreen() {
   const [loading, setLoading] = useState(true);
   const currentUser: ClientProfileData | null = getSavedUserData();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
       loadProfile();
@@ -125,6 +129,70 @@ export default function ClientProfileScreen() {
     router.push('/client-edit-profile');
   };
 
+
+  const executeDeleteClientAccount = async () => {
+    setIsDeleting(true);
+    try {
+      const savedUser = getSavedUserData();
+      const targetId = clientProfile?.id || savedUser?.id || savedUser?.userId;
+      const targetEmail = clientProfile?.email || savedUser?.email;
+
+      let deleted = false;
+      if (targetEmail) {
+        try {
+          await apiClient.delete('/clients/delete-by-email', { params: { email: targetEmail } });
+          deleted = true;
+        } catch (e) {
+          console.warn('Delete client by email failed:', e);
+        }
+        try {
+          await apiClient.delete('/users/delete-by-email', { params: { email: targetEmail } });
+        } catch (e) {
+          console.warn('Delete user by email failed:', e);
+        }
+      }
+      if (!deleted && targetId) {
+        try {
+          await apiClient.delete(`/clients/${targetId}`);
+        } catch (e) {
+          console.warn('Delete client by ID failed:', e);
+        }
+      }
+
+      clearAuthSession();
+      router.replace('/login');
+    } catch (err) {
+      console.warn('Client account deletion error:', err);
+      clearAuthSession();
+      router.replace('/login');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleDeleteClientAccount = () => {
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm(
+        'Are you sure you want to delete your client account? This action will permanently delete your client account, profile, and associated records from the database and cannot be undone.'
+      );
+      if (confirmed) {
+        executeDeleteClientAccount();
+      }
+    } else {
+      Alert.alert(
+        'Delete Client Account',
+        'Are you sure you want to delete your client account? This action will permanently delete your client account, profile, and associated records from the database and cannot be undone.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete Account',
+            style: 'destructive',
+            onPress: executeDeleteClientAccount,
+          },
+        ]
+      );
+    }
+  };
   const handleHome = () => {
     router.replace('/client-dashboard');
   };
@@ -306,6 +374,22 @@ export default function ClientProfileScreen() {
             </Text>
           </TouchableOpacity>
 
+          {/* ================= DELETE CLIENT ACCOUNT ================= */}
+          <TouchableOpacity
+            style={[styles.deleteAccountBtn, isDeleting && { opacity: 0.6 }]}
+            onPress={handleDeleteClientAccount}
+            activeOpacity={0.8}
+            disabled={isDeleting}
+          >
+            {isDeleting ? (
+              <ActivityIndicator size="small" color="#EF4444" />
+            ) : (
+              <>
+                <Text style={styles.deleteAccountIcon}>🗑️</Text>
+                <Text style={styles.deleteAccountText}>Delete Client Account</Text>
+              </>
+            )}
+          </TouchableOpacity>
           {/* Extra bottom spacing for tab bar */}
           <View style={{ height: 90 }} />
 
@@ -703,6 +787,27 @@ const styles = StyleSheet.create({
     color: Colors.dark,
   },
 
+  deleteAccountBtn: {
+    height: 48,
+    borderRadius: Theme.borderRadius.md,
+    borderWidth: 1.5,
+    borderColor: '#EF4444',
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexDirection: 'row',
+    marginTop: Theme.spacing.sm,
+    gap: 8,
+  },
+  deleteAccountIcon: {
+    fontSize: 14,
+    color: '#EF4444',
+  },
+  deleteAccountText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#EF4444',
+  },
   /* ================= BOTTOM NAV ================= */
 
   bottomTabBar: {
