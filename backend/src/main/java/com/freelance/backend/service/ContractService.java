@@ -12,6 +12,8 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 
+import static org.springframework.data.jpa.domain.AbstractPersistable_.id;
+
 @Service
 public class ContractService {
 
@@ -37,6 +39,14 @@ public class ContractService {
     public Contract getContractById(String id) {
         return contractRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Contract not found with id: " + id));
+    }
+
+    public List<Contract> getContractForClient(String name) {
+        if (name == null || name.isBlank()) {
+            return List.of();
+        }
+
+        return contractRepository.findByClientNameOrFreelancerName(name.trim(), null);
     }
 
     public Contract createContract(Contract contract) {

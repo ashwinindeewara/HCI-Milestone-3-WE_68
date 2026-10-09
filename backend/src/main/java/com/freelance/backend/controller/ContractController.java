@@ -27,7 +27,7 @@ public class ContractController {
         if (freelancerName != null && !freelancerName.isBlank()) {
             return ResponseEntity.ok(contractService.getFreelancerContracts(freelancerName));
         }
-        return ResponseEntity.ok(List.of());
+        return ResponseEntity.ok(contractService.getAllContracts());
     }
 
     @GetMapping("/freelancer")
@@ -47,6 +47,11 @@ public class ContractController {
     @GetMapping("/{id}")
     public ResponseEntity<Contract> getContractById(@PathVariable String id) {
         return ResponseEntity.ok(contractService.getContractById(id));
+    }
+
+    @GetMapping("/client/{name}")
+    public ResponseEntity<List<Contract>> getContractsForClient(@PathVariable String name) {
+        return ResponseEntity.ok(contractService.getContractForClient(name) );
     }
 
     @PostMapping
