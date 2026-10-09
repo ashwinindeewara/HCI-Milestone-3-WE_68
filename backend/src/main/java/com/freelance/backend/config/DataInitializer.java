@@ -62,8 +62,10 @@ public class DataInitializer implements CommandLineRunner {
 
     private void seedUsers() {
         userRepository.findByEmail("chathuniimalsha.com").ifPresent(u -> {
-            u.setEmail("chathuni@design.com");
-            userRepository.save(u);
+            if (!userRepository.existsByEmail("chathuni@design.com")) {
+                u.setEmail("chathuni@design.com");
+                userRepository.save(u);
+            }
         });
 
         if (userRepository.count() == 0) {
