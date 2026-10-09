@@ -14,7 +14,6 @@ import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
 import { getSavedUserData } from '../src/services/authService';
 import apiClient from '../src/services/api';
-import ContractService from '../src/services/contractService';
 
 interface ProjectCardData {
   id: string;
@@ -25,11 +24,124 @@ interface ProjectCardData {
   progress: number;
 }
 
+type ActivityTone = 'SUCCESS' | 'WARNING' | 'ERROR';
+
 interface ActivityItemData {
   id: string;
   title: string;
   description: string;
-  type: 'SUCCESS' | 'WARNING' | 'ERROR';
+  type: ActivityTone;
+  createdAt: string;
+  projectTitle: string;
+  performedBy: string;
+}
+
+const unwrapActivityList = (value: any): any[] => {
+  let candidate = value;
+  for (let depth = 0; depth < 4; depth += 1) {
+    if (Array.isArray(candidate)) return candidate;
+    if (!candidate || typeof candidate !== 'object') return [];
+    candidate = candidate.activities ?? candidate.items ?? candidate.content ?? candidate.data ?? candidate.result;
+  }
+  return Array.isArray(candidate) ? candidate : [];
+};
+
+const toActivityTitle = (rawType: unknown, rawDescription: unknown): string => {
+  const type = String(rawType ?? '').toUpperCase();
+  const description = String(rawDescription ?? '').toUpperCase();
+  const combined = `${type} ${description}`;
+  const statusMatch = description.match(/STATUS CHANGED TO\s+([A-Z_]+)/);
+  const status = statusMatch?.[1] ?? '';
+
+  if (status === 'FUNDED' || combined.includes('MILESTONE_FUNDED')) return 'Milestone Funded';
+  if (['SUBMITTED', 'DELIVERED', 'PENDING_REVIEW'].includes(status) || combined.includes('DELIVERABLE_SUBMITTED')) return 'Deliverable Submitted';
+  if (status === 'RELEASED' || combined.includes('PAYMENT_RELEASED')) return 'Payment Released';
+  if (['APPROVED', 'COMPLETED'].includes(status)) return 'Milestone Approved';
+  if (status === 'CHANGES_REQUESTED' || combined.includes('CHANGES_REQUESTED')) return 'Changes Requested';
+  if (status === 'REJECTED' || combined.includes('REJECTED')) return 'Milestone Rejected';
+  if (type.includes('FILE_UPLOADED')) return 'File Uploaded';
+  if (type.includes('CONTRACT_ACCEPTED')) return 'Contract Accepted';
+  if (type.includes('PROJECT_ACTIVATED')) return 'Project Activated';
+
+  const readable = String(rawType ?? 'PROJECT_UPDATE')
+    .replace(/[_-]+/g, ' ')
+    .toLowerCase()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+  return readable || 'Project Updated';
+};
+
+const toActivityTone = (rawType: unknown, rawDescription: unknown): ActivityTone => {
+  const combined = `${String(rawType ?? '')} ${String(rawDescription ?? '')}`.toUpperCase();
+  if (/REJECTED|CHANGES_REQUESTED|FAILED|DISPUTE/.test(combined)) return 'ERROR';
+  if (/SUBMITTED|DELIVERED|PENDING_REVIEW|FUNDED/.test(combined)) return 'WARNING';
+  return 'SUCCESS';
+};
+
+const formatActivityDate = (value: string): string => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+};
+
+/**
+ * Fetch activity rows for the contracts returned by the client-scoped contracts API.
+ * ProjectService creates project IDs as PRJ-<contract ID>, and ProjectController
+ * exposes saved events from GET /projects/{projectId}/activities.
+ */
+async function fetchRecentClientActivities(contractItems: any[]): Promise<ActivityItemData[]> {
+  const groups = await Promise.all(contractItems.map(async (contract: any) => {
+    const rawId = String(contract?.id ?? contract?.contractId ?? '').trim();
+    if (!rawId) return [] as ActivityItemData[];
+
+    const contractId = rawId.startsWith('PRJ-') ? rawId.slice(4) : rawId;
+    const projectId = String(contract?.projectId ?? contract?.project?.id ?? (rawId.startsWith('PRJ-') ? rawId : `PRJ-${contractId}`));
+    const projectTitle = String(contract?.title ?? contract?.projectName ?? contract?.project?.title ?? 'Project');
+
+    try {
+      const response = await apiClient.get(
+        `/projects/${encodeURIComponent(projectId)}/activities`,
+        { timeout: 10000 },
+      );
+      const rawActivities = unwrapActivityList(response.data);
+
+      return rawActivities.map((activity: any, index: number) => {
+        const rawType = activity?.type ?? activity?.eventType ?? 'PROJECT_UPDATE';
+        const rawDescription = activity?.description ?? activity?.message ?? activity?.details ?? '';
+        return {
+          id: `${projectId}-${String(activity?.id ?? `${rawType}-${index}`)}`,
+          title: toActivityTitle(rawType, rawDescription),
+          description: String(rawDescription || 'A project activity was recorded.'),
+          type: toActivityTone(rawType, rawDescription),
+          createdAt: String(activity?.createdAt ?? activity?.timestamp ?? activity?.eventTime ?? ''),
+          projectTitle,
+          performedBy: String(activity?.performedBy ?? activity?.actorName ?? activity?.createdBy ?? ''),
+        } as ActivityItemData;
+      });
+    } catch (error: any) {
+      // One project having no events must not prevent other project activities from loading.
+      console.info(
+        `[ClientDashboard] Could not load activities for project ${projectId}:`,
+        error?.response?.status ?? error?.message,
+      );
+      return [] as ActivityItemData[];
+    }
+  }));
+
+  return groups
+    .flat()
+    .sort((a, b) => {
+      const dateA = Date.parse(a.createdAt);
+      const dateB = Date.parse(b.createdAt);
+      return (Number.isFinite(dateB) ? dateB : 0) - (Number.isFinite(dateA) ? dateA : 0);
+    })
+    .slice(0, 5);
 }
 
 export default function ClientDashboardScreen() {
@@ -79,6 +191,7 @@ export default function ClientDashboardScreen() {
     try {
       if (!clientName) {
         setProjects([]);
+        setActivities([]);
         setMetrics({
           activeProjects: 0,
           pendingApprovals: 0,
@@ -215,25 +328,14 @@ export default function ClientDashboardScreen() {
         upcomingDeadlines: upcomingDeadlinesCount,
       });
 
-      // Load recent activity in the background so it cannot delay project cards.
-      void ContractService.getDashboardMetrics()
-        .then((metricsData: any) => {
-          if (Array.isArray(metricsData?.recentActivity)) {
-            const mappedActivities: ActivityItemData[] = metricsData.recentActivity.map((activity: any) => ({
-              id: String(activity.id ?? `${activity.title ?? 'activity'}-${activity.description ?? ''}`),
-              title: String(activity.title ?? 'Activity'),
-              description: String(activity.description ?? ''),
-              type: activity.type === 'PAYMENT'
-                ? 'ERROR'
-                : activity.type === 'MILESTONE'
-                  ? 'WARNING'
-                  : 'SUCCESS',
-            }));
-            setActivities(mappedActivities);
-          }
-        })
+      // Load only events belonging to this client's contracts. This replaces the
+      // previous global/dashboard-metrics feed, which could return demo or unrelated data.
+      setActivities([]);
+      void fetchRecentClientActivities(rawContracts)
+        .then(setActivities)
         .catch((activityError: any) => {
-          console.info('[ClientDashboard] Could not load recent activity:', activityError);
+          console.info('[ClientDashboard] Could not load client activity:', activityError);
+          setActivities([]);
         });
     } catch (error: any) {
       console.error('[ClientDashboard] Error loading client projects:', error);
@@ -242,6 +344,7 @@ export default function ClientDashboardScreen() {
       console.error('HTTP status:', error?.response?.status);
       console.error('Response data:', error?.response?.data);
       setProjects([]);
+      setActivities([]);
       setProjectsError(
         error?.response?.data?.message ??
         error?.response?.data?.error ??
@@ -360,7 +463,7 @@ export default function ClientDashboardScreen() {
 
           <TouchableOpacity
             style={styles.actionPillWhite}
-            onPress={() => router.push('/client-disputes')}
+            onPress={() => router.push('/create-dispute')}
             activeOpacity={0.8}
           >
             <Text style={styles.actionPillIcon}>+</Text>
@@ -369,7 +472,7 @@ export default function ClientDashboardScreen() {
 
           <TouchableOpacity
             style={styles.actionPillGreen}
-            onPress={() => router.push('/client-milestones')}
+            onPress={() => router.push('/client-milestone-review')}
             activeOpacity={0.8}
           >
             <Text style={styles.actionPillTextWhite}>Milestones</Text>
@@ -482,6 +585,11 @@ export default function ClientDashboardScreen() {
                 <View style={styles.activityContent}>
                   <Text style={styles.activityTitle}>{act.title}</Text>
                   <Text style={styles.activityDescription}>{act.description}</Text>
+                  <Text style={styles.activityMeta}>
+                    {[act.projectTitle, act.performedBy, formatActivityDate(act.createdAt)]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </Text>
                 </View>
               </View>
             ))
@@ -506,7 +614,7 @@ export default function ClientDashboardScreen() {
               <Text style={styles.tabLabel}>Find Talent</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-payment-list')}>
+            <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-reports')}>
               <Text style={styles.tabIcon}>💳</Text>
               <Text style={styles.tabLabel}>Payments</Text>
             </TouchableOpacity>
@@ -878,6 +986,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 17,
     color: Colors.neutralMedium,
+  },
+  activityMeta: {
+    fontSize: 10,
+    lineHeight: 14,
+    color: Colors.neutralLight,
+    marginTop: 3,
   },
   activityList: {
     marginTop: 4,
