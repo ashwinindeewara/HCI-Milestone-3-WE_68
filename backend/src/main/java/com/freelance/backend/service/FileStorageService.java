@@ -49,6 +49,10 @@ public class FileStorageService {
     }
 
     public FileAttachment storeFile(MultipartFile file, String relatedEntityType, String relatedEntityId, String uploadedBy) {
+        return storeFile(file, relatedEntityType, relatedEntityId, uploadedBy, null);
+    }
+
+    public FileAttachment storeFile(MultipartFile file, String relatedEntityType, String relatedEntityId, String uploadedBy, String uploadedByEmail) {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("Cannot store an empty file.");
         }
@@ -101,6 +105,7 @@ public class FileStorageService {
                 relatedEntityType != null ? relatedEntityType.toUpperCase() : "GENERAL",
                 relatedEntityId
         );
+        attachment.setUploadedByEmail(uploadedByEmail != null ? uploadedByEmail.trim().toLowerCase() : null);
 
         return fileAttachmentRepository.save(attachment);
     }
@@ -139,6 +144,13 @@ public class FileStorageService {
 
     public List<FileAttachment> getAllFiles() {
         return fileAttachmentRepository.findAll();
+    }
+
+    public List<FileAttachment> getFilesByOwnerEmail(String email) {
+        if (email == null || email.isBlank()) return List.of();
+        List<FileAttachment> owned = fileAttachmentRepository.findByUploadedByEmailIgnoreCaseOrderByCreatedAtDesc(email.trim());
+        if (!owned.isEmpty()) return owned;
+        return fileAttachmentRepository.findByUploadedByOrderByCreatedAtDesc(email.trim());
     }
 
     public void deleteFile(String fileId) {

@@ -11,4 +11,5 @@ public interface FileAttachmentRepository extends JpaRepository<FileAttachment, 
     List<FileAttachment> findByRelatedEntityTypeAndRelatedEntityIdOrderByCreatedAtDesc(String relatedEntityType, String relatedEntityId);
     List<FileAttachment> findByRelatedEntityIdOrderByCreatedAtDesc(String relatedEntityId);
     List<FileAttachment> findByUploadedByOrderByCreatedAtDesc(String uploadedBy);
+    List<FileAttachment> findByUploadedByEmailIgnoreCaseOrderByCreatedAtDesc(String uploadedByEmail);
 }

@@ -30,6 +30,9 @@ public class FileAttachment {
 
     private String uploadedBy;
 
+    @Column(name = "uploaded_by_email")
+    private String uploadedByEmail;
+
     private String relatedEntityType; // DISPUTE, DELIVERABLE, PROJECT, CONTRACT, PROFILE
 
     private String relatedEntityId;
@@ -126,6 +129,14 @@ public class FileAttachment {
 
     public void setUploadedBy(String uploadedBy) {
         this.uploadedBy = uploadedBy;
+    }
+
+    public String getUploadedByEmail() {
+        return uploadedByEmail;
+    }
+
+    public void setUploadedByEmail(String uploadedByEmail) {
+        this.uploadedByEmail = uploadedByEmail;
     }
 
     public String getRelatedEntityType() {

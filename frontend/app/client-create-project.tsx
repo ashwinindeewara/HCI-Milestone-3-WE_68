@@ -289,7 +289,12 @@ export default function CreateProjectScreen() {
 
   return (
       <SafeAreaView style={styles.safeArea}>
-          <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+          <ScrollView
+            style={styles.container}
+            contentContainerStyle={styles.content}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
             <View style={styles.header}>
               <TouchableOpacity
                 onPress={() => step > 1 ? setStep(step - 1) : router.replace('/client-find-talent')}
@@ -645,7 +650,8 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: Theme.spacing.md,
-    paddingBottom: Theme.spacing.xl,
+    // Leave room below the final form action so it can scroll fully above the tab bar.
+    paddingBottom: 96,
   },
   header: {
     height: 54,
@@ -1076,10 +1082,7 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   clientTabBar: {
-      position: 'absolute',
-      bottom: 0,
-      left: 0,
-      right: 0,
+      // Keep the tab bar in normal layout flow; do not overlay the form buttons.
       height: 64,
       backgroundColor: Colors.surface,
       borderTopWidth: 1,

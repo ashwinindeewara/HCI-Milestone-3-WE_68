@@ -379,53 +379,62 @@ export default function ClientMilestoneReviewScreen() {
     [milestone?.status],
   );
 
-  const updateMilestoneStatus = async (status: 'APPROVED' | 'CHANGES_REQUESTED', reason?: string) => {
-    if (!contract || !milestone) return;
+  // Opening the funding screen is navigation only. Do not update the status
+  // or release funds here; that happens when the user confirms on Fund Milestone.
+  const openFundingScreen = () => {
+    if (!contract || !milestone) {
+      Alert.alert('Milestone unavailable', 'Load the contract and selected milestone before continuing.');
+      return;
+    }
+
+    const activeProjectId = projectId || `PRJ-${contract.id}`;
+    console.log('[MilestoneReview] Opening funding screen', {
+      contractId: contract.id,
+      projectId: activeProjectId,
+      milestoneId: milestone.id,
+    });
+
+    router.push({
+      pathname: '/client-fund-milestone',
+      params: {
+        contractId: contract.id,
+        projectId: activeProjectId,
+        milestoneId: milestone.id,
+      },
+    });
+  };
+
+  // Request Changes remains an API action; approval/funding is handled by the
+  // separate Fund Milestone screen.
+  const updateMilestoneStatus = async (reason: string) => {
+    if (!contract || !milestone || !reason.trim()) return;
     setActionLoading(true);
     try {
       const activeProjId = projectId || `PRJ-${contract.id}`;
-      let updatedStatus: string = status;
-
-      try {
-        const response = await apiClient.patch(
-          `/projects/${encodeURIComponent(activeProjId)}/milestones/${encodeURIComponent(milestone.id)}/status`,
-          reason ? { reason } : {},
-          { params: { status }, timeout: 8000 },
-        );
-        updatedStatus = asString(response.data?.status, status);
-      } catch (err) {
-        console.info('[MilestoneReview] Patch endpoint failed, updating via ContractService fallback', err);
-        if (status === 'APPROVED') {
-          await ContractService.releasePayment(milestone.id);
-          updatedStatus = 'RELEASED';
-        } else {
-          updatedStatus = 'CHANGES_REQUESTED';
-        }
-      }
-
+      const response = await apiClient.patch(
+        `/projects/${encodeURIComponent(activeProjId)}/milestones/${encodeURIComponent(milestone.id)}/status`,
+        { reason: reason.trim() },
+        { params: { status: 'CHANGES_REQUESTED' }, timeout: 15000 },
+      );
+      const updatedStatus = asString(response.data?.status, 'CHANGES_REQUESTED');
       const updatedMilestone = { ...milestone, status: updatedStatus };
-      const updatedContractMilestones = contract.milestones.map((m) =>
-        m.id === milestone.id ? updatedMilestone : m,
+      const updatedContractMilestones = contract.milestones.map((item) =>
+        item.id === milestone.id ? updatedMilestone : item,
       );
 
       setMilestone(updatedMilestone);
       setContract({ ...contract, milestones: updatedContractMilestones });
       setChangesModalVisible(false);
       setChangesReason('');
-
-      Alert.alert(
-        status === 'APPROVED' ? 'Milestone Approved & Released' : 'Changes Requested',
-        status === 'APPROVED'
-          ? 'The milestone has been approved and escrow payment released to freelancer.'
-          : 'Your change request has been sent to the freelancer.',
-      );
+      Alert.alert('Changes Requested', 'Your change request has been sent to the freelancer.');
     } catch (error: any) {
       console.error('[MilestoneReview] Status update failed:', error);
       Alert.alert(
-        'Unable to update milestone',
+        'Unable to request changes',
         error?.response?.data?.message ??
+          error?.response?.data?.error ??
           error?.message ??
-          'Check milestone service connection.',
+          'Check that the milestone status endpoint is available.',
       );
     } finally {
       setActionLoading(false);
@@ -578,7 +587,7 @@ export default function ClientMilestoneReviewScreen() {
             <InfoRow label="Total Budget" value={`$${contract.totalBudget.toLocaleString()}`} highlight />
             <InfoRow label="Contract Status" value={contract.status.replace(/_/g, ' ')} />
           </View>
-          
+
           {/* Deliverables Section */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Submitted Deliverables ({milestone.deliverables.length})</Text>
@@ -666,13 +675,14 @@ export default function ClientMilestoneReviewScreen() {
         {/* Action Bar */}
         <View style={styles.actionBar}>
           <TouchableOpacity
-            style={[styles.primaryButton, (actionLoading || isApproved) && styles.disabledButton]}
-            onPress={() => updateMilestoneStatus('APPROVED')}
-            disabled={actionLoading || isApproved}
+            style={styles.primaryButton}
+            onPress={openFundingScreen}
+            accessibilityRole="button"
+            accessibilityLabel="Continue to fund this milestone"
           >
-            {actionLoading
-              ? <ActivityIndicator color={Colors.surface} />
-              : <Text style={styles.primaryButtonText}>{isApproved ? 'Milestone Approved' : 'Approve Milestone'}</Text>}
+            <Text style={styles.primaryButtonText}>
+              {isApproved ? 'Proceed to Funding' : 'Approve Milestone'}
+            </Text>
           </TouchableOpacity>
 
           <View style={styles.actionRowSecondary}>
@@ -729,7 +739,7 @@ export default function ClientMilestoneReviewScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalSubmitButton, (!changesReason.trim() || actionLoading) && styles.disabledButton]}
-                onPress={() => updateMilestoneStatus('CHANGES_REQUESTED', changesReason.trim())}
+                onPress={() => updateMilestoneStatus(changesReason.trim())}
                 disabled={!changesReason.trim() || actionLoading}
               >
                 {actionLoading
@@ -1282,4 +1292,3 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 });
-
