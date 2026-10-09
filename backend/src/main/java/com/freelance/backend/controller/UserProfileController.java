@@ -39,4 +39,10 @@ public class UserProfileController {
     public ResponseEntity<UserProfileDTO> updateProfileQuery(@RequestParam(defaultValue = "1") Long userId, @RequestBody UpdateProfileRequest request) {
         return ResponseEntity.ok(userProfileService.updateUserProfile(userId, request));
     }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteUserProfile(@PathVariable Long id) {
+        userProfileService.deleteUserProfile(id);
+        return ResponseEntity.noContent().build();
+    }
 }

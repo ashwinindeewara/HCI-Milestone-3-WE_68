@@ -11,6 +11,7 @@ import {
   Platform,
   SafeAreaView,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import Colors from '../../src/constants/colors';
@@ -322,6 +323,64 @@ export default function FreelancerProfileScreen() {
       } else {
         router.replace('/(tabs)/dashboard');
       }
+    }
+  };
+
+  const [deleting, setDeleting] = useState(false);
+
+  const executeDeleteProfile = async () => {
+    setDeleting(true);
+    try {
+      const activeUser = getCurrentUser();
+      const targetEmail = profile.email || activeUser?.email || '';
+      await FreelancerApiService.deleteProfile(targetEmail);
+
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+        const currentUser = getCurrentUser();
+        const k = `profile_cache_${currentUser?.email || currentUser?.fullName || 'default'}`;
+        localStorage.removeItem(k);
+        localStorage.removeItem('auth_user');
+        localStorage.removeItem('auth_email');
+        localStorage.removeItem('auth_name');
+        localStorage.removeItem('auth_role');
+      }
+
+      if (Platform.OS === 'web') {
+        window.alert('Profile deleted successfully.');
+      } else {
+        Alert.alert('Profile Deleted', 'Your profile record has been successfully removed.');
+      }
+
+      router.replace('/login');
+    } catch (err: any) {
+      console.warn('Profile delete error:', err);
+      Alert.alert('Delete Failed', err.message || 'Failed to delete profile. Please try again.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleDeleteProfile = () => {
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm(
+        'Are you sure you want to delete your profile? This action will permanently remove your profile data from the database and cannot be undone.'
+      );
+      if (confirmed) {
+        executeDeleteProfile();
+      }
+    } else {
+      Alert.alert(
+        'Delete Profile Confirmation',
+        'Are you sure you want to delete your profile? This action will permanently remove your profile data from the database and cannot be undone.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete Profile',
+            style: 'destructive',
+            onPress: executeDeleteProfile,
+          },
+        ]
+      );
     }
   };
 
