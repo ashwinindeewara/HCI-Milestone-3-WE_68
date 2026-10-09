@@ -12,9 +12,24 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
-@CrossOrigin(origins = "*")
+@CrossOrigin(
+        origins = {
+                "http://localhost:8081",
+                "http://127.0.0.1:8081"
+        },
+        allowedHeaders = "*",
+        methods = {
+                RequestMethod.GET,
+                RequestMethod.POST,
+                RequestMethod.PUT,
+                RequestMethod.PATCH,
+                RequestMethod.DELETE,
+                RequestMethod.OPTIONS
+        }
+)
 public class ProjectController {
 
     @Autowired
@@ -29,11 +44,17 @@ public class ProjectController {
             @RequestParam(required = false) String email
     ) {
         if (email != null && !email.isBlank()) {
-            return ResponseEntity.ok(projectService.getFreelancerProjectsByEmail(email));
+            return ResponseEntity.ok(
+                    projectService.getFreelancerProjectsByEmail(email)
+            );
         }
+
         if (freelancerName != null && !freelancerName.isBlank()) {
-            return ResponseEntity.ok(projectService.getFreelancerProjects(freelancerName));
+            return ResponseEntity.ok(
+                    projectService.getFreelancerProjects(freelancerName)
+            );
         }
+
         return ResponseEntity.ok(List.of());
     }
 
@@ -43,11 +64,17 @@ public class ProjectController {
             @RequestParam(required = false) String email
     ) {
         if (email != null && !email.isBlank()) {
-            return ResponseEntity.ok(projectService.getFreelancerProjectsByEmail(email));
+            return ResponseEntity.ok(
+                    projectService.getFreelancerProjectsByEmail(email)
+            );
         }
+
         if (freelancerName != null && !freelancerName.isBlank()) {
-            return ResponseEntity.ok(projectService.getFreelancerProjects(freelancerName));
+            return ResponseEntity.ok(
+                    projectService.getFreelancerProjects(freelancerName)
+            );
         }
+
         return ResponseEntity.ok(List.of());
     }
 
@@ -57,17 +84,23 @@ public class ProjectController {
     }
 
     @GetMapping("/api/projects/{id}/milestones")
-    public ResponseEntity<List<Milestone>> getProjectMilestones(@PathVariable String id) {
+    public ResponseEntity<List<Milestone>> getProjectMilestones(
+            @PathVariable String id
+    ) {
         return ResponseEntity.ok(projectService.getProjectMilestones(id));
     }
 
     @GetMapping("/api/projects/{id}/activities")
-    public ResponseEntity<List<ProjectActivity>> getProjectActivities(@PathVariable String id) {
+    public ResponseEntity<List<ProjectActivity>> getProjectActivities(
+            @PathVariable String id
+    ) {
         return ResponseEntity.ok(projectService.getProjectActivities(id));
     }
 
     @GetMapping("/api/projects/{id}/files")
-    public ResponseEntity<List<FileAttachment>> getProjectFiles(@PathVariable String id) {
+    public ResponseEntity<List<FileAttachment>> getProjectFiles(
+            @PathVariable String id
+    ) {
         return ResponseEntity.ok(projectService.getProjectFiles(id));
     }
 
@@ -78,27 +111,38 @@ public class ProjectController {
             @RequestParam(required = false, defaultValue = "Freelancer") String uploadedBy,
             @RequestParam(required = false) String uploadedByEmail
     ) {
-        FileAttachment attachment = fileStorageService.storeFile(file, "PROJECT", id, uploadedBy, uploadedByEmail);
-        projectService.logActivity(id, id, "FILE_UPLOADED", "Uploaded file: " + attachment.getOriginalFileName(), uploadedBy);
+        FileAttachment attachment = fileStorageService.storeFile(
+                file,
+                "PROJECT",
+                id,
+                uploadedBy,
+                uploadedByEmail
+        );
+
+        projectService.logActivity(
+                id,
+                id,
+                "FILE_UPLOADED",
+                "Uploaded file: " + attachment.getOriginalFileName(),
+                uploadedBy
+        );
+
         return ResponseEntity.ok(attachment);
     }
 
-    // Get deliverables for a specific milestone
-    @GetMapping(
-            "/api/projects/{projectId}/milestones/{milestoneId}/deliverables"
-    )
+    // Get submitted deliverables for one milestone.
+    @GetMapping("/api/projects/{projectId}/milestones/{milestoneId}/deliverables")
     public ResponseEntity<?> getMilestoneDeliverables(
             @PathVariable String projectId,
             @PathVariable String milestoneId
     ) {
-        return ResponseEntity.ok( projectService.getMilestoneDeliverables( projectId, milestoneId)
+        return ResponseEntity.ok(
+                projectService.getMilestoneDeliverables(projectId, milestoneId)
         );
     }
 
-    // Get messages for a specific milestone
-    @GetMapping(
-            "/api/projects/{projectId}/milestones/{milestoneId}/messages"
-    )
+    // Get conversation messages for one milestone.
+    @GetMapping("/api/projects/{projectId}/milestones/{milestoneId}/messages")
     public ResponseEntity<?> getMilestoneMessages(
             @PathVariable String projectId,
             @PathVariable String milestoneId
@@ -108,33 +152,40 @@ public class ProjectController {
         );
     }
 
-    // Send a message for a specific milestone
-    @PostMapping(
-            "/api/projects/{projectId}/milestones/{milestoneId}/messages"
-    )
+    // Save a message in the milestone conversation.
+    @PostMapping("/api/projects/{projectId}/milestones/{milestoneId}/messages")
     public ResponseEntity<?> sendMilestoneMessage(
             @PathVariable String projectId,
             @PathVariable String milestoneId,
-            @RequestBody java.util.Map<String, Object> payload
+            @RequestBody Map<String, Object> payload
     ) {
         return ResponseEntity.ok(
                 projectService.sendMilestoneMessage(projectId, milestoneId, payload)
         );
     }
 
-    // Update a milestone's status
-    @PatchMapping(
-            "/api/projects/{projectId}/milestones/{milestoneId}/status"
-    )
+    // Approve a milestone or request changes.
+    // Example: PATCH .../status?status=APPROVED
+    @PatchMapping("/api/projects/{projectId}/milestones/{milestoneId}/status")
     public ResponseEntity<?> updateMilestoneStatus(
             @PathVariable String projectId,
             @PathVariable String milestoneId,
             @RequestParam String status,
-            @RequestBody(required = false)
-            java.util.Map<String, Object> payload
+            @RequestBody(required = false) Map<String, Object> payload
     ) {
+        // Temporary diagnostic log: confirm that Spring registered and entered this route.
+        System.out.println("[ProjectController] PATCH milestone status endpoint hit"
+                + " | projectId=" + projectId
+                + " | milestoneId=" + milestoneId
+                + " | status=" + status);
+
         return ResponseEntity.ok(
-                projectService.updateMilestoneStatus(projectId, milestoneId, status, payload)
+                projectService.updateMilestoneStatus(
+                        projectId,
+                        milestoneId,
+                        status,
+                        payload == null ? Map.of() : payload
+                )
         );
     }
 }

@@ -299,58 +299,86 @@ export default function ClientContractsScreen() {
           </View>
         ) : (
           <View style={styles.projectList}>
-            {filteredProjects.map((item) => (
-              <TouchableOpacity
-                key={item.id}
-                style={styles.projectCard}
-                onPress={() =>
-                  router.push({
-                    pathname: '/client-milestone-review',
-                    params: { contractId: item.id },
-                  })
-                }
-                activeOpacity={0.85}
-              >
-                <View style={styles.cardHeader}>
-                  <View style={{ flex: 1, paddingRight: 8 }}>
-                    <Text style={styles.projectTitle} numberOfLines={1}>{item.title}</Text>
-                    <Text style={styles.freelancerName} numberOfLines={1}>{item.freelancerName}</Text>
-                  </View>
+            {filteredProjects.map((item) => {
+              // Contract endpoints use C-... IDs; project endpoints use PRJ-C-... IDs.
+              const contractId = item.id.startsWith('PRJ-') ? item.id.slice(4) : item.id;
+              const projectId = item.id.startsWith('PRJ-') ? item.id : `PRJ-${item.id}`;
 
-                  <View
-                    style={[
-                      styles.tagBox,
-                      item.status === 'Completed' ? styles.tagCompleted : styles.tagActive,
-                    ]}
-                  >
-                    <Text
+              const openProjectDetails = () => {
+                  console.log(contractId + "@"+projectId)
+                if (!contractId || !projectId) {
+                  console.error('[ClientContracts] Cannot open project details: missing IDs', {
+                    itemId: item.id,
+                    contractId,
+                    projectId,
+                  });
+                  return;
+                }
+
+                // Use an explicit Expo Router href so the route and query params
+                // are easy to verify in the browser address bar and console.
+                const href = `/client-project-details?contractId=${encodeURIComponent(contractId)}&projectId=${encodeURIComponent(projectId)}`;
+                console.log('[ClientContracts] Opening project details:', {
+                  route: '/client-project-details',
+                  contractId,
+                  projectId,
+                  href,
+                });
+                router.push(href as any);
+              };
+
+              return (
+                <View key={item.id} style={styles.projectCard}>
+                  <View style={styles.cardHeader}>
+                    <View style={{ flex: 1, paddingRight: 8 }}>
+                      <Text style={styles.projectTitle} numberOfLines={1}>{item.title}</Text>
+                      <Text style={styles.freelancerName} numberOfLines={1}>{item.freelancerName}</Text>
+                    </View>
+
+                    <View
                       style={[
-                        styles.tagText,
-                        item.status === 'Completed' ? styles.tagTextCompleted : styles.tagTextActive,
+                        styles.tagBox,
+                        item.status === 'Completed' ? styles.tagCompleted : styles.tagActive,
                       ]}
                     >
-                      {item.escrowTag}
+                      <Text
+                        style={[
+                          styles.tagText,
+                          item.status === 'Completed' ? styles.tagTextCompleted : styles.tagTextActive,
+                        ]}
+                      >
+                        {item.escrowTag}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.progressRow}>
+                    <Text style={styles.milestoneText} numberOfLines={1}>
+                      Milestone: {item.milestoneTitle}
                     </Text>
+                    <Text style={styles.progressPercent}>{item.progress}%</Text>
+                  </View>
+
+                  <View style={styles.progressTrack}>
+                    <View style={[styles.progressFill, { width: `${item.progress}%` }]} />
+                  </View>
+
+                  <View style={styles.cardFooter}>
+                    <Text style={styles.dueDate}>📅 {item.dueDate}</Text>
+                    <TouchableOpacity
+                      style={styles.viewDetailsButton}
+                      onPress={openProjectDetails}
+                      activeOpacity={0.8}
+                      accessibilityRole="button"
+                      accessibilityLabel={`View details for ${item.title}`}
+                    >
+                      <Text style={styles.viewDetailsButtonText}>View Details</Text>
+                      <Text style={styles.viewDetailsArrow}>›</Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
-
-                <View style={styles.progressRow}>
-                  <Text style={styles.milestoneText} numberOfLines={1}>
-                    Milestone: {item.milestoneTitle}
-                  </Text>
-                  <Text style={styles.progressPercent}>{item.progress}%</Text>
-                </View>
-
-                <View style={styles.progressTrack}>
-                  <View style={[styles.progressFill, { width: `${item.progress}%` }]} />
-                </View>
-
-                <View style={styles.cardFooter}>
-                  <Text style={styles.dueDate}>📅 {item.dueDate}</Text>
-                  <Text style={styles.viewDetails}>View Details ›</Text>
-                </View>
-              </TouchableOpacity>
-            ))}
+              );
+            })}
           </View>
         )}
       </ScrollView>
@@ -370,7 +398,7 @@ export default function ClientContractsScreen() {
             <Text style={styles.tabLabel}>Find Talent</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-reports')}>
+          <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-payment-list')}>
             <Text style={styles.tabIcon}>💳</Text>
             <Text style={styles.tabLabel}>Payments</Text>
           </TouchableOpacity>
@@ -578,10 +606,27 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.neutralLight,
   },
-  viewDetails: {
-    fontSize: 12,
+  viewDetailsButton: {
+    minHeight: 34,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    backgroundColor: Colors.primary,
+    borderRadius: 8,
+  },
+  viewDetailsButtonText: {
+    color: Colors.surface,
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  viewDetailsArrow: {
+    color: Colors.surface,
+    fontSize: 18,
+    lineHeight: 18,
     fontWeight: '700',
-    color: Colors.primary,
   },
   clientTabBar: {
         position: 'absolute',

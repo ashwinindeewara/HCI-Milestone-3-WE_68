@@ -253,8 +253,41 @@ public class ProjectService {
             throw new IllegalArgumentException("The status query parameter is required.");
         }
 
-        Project project = getProjectById(projectId);
-        Milestone milestone = findMilestoneForProject(project, milestoneId);
+        // A contract can exist before its Project row is created (for example,
+        // while the contract is still being drafted). Resolve the linked contract
+        // directly in that case, rather than returning 404 just because the
+        // projects table does not yet contain PRJ-<contractId>.
+        Project project = projectRepository.findById(projectId).orElse(null);
+        String contractId;
+
+        if (project != null) {
+            contractId = project.getContractId();
+            if (contractId == null || contractId.isBlank()) {
+                throw new ResourceNotFoundException(
+                        "Project has no linked contract: " + projectId
+                );
+            }
+        } else {
+            contractId = projectId != null && projectId.startsWith("PRJ-")
+                    ? projectId.substring(4)
+                    : projectId;
+
+            if (contractId == null || contractId.isBlank()
+                    || contractRepository.findById(contractId).isEmpty()) {
+                throw new ResourceNotFoundException(
+                        "Project or linked contract not found for ID: " + projectId
+                );
+            }
+        }
+
+        final String resolvedContractId = contractId;
+        Milestone milestone = milestoneRepository.findByContractId(resolvedContractId)
+                .stream()
+                .filter(item -> milestoneId.equals(String.valueOf(item.getId())))
+                .findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Milestone " + milestoneId + " not found for contract " + resolvedContractId
+                ));
 
         String normalizedStatus = status.trim().toUpperCase(Locale.ROOT);
         List<String> allowedStatuses = List.of(
@@ -285,13 +318,18 @@ public class ProjectService {
                 + "' status changed to " + normalizedStatus
                 + (reason.isBlank() ? "" : ". Reason: " + reason);
 
-        logActivity(
-                project.getId(),
-                project.getContractId(),
-                "MILESTONE_STATUS_UPDATED",
-                description,
-                "CLIENT"
-        );
+        // ProjectActivity may be related to a real project row. Only write that
+        // activity when the Project entity exists; status updates for a contract
+        // without a Project row should still be allowed.
+        if (project != null) {
+            logActivity(
+                    project.getId(),
+                    resolvedContractId,
+                    "MILESTONE_STATUS_UPDATED",
+                    description,
+                    valueOrDefault(payload == null ? null : payload.get("performedBy"), "CLIENT")
+            );
+        }
 
         return saved;
     }

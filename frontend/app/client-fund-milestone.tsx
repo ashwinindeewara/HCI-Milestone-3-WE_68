@@ -101,7 +101,6 @@ export default function ClientFundMilestoneScreen() {
   const [selectedMilestoneId, setSelectedMilestoneId] = useState(initialMilestoneId);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CARD');
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
   const [showMilestonePicker, setShowMilestonePicker] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
@@ -175,9 +174,9 @@ export default function ClientFundMilestoneScreen() {
   const platformFee = useMemo(() => Math.round(milestoneAmount * 0.05 * 100) / 100, [milestoneAmount]);
   const totalCharged = milestoneAmount + platformFee;
 
-  const confirmPayment = async () => {
+  const confirmPayment = () => {
     if (!contract || !selectedMilestone) {
-      setErrorMessage('Select a milestone before confirming payment.');
+      setErrorMessage('Select a milestone before continuing.');
       return;
     }
     if (milestoneAmount <= 0) {
@@ -185,53 +184,16 @@ export default function ClientFundMilestoneScreen() {
       return;
     }
 
-    setSubmitting(true);
     setErrorMessage('');
-    setSuccessMessage('');
-
-    try {
-      const activeProjectId = projectId || `PRJ-${contract.id}`;
-      console.log('[FundMilestone] Marking milestone as funded:', {
+    router.push({
+      pathname: '/client-payment-summary',
+      params: {
         contractId: contract.id,
-        projectId: activeProjectId,
+        projectId: projectId || `PRJ-${contract.id}`,
         milestoneId: selectedMilestone.id,
         paymentMethod,
-        amount: milestoneAmount,
-        platformFee,
-      });
-
-      // Uses the existing milestone-status endpoint. This changes the milestone
-      // status to FUNDED; it does not charge a real card or bank account.
-      const response = await apiClient.patch(
-        `/projects/${encodeURIComponent(activeProjectId)}/milestones/${encodeURIComponent(selectedMilestone.id)}/status`,
-        {},
-        { params: { status: 'FUNDED' }, timeout: 15000 },
-      );
-
-      const returnedStatus = toText(response.data?.status, 'FUNDED');
-      setContract((current) => current ? {
-        ...current,
-        milestones: current.milestones.map((item) =>
-          item.id === selectedMilestone.id ? { ...item, status: returnedStatus } : item,
-        ),
-      } : current);
-      setSuccessMessage(
-        `Milestone funding status updated. ${formatMoney(totalCharged)} is shown as the total including the 5% platform fee.`,
-      );
-    } catch (error: any) {
-      console.error('[FundMilestone] Failed to confirm funding:', error);
-      console.error('Request URL:', error?.config?.url);
-      console.error('HTTP status:', error?.response?.status);
-      console.error('Response data:', error?.response?.data);
-      setErrorMessage(
-        error?.response?.data?.message ??
-          error?.response?.data?.error ??
-          error?.message ??
-          'Unable to update the milestone funding status.',
-      );
-    } finally {
-      setSubmitting(false);
-    }
+      },
+    });
   };
 
   const returnToReview = () => {
@@ -388,13 +350,11 @@ export default function ClientFundMilestoneScreen() {
           ) : null}
 
           <TouchableOpacity
-            style={[styles.primaryButton, (submitting || Boolean(successMessage)) && styles.disabledButton]}
+            style={[styles.primaryButton, (!selectedMilestone || milestoneAmount <= 0) && styles.disabledButton]}
             onPress={confirmPayment}
-            disabled={submitting || Boolean(successMessage)}
+            disabled={!selectedMilestone || milestoneAmount <= 0}
           >
-            {submitting
-              ? <ActivityIndicator color={Colors.surface} />
-              : <Text style={styles.primaryButtonText}>{successMessage ? 'Funding Status Updated' : 'Confirm Payment'}</Text>}
+            <Text style={styles.primaryButtonText}>Confirm Payment</Text>
           </TouchableOpacity>
         </ScrollView>
       </View>

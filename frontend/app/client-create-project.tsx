@@ -609,31 +609,31 @@ export default function CreateProjectScreen() {
             )}
           </ScrollView>
         <View style={styles.clientTabBar}>
-            <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-dashboard')}>
-              <Text style={[styles.tabIcon, styles.tabIconActive]}>🏠</Text>
-              <Text style={[styles.tabLabel, styles.tabLabelActive]}>Home</Text>
-            </TouchableOpacity>
+        <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-dashboard')}>
+          <Text style={[styles.tabIcon, styles.tabIconActive]}>🏠</Text>
+          <Text style={[styles.tabLabel, styles.tabLabelActive]}>Home</Text>
+        </TouchableOpacity>
 
-            <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-contracts')}>
-              <Text style={styles.tabIcon}>📁</Text>
-              <Text style={styles.tabLabel}>Projects</Text>
-            </TouchableOpacity>
+        <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-contracts')}>
+          <Text style={styles.tabIcon}>📁</Text>
+          <Text style={styles.tabLabel}>Projects</Text>
+        </TouchableOpacity>
 
-            <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-find-talent')}>
-              <Text style={styles.tabIcon}>🔍</Text>
-              <Text style={styles.tabLabel}>Find Talent</Text>
-            </TouchableOpacity>
+        <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-find-talent')}>
+          <Text style={styles.tabIcon}>🔍</Text>
+          <Text style={styles.tabLabel}>Find Talent</Text>
+        </TouchableOpacity>
 
-            <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-reports')}>
-              <Text style={styles.tabIcon}>💳</Text>
-              <Text style={styles.tabLabel}>Payments</Text>
-            </TouchableOpacity>
+        <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-payment-list')}>
+          <Text style={styles.tabIcon}>💳</Text>
+          <Text style={styles.tabLabel}>Payments</Text>
+        </TouchableOpacity>
 
-            <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-profile')}>
-              <Text style={styles.tabIcon}>👤</Text>
-              <Text style={styles.tabLabel}>Profile</Text>
-            </TouchableOpacity>
-        </View>
+        <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-profile')}>
+          <Text style={styles.tabIcon}>👤</Text>
+          <Text style={styles.tabLabel}>Profile</Text>
+        </TouchableOpacity>
+                </View>
     </SafeAreaView>
   );
 }

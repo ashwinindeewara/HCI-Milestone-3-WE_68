@@ -360,7 +360,7 @@ export default function ClientDashboardScreen() {
 
           <TouchableOpacity
             style={styles.actionPillWhite}
-            onPress={() => router.push('/create-dispute')}
+            onPress={() => router.push('/client-disputes')}
             activeOpacity={0.8}
           >
             <Text style={styles.actionPillIcon}>+</Text>
@@ -506,7 +506,7 @@ export default function ClientDashboardScreen() {
               <Text style={styles.tabLabel}>Find Talent</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-reports')}>
+            <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-payment-list')}>
               <Text style={styles.tabIcon}>💳</Text>
               <Text style={styles.tabLabel}>Payments</Text>
             </TouchableOpacity>

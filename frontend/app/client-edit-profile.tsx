@@ -640,119 +640,31 @@ export default function ClientEditProfileScreen() {
         )}
 
         {/* ================= BOTTOM NAV ================= */}
+        <View style={styles.clientTabBar}>
+            <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-dashboard')}>
+              <Text style={[styles.tabIcon, styles.tabIconActive]}>🏠</Text>
+              <Text style={[styles.tabLabel, styles.tabLabelActive]}>Home</Text>
+            </TouchableOpacity>
 
-        <View style={styles.bottomTabBar}>
+            <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-contracts')}>
+              <Text style={styles.tabIcon}>📁</Text>
+              <Text style={styles.tabLabel}>Projects</Text>
+            </TouchableOpacity>
 
-          {/* Home */}
+            <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-find-talent')}>
+              <Text style={styles.tabIcon}>🔍</Text>
+              <Text style={styles.tabLabel}>Find Talent</Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.tabItem}
-            onPress={() =>
-              router.replace('/client-dashboard')
-            }
-            activeOpacity={0.8}
-          >
-            <Ionicons
-              name="home-outline"
-              size={20}
-              color={Colors.primary}
-            />
+            <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-payment-list')}>
+              <Text style={styles.tabIcon}>💳</Text>
+              <Text style={styles.tabLabel}>Payments</Text>
+            </TouchableOpacity>
 
-            <Text
-              style={[
-                styles.tabLabel,
-                styles.tabLabelActive,
-              ]}
-            >
-              Home
-            </Text>
-          </TouchableOpacity>
-
-          {/* Projects */}
-
-          <TouchableOpacity
-            style={styles.tabItem}
-            onPress={() =>
-              router.push('/client-projects')
-            }
-            activeOpacity={0.8}
-          >
-            <Ionicons
-              name="folder-outline"
-              size={20}
-              color={Colors.neutralMedium}
-            />
-
-            <Text style={styles.tabLabel}>
-              Projects
-            </Text>
-          </TouchableOpacity>
-
-          {/* Find Talent */}
-
-          <TouchableOpacity
-            style={styles.tabItem}
-            onPress={() =>
-              router.push('/(tabs)/find-talent')
-            }
-            activeOpacity={0.8}
-          >
-            <Ionicons
-              name="search-outline"
-              size={20}
-              color={Colors.neutralMedium}
-            />
-
-            <Text style={styles.tabLabel}>
-              Find Talent
-            </Text>
-          </TouchableOpacity>
-
-          {/* Payments */}
-
-          <TouchableOpacity
-            style={styles.tabItem}
-            onPress={() =>
-              router.push('/client-payments')
-            }
-            activeOpacity={0.8}
-          >
-            <Ionicons
-              name="card-outline"
-              size={20}
-              color={Colors.neutralMedium}
-            />
-
-            <Text style={styles.tabLabel}>
-              Payments
-            </Text>
-          </TouchableOpacity>
-
-          {/* Profile */}
-
-          <TouchableOpacity
-            style={styles.tabItem}
-            onPress={() =>
-              router.replace('/client-profile')
-            }
-            activeOpacity={0.8}
-          >
-            <Ionicons
-              name="person-outline"
-              size={20}
-              color={Colors.primary}
-            />
-
-            <Text
-              style={[
-                styles.tabLabel,
-                styles.tabLabelActive,
-              ]}
-            >
-              Profile
-            </Text>
-          </TouchableOpacity>
-
+            <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-profile')}>
+              <Text style={styles.tabIcon}>👤</Text>
+              <Text style={styles.tabLabel}>Profile</Text>
+            </TouchableOpacity>
         </View>
 
       </View>
@@ -1238,4 +1150,23 @@ const styles = StyleSheet.create({
       fontWeight: '800',
       color: Colors.surface,
     },
+
+    clientTabBar: {
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: 64,
+          backgroundColor: Colors.surface,
+          borderTopWidth: 1,
+          borderTopColor: Colors.border,
+          flexDirection: 'row',
+          justifyContent: 'space-around',
+          alignItems: 'center',
+      },
+      tabItem: { alignItems: 'center', justifyContent: 'center' },
+      tabIcon: { fontSize: 18, opacity: 0.6 },
+      tabIconActive: { opacity: 1, transform: [{ scale: 1.1 }] },
+      tabLabel: { fontSize: 10, fontWeight: '600', color: Colors.neutralMedium, marginTop: 2 },
+      tabLabelActive: { color: Colors.primary, fontWeight: '700' },
 });
