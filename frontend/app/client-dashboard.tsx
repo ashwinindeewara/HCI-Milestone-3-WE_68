@@ -369,7 +369,7 @@ export default function ClientDashboardScreen() {
 
           <TouchableOpacity
             style={styles.actionPillGreen}
-            onPress={() => router.push('/client-milestone-review')}
+            onPress={() => router.push('/client-milestones')}
             activeOpacity={0.8}
           >
             <Text style={styles.actionPillTextWhite}>Milestones</Text>

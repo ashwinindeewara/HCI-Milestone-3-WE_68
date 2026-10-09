@@ -7,10 +7,22 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/contracts")
-@CrossOrigin(origins = "*")
+@CrossOrigin(
+        origins = {"http://localhost:8081", "http://127.0.0.1:8081"},
+        allowedHeaders = "*",
+        methods = {
+                RequestMethod.GET,
+                RequestMethod.POST,
+                RequestMethod.PUT,
+                RequestMethod.PATCH,
+                RequestMethod.DELETE,
+                RequestMethod.OPTIONS
+        }
+)
 public class ContractController {
 
     @Autowired
@@ -51,7 +63,7 @@ public class ContractController {
 
     @GetMapping("/client/{name}")
     public ResponseEntity<List<Contract>> getContractsForClient(@PathVariable String name) {
-        return ResponseEntity.ok(contractService.getContractForClient(name) );
+        return ResponseEntity.ok(contractService.getContractsForClient(name));
     }
 
     @PostMapping
@@ -62,6 +74,29 @@ public class ContractController {
     @PatchMapping("/{id}/status")
     public ResponseEntity<Contract> updateStatus(@PathVariable String id, @RequestParam String status) {
         return ResponseEntity.ok(contractService.updateContractStatus(id, status));
+    }
+
+    /** Record milestone funding against existing contract and milestone fields.
+     * This demo endpoint records status; it does not charge a real card/bank account.
+     */
+    @PostMapping("/{id}/payments/milestones/{milestoneId}")
+    public ResponseEntity<Map<String, Object>> recordMilestonePayment(
+            @PathVariable String id,
+            @PathVariable String milestoneId,
+            @RequestBody(required = false) Map<String, Object> payload
+    ) {
+        String paymentMethod = payload == null || payload.get("paymentMethod") == null
+                ? "CARD"
+                : String.valueOf(payload.get("paymentMethod"));
+        return ResponseEntity.ok(
+                contractService.recordMilestonePayment(id, milestoneId, paymentMethod)
+        );
+    }
+
+    /** Query persisted payment/funding state for the contract. */
+    @GetMapping("/{id}/payment-status")
+    public ResponseEntity<Map<String, Object>> getPaymentStatus(@PathVariable String id) {
+        return ResponseEntity.ok(contractService.getPaymentStatus(id));
     }
 
     @PostMapping("/{id}/send")

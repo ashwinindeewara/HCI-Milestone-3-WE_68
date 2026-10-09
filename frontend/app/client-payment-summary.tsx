@@ -200,16 +200,21 @@ export default function ClientPaymentSummaryScreen() {
         },
       });
     } catch (error: any) {
-      console.error('[PaymentSummary] Pay Now failed:', error);
-      console.error('URL:', error?.config?.url);
-      console.error('Status:', error?.response?.status);
-      console.error('Response:', error?.response?.data);
-      setErrorMessage(
-        error?.response?.data?.message ??
-        error?.response?.data?.error ??
-        error?.message ??
-        'Unable to update funding status. Check the backend endpoint and try again.',
+      console.error('HTTP status:', error?.response?.status);
+      console.error('Response body:', error?.response?.data);
+
+      const serverMessage =
+        error?.response?.data?.message ?? error?.response?.data?.error;
+      const message = serverMessage || (
+        error?.response?.status === 404
+          ? 'The payment endpoint was not found. Replace ContractController and ContractService with the updated versions, then restart Spring Boot.'
+          : error?.response?.status
+            ? `The backend could not save the funding update (HTTP ${error.response.status}).`
+            : error?.code === 'ECONNABORTED'
+              ? 'The backend timed out while saving the funding update. Check the Spring Boot and database logs.'
+              : error?.message ?? 'Unable to save the funding update. Please try again.'
       );
+      setErrorMessage(message);
     } finally {
       setSubmitting(false);
     }

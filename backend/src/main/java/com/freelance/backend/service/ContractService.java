@@ -7,12 +7,18 @@ import com.freelance.backend.repository.ContractRepository;
 import com.freelance.backend.repository.NotificationRepository;
 import com.freelance.backend.repository.FreelancerProfileRepository;
 import com.freelance.backend.repository.UserRepository;
+import com.freelance.backend.repository.MilestoneRepository;
+import com.freelance.backend.repository.ProjectRepository;
+import com.freelance.backend.entity.Milestone;
+import com.freelance.backend.entity.Project;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-
-import static org.springframework.data.jpa.domain.AbstractPersistable_.id;
+import java.util.Map;
+import java.util.LinkedHashMap;
+import java.util.Locale;
 
 @Service
 public class ContractService {
@@ -32,8 +38,22 @@ public class ContractService {
     @Autowired(required = false)
     private FreelancerProfileRepository profileRepository;
 
+    @Autowired
+    private MilestoneRepository milestoneRepository;
+
+    @Autowired(required = false)
+    private ProjectRepository projectRepository;
+
     public List<Contract> getAllContracts() {
         return contractRepository.findAll();
+    }
+
+    /** Returns contracts created for the supplied client/company name. */
+    public List<Contract> getContractsForClient(String clientName) {
+        if (clientName == null || clientName.isBlank()) {
+            return List.of();
+        }
+        return contractRepository.findByClientNameOrFreelancerName(clientName.trim(), null);
     }
 
     public Contract getContractById(String id) {
@@ -41,12 +61,156 @@ public class ContractService {
                 .orElseThrow(() -> new ResourceNotFoundException("Contract not found with id: " + id));
     }
 
-    public List<Contract> getContractForClient(String name) {
-        if (name == null || name.isBlank()) {
-            return List.of();
+    /**
+     * Records a client milestone-funding action in the existing schema.
+     * The contract's in_escrow_amount is increased by the milestone amount,
+     * and the milestone row is marked FUNDED. Repeated calls are idempotent
+     * for milestones already marked as funded/approved/released/completed.
+     *
+     * NOTE: This is a demo status-recording flow, not a real card/bank charge.
+     */
+    @Transactional
+    public Map<String, Object> recordMilestonePayment(
+            String contractId,
+            String milestoneId,
+            String paymentMethod
+    ) {
+        if (milestoneId == null || milestoneId.isBlank()) {
+            throw new IllegalArgumentException("Milestone ID is required.");
         }
 
-        return contractRepository.findByClientNameOrFreelancerName(name.trim(), null);
+        String normalizedMethod = paymentMethod == null
+                ? "CARD"
+                : paymentMethod.trim().toUpperCase(Locale.ROOT);
+        if (!List.of("CARD", "BANK").contains(normalizedMethod)) {
+            throw new IllegalArgumentException("Payment method must be CARD or BANK.");
+        }
+
+        Contract contract = getContractById(contractId);
+        Milestone milestone = milestoneRepository.findByContractId(contractId)
+                .stream()
+                .filter(item -> milestoneId.equals(String.valueOf(item.getId())))
+                .findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Milestone " + milestoneId + " was not found for contract " + contractId
+                ));
+
+        Object rawAmount = milestone.getAmount();
+        double milestoneAmount;
+        try {
+            milestoneAmount = rawAmount instanceof Number
+                    ? ((Number) rawAmount).doubleValue()
+                    : Double.parseDouble(String.valueOf(rawAmount));
+        } catch (RuntimeException ex) {
+            throw new IllegalArgumentException("Milestone has an invalid amount.");
+        }
+        if (!Double.isFinite(milestoneAmount) || milestoneAmount <= 0) {
+            throw new IllegalArgumentException("Milestone amount must be greater than zero.");
+        }
+
+        String existingMilestoneStatus = milestone.getStatus() == null
+                ? "PENDING"
+                : milestone.getStatus().trim().toUpperCase(Locale.ROOT);
+        boolean alreadyFunded = List.of(
+                "FUNDED", "APPROVED", "RELEASED", "COMPLETED"
+        ).contains(existingMilestoneStatus);
+
+        double currentEscrow = contract.getInEscrowAmount() == null
+                ? 0.0
+                : contract.getInEscrowAmount();
+
+        if (!alreadyFunded) {
+            if (List.of("REJECTED", "CANCELLED", "CANCELED").contains(existingMilestoneStatus)) {
+                throw new IllegalStateException(
+                        "A rejected or cancelled milestone cannot be funded."
+                );
+            }
+
+            milestone.setStatus("FUNDED");
+            milestoneRepository.save(milestone);
+
+            currentEscrow = Math.round((currentEscrow + milestoneAmount) * 100.0) / 100.0;
+            contract.setInEscrowAmount(currentEscrow);
+            contractRepository.save(contract);
+
+            // Keep an existing Project row's escrow value aligned with contracts.in_escrow_amount.
+            if (projectRepository != null) {
+                final double escrowToPersist = currentEscrow;
+                projectRepository.findByContractId(contractId).ifPresent(project -> {
+                    project.setInEscrowAmount(escrowToPersist);
+                    projectRepository.save(project);
+                });
+            }
+        }
+
+        double platformFee = Math.round(milestoneAmount * 0.05 * 100.0) / 100.0;
+        double totalCharged = Math.round((milestoneAmount + platformFee) * 100.0) / 100.0;
+        double budget = contract.getTotalBudget() == null ? 0.0 : contract.getTotalBudget();
+        String paymentStatus = currentEscrow <= 0.0
+                ? "NOT_PAID"
+                : (budget > 0.0 && currentEscrow + 0.000001 >= budget
+                ? "PAID"
+                : "PARTIALLY_PAID");
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("success", true);
+        response.put("paymentMade", true);
+        response.put("alreadyPaid", alreadyFunded);
+        response.put("paymentStatus", paymentStatus);
+        response.put("contractId", contractId);
+        response.put("milestoneId", milestoneId);
+        response.put("milestoneTitle", milestone.getTitle());
+        response.put("milestoneStatus", alreadyFunded ? existingMilestoneStatus : "FUNDED");
+        response.put("milestoneAmount", Math.round(milestoneAmount * 100.0) / 100.0);
+        response.put("platformFee", platformFee);
+        response.put("totalCharged", totalCharged);
+        response.put("inEscrowAmount", currentEscrow);
+        response.put("paymentMethod", normalizedMethod);
+        response.put("message", alreadyFunded
+                ? "This milestone was already recorded as funded. No additional escrow amount was added."
+                : "Milestone funding status recorded successfully.");
+        response.put("note", "Demo only: no real card or bank transaction was processed.");
+        return response;
+    }
+
+    /**
+     * Returns whether a contract has any funded milestones and the current
+     * escrow total. The value is derived from the existing contract and milestone
+     * rows, so no new database columns are required.
+     */
+    public Map<String, Object> getPaymentStatus(String contractId) {
+        Contract contract = getContractById(contractId);
+        List<Milestone> milestones = milestoneRepository.findByContractId(contractId);
+        long fundedCount = milestones.stream()
+                .filter(m -> m.getStatus() != null && List.of(
+                        "FUNDED", "APPROVED", "RELEASED", "COMPLETED"
+                ).contains(m.getStatus().trim().toUpperCase(Locale.ROOT)))
+                .count();
+        double escrow = contract.getInEscrowAmount() == null ? 0.0 : contract.getInEscrowAmount();
+        boolean paymentMade = fundedCount > 0 || escrow > 0.0;
+        double budget = contract.getTotalBudget() == null ? 0.0 : contract.getTotalBudget();
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("contractId", contractId);
+        response.put("paymentMade", paymentMade);
+        response.put("paymentStatus", !paymentMade ? "NOT_PAID"
+                : (budget > 0.0 && escrow + 0.000001 >= budget ? "PAID" : "PARTIALLY_PAID"));
+        response.put("inEscrowAmount", escrow);
+        response.put("totalBudget", budget);
+        response.put("fundedMilestones", fundedCount);
+        response.put("totalMilestones", milestones.size());
+        response.put("milestones", milestones.stream().map(m -> {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("id", m.getId());
+            row.put("title", m.getTitle());
+            row.put("amount", m.getAmount());
+            row.put("status", m.getStatus());
+            row.put("paymentMade", m.getStatus() != null && List.of(
+                    "FUNDED", "APPROVED", "RELEASED", "COMPLETED"
+            ).contains(m.getStatus().trim().toUpperCase(Locale.ROOT)));
+            return row;
+        }).toList());
+        return response;
     }
 
     public Contract createContract(Contract contract) {
