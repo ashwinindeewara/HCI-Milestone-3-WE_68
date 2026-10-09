@@ -205,7 +205,7 @@ export default function ClientDashboardScreen() {
 
             <TouchableOpacity
               style={styles.actionPillWhite}
-              onPress={() => router.push('/client-contracts')}
+              onPress={() => router.push('/client-disputes')}
             >
               <Text style={styles.actionPillIcon}>+</Text>
               <Text style={styles.actionPillTextDark}>Disputes</Text>
