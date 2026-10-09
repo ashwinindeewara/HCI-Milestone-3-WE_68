@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -19,12 +20,22 @@ public class FreelancerProfileController {
 
     @GetMapping
     public ResponseEntity<FreelancerProfile> getProfile(
+            @RequestParam(value = "id", required = false) Long id,
             @RequestParam(value = "email", required = false) String email
     ) {
+        if (id != null) {
+            return ResponseEntity.ok(profileService.getProfileById(id));
+        }
         if (email != null && !email.isBlank()) {
             return ResponseEntity.ok(profileService.getProfileByEmail(email));
         }
         return ResponseEntity.ok(profileService.getDefaultProfile());
+    }
+
+    @GetMapping("/all")
+    public ResponseEntity<List<FreelancerProfile>> getAllProfiles() {
+        List<FreelancerProfile> profiles = profileService.getAllFreelancerProfiles();
+        return ResponseEntity.ok(profiles);
     }
 
     @GetMapping("/{email}")
@@ -39,8 +50,8 @@ public class FreelancerProfileController {
     ) {
         String email = (emailParam != null && !emailParam.isBlank())
                 ? emailParam
-                : ((dto.getEmail() != null && !dto.getEmail().isBlank()) ? dto.getEmail() : "");
-        if (email.isBlank()) {
+                : dto.getEmail();
+        if (email == null || email.isBlank()) {
             return ResponseEntity.badRequest().build();
         }
         return ResponseEntity.ok(profileService.updateProfile(email.trim().toLowerCase(), dto));
@@ -85,5 +96,26 @@ public class FreelancerProfileController {
             return ResponseEntity.badRequest().build();
         }
         return ResponseEntity.ok(profileService.uploadProfileImage(email.trim().toLowerCase(), file));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteProfileById(@PathVariable Long id) {
+        profileService.deleteProfileById(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping
+    public ResponseEntity<Void> deleteProfile(
+            @RequestParam(value = "id", required = false) Long id,
+            @RequestParam(value = "email", required = false) String email
+    ) {
+        if (id != null) {
+            profileService.deleteProfileById(id);
+        } else if (email != null && !email.isBlank()) {
+            profileService.deleteProfileByEmail(email);
+        } else {
+            return ResponseEntity.badRequest().build();
+        }
+        return ResponseEntity.noContent().build();
     }
 }

@@ -14,7 +14,7 @@ import {
 import { useRouter, useFocusEffect } from 'expo-router';
 import Colors from '../../src/constants/colors';
 import Theme from '../../src/constants/theme';
-import { FreelancerApiService, resolveMediaUrl, apiClient, getCurrentUser } from '../../src/services/api';
+import { calculateMilestoneProgress, FreelancerApiService, resolveMediaUrl, apiClient, getCurrentUser } from '../../src/services/api';
 import { getUserSession } from '../../src/services/storage';
 import { clearAuthSession } from '../../src/services/authService';
 
@@ -41,7 +41,9 @@ export default function DashboardScreen() {
 
   // Role Redirect Guard
   useEffect(() => {
-    if (currentRole === 'ADMIN') {
+    if (currentRole === 'CLIENT') {
+      router.replace('/client-dashboard');
+    } else if (currentRole === 'ADMIN') {
       router.replace('/admin-dashboard');
     } else if (currentRole === 'PAYMENT_STAFF') {
       router.replace('/staff-dashboard');
@@ -190,6 +192,19 @@ Executed on:                    ${new Date().toLocaleDateString('en-US', { year:
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [dashboardContracts, setDashboardContracts] = useState<any[]>([]);
 
+  const getProjectDueDate = (project: ProjectItem) => {
+    if (!project.dueDate) return null;
+    const date = new Date(`${project.dueDate.slice(0, 10)}T00:00:00`);
+    return Number.isNaN(date.getTime()) ? null : date;
+  };
+
+  const formatProjectDueDate = (project: ProjectItem) => {
+    const date = getProjectDueDate(project);
+    return date
+      ? date.toLocaleDateString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' })
+      : 'No deadline';
+  };
+
   const loadDashboardData = async () => {
     try {
       const activeUser = getCurrentUser();
@@ -222,7 +237,26 @@ Executed on:                    ${new Date().toLocaleDateString('en-US', { year:
 
       // 3. Projects
       if (prjRes.status === 'fulfilled' && Array.isArray(prjRes.value.data)) {
-        const syncedProjects = prjRes.value.data;
+        let pendingMilestoneCount = 0;
+        const syncedProjects = await Promise.all(prjRes.value.data.map(async (project: any) => {
+          const contractId = project.contractId || project.id;
+          try {
+            const milestoneResponse = await FreelancerApiService.getContractMilestones(contractId);
+            if (Array.isArray(milestoneResponse.data)) {
+              pendingMilestoneCount += milestoneResponse.data.filter((milestone: any) => {
+                const status = String(milestone.status || '').toUpperCase();
+                return !['COMPLETED', 'RELEASED', 'APPROVED'].includes(status);
+              }).length;
+              return {
+                ...project,
+                completionPercentage: calculateMilestoneProgress(milestoneResponse.data),
+              };
+            }
+          } catch {
+            // Keep the persisted project value if milestone refresh is unavailable.
+          }
+          return project;
+        }));
         setProjects(syncedProjects);
 
         const activeCount = syncedProjects.filter((p: any) => p.status === 'ACTIVE' || p.status === 'IN_PROGRESS').length;
@@ -231,6 +265,7 @@ Executed on:                    ${new Date().toLocaleDateString('en-US', { year:
         setMetrics((prev) => ({
           ...prev,
           activeProjects: activeCount,
+          pendingMilestones: pendingMilestoneCount,
           pendingEscrow: totalEscrow,
         }));
       } else {
@@ -508,43 +543,47 @@ Executed on:                    ${new Date().toLocaleDateString('en-US', { year:
         <Text style={styles.sectionTitle}>Upcoming Deadlines</Text>
       </View>
 
-      {projects.length > 0 ? (
-        <View style={styles.deadlineCard}>
-          <View style={styles.deadlineLeft}>
-            <Text style={styles.deadlineIcon}>⏰</Text>
-            <View>
-              <Text style={styles.deadlineTitle}>
-                {projects[0].statusBadge || 'Project Milestone'} Handover
-              </Text>
-              <Text style={styles.deadlineSub}>
-                {projects[0].title} • {projects[0].clientName}
-              </Text>
-            </View>
-          </View>
-          <View style={styles.daysLeftBadge}>
-            <Text style={styles.daysLeftText}>{projects[0].dueDate || 'Upcoming'}</Text>
-          </View>
-        </View>
-      ) : isChathuni ? (
-        <View style={styles.deadlineCard}>
-          <View style={styles.deadlineLeft}>
-            <Text style={styles.deadlineIcon}>⏰</Text>
-            <View>
-              <Text style={styles.deadlineTitle}>UI Design Phase Handover</Text>
-              <Text style={styles.deadlineSub}>E-Commerce Redesign • TechVentures</Text>
-            </View>
-          </View>
-          <View style={styles.daysLeftBadge}>
-            <Text style={styles.daysLeftText}>3 days left</Text>
-          </View>
-        </View>
-      ) : (
+      {(() => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const upcomingProjects = projects
+          .filter((project) => {
+            const dueDate = getProjectDueDate(project);
+            const status = String(project.status || '').toUpperCase();
+            return dueDate && dueDate >= today && status !== 'COMPLETED';
+          })
+          .sort((a, b) => getProjectDueDate(a)!.getTime() - getProjectDueDate(b)!.getTime());
+
+        return upcomingProjects.length > 0 ? (
+          upcomingProjects.map((project) => (
+            <TouchableOpacity
+              key={`deadline-${project.id}`}
+              style={styles.deadlineCard}
+              onPress={() => router.push('/(tabs)/contracts')}
+              activeOpacity={0.85}
+            >
+              <View style={styles.deadlineLeft}>
+                <Text style={styles.deadlineIcon}>⏰</Text>
+                <View>
+                  <Text style={styles.deadlineTitle}>{project.title}</Text>
+                  <Text style={styles.deadlineSub}>
+                    {project.statusBadge || 'Project deadline'} • {project.clientName}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.daysLeftBadge}>
+                <Text style={styles.daysLeftText}>{formatProjectDueDate(project)}</Text>
+              </View>
+            </TouchableOpacity>
+          ))
+        ) : (
         <View style={[styles.deadlineCard, { justifyContent: 'center', paddingVertical: 14 }]}>
           <Text style={{ color: '#94A3B8', fontSize: 13, textAlign: 'center' }}>
             No upcoming deadlines scheduled
           </Text>
         </View>
-      )}
+        );
+      })()}
 
       {/* Toast Notification */}
       {downloadToast && (

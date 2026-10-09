@@ -22,6 +22,17 @@ const GET_BASE_URL = () => {
 
 export const API_BASE_URL = GET_BASE_URL();
 
+export const calculateMilestoneProgress = (milestones: Array<{ status?: string }>): number => {
+  const completedCount = milestones.filter((milestone) =>
+    ['COMPLETED', 'RELEASED', 'APPROVED', 'SUBMITTED'].includes(String(milestone.status).toUpperCase())
+  ).length;
+  if (milestones.length === 0) return 0;
+  if (milestones.length === 3) {
+    return completedCount === 1 ? 30 : completedCount === 2 ? 65 : completedCount === 3 ? 100 : 0;
+  }
+  return Math.round((completedCount / milestones.length) * 100);
+};
+
 export const resolveMediaUrl = (url?: string): string => {
   if (!url) return '';
   if (url.startsWith('data:') || url.startsWith('blob:')) {
@@ -256,6 +267,7 @@ export const FreelancerApiService = {
     return apiClient.get('/contracts/freelancer', { params });
   },
   getContract: (id: string) => apiClient.get(`/contracts/${id}`),
+  deleteAccount: (email: string) => apiClient.delete('/users/delete-by-email', { params: { email } }),
   getContractDownloadUrl: (id: string) => `${API_BASE_URL}/contracts/${id}/download`,
   acceptContract: (id: string, signerName?: string) => {
     const user = getCurrentUser();
@@ -286,12 +298,19 @@ export const FreelancerApiService = {
     if (email) params.email = email;
     return apiClient.get('/freelancer/projects', { params });
   },
+  getClientProjects: (clientName?: string) => {
+    const user = getCurrentUser();
+    return apiClient.get('/client/projects', {
+      params: { clientName: clientName || user?.fullName || '' },
+    });
+  },
   getProject: (id: string) => apiClient.get(`/projects/${id}`),
   getProjectMilestones: (id: string) => apiClient.get(`/projects/${id}/milestones`),
   getProjectActivities: (id: string) => apiClient.get(`/projects/${id}/activities`),
   getProjectFiles: (id: string) => apiClient.get(`/projects/${id}/files`),
 
   // Milestones & Deliverables
+  getContractMilestones: (contractId: string) => apiClient.get(`/milestones/contract/${contractId}`),
   getMilestone: (id: string) => apiClient.get(`/milestones/${id}`),
   submitDeliverable: (milestoneId: string, data: { fileName: string; fileSize?: string; notes?: string }) =>
     apiClient.post(`/milestones/${milestoneId}/deliverables`, data),
@@ -376,6 +395,20 @@ export const FreelancerApiService = {
       throw new Error(`Profile image upload failed: ${res.statusText}`);
     }
     return res.json();
+  },
+  deleteProfile: (idOrEmail?: string | number) => {
+    if (typeof idOrEmail === 'number' || (typeof idOrEmail === 'string' && /^\d+$/.test(idOrEmail))) {
+      return apiClient.delete(`/freelancer/profile/${idOrEmail}`);
+    }
+    const user = getCurrentUser();
+    const targetEmail = (typeof idOrEmail === 'string' ? idOrEmail : '') || user?.email || '';
+    if (targetEmail) {
+      return apiClient.delete('/freelancer/profile', { params: { email: targetEmail } });
+    }
+    return apiClient.delete('/freelancer/profile');
+  },
+  deleteUserProfileById: (id: number | string) => {
+    return apiClient.delete(`/profile/${id}`);
   },
   uploadFile: async (file: any, relatedEntityType = 'PROJECT', relatedEntityId = 'GENERAL', uploadedBy?: string) => {
     const user = getCurrentUser();

@@ -108,14 +108,14 @@ export default function LoginScreen() {
         saveAuthSession(response.data.token, response.data);
       }
 
-      const userRole = response.data?.role;
+      const userRole = String(response.data?.role || 'FREELANCER').toUpperCase();
 
       // Save user session credentials for profile modal
       saveUserSession({
         id: response.data?.id,
         fullName: response.data?.fullName || (email.includes('admin') ? 'System Admin' : 'User Account'),
         email: response.data?.email || email.trim(),
-        role: userRole || 'ADMIN',
+        role: userRole,
         token: response.data?.token,
       });
 
@@ -125,7 +125,7 @@ export default function LoginScreen() {
       } else if (userRole === 'PAYMENT_STAFF') {
         router.replace('/staff-dashboard');
       } else if (userRole === 'CLIENT') {
-        router.replace({ pathname: '/(tabs)/dashboard', params: { role: 'CLIENT' } });
+        router.replace('/client-dashboard');
       } else {
         router.replace({ pathname: '/(tabs)/dashboard', params: { role: 'FREELANCER' } });
       }

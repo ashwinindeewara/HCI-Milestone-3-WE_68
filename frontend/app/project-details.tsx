@@ -315,14 +315,20 @@ export default function ProjectDetailsScreen() {
       }
 
       // Load shared database state in parallel; it is authoritative over browser cache.
-      const [cResResult, actResResult, fileResResult] = await Promise.allSettled([
+      const [cResResult, milestoneRes, actResResult, fileResResult] = await Promise.allSettled([
         FreelancerApiService.getContract(cleanId),
+        FreelancerApiService.getContractMilestones(cleanId),
         FreelancerApiService.getProjectActivities('PRJ-' + projectId),
         FreelancerApiService.getProjectFiles(projectId),
       ]);
 
       if (cResResult.status === 'fulfilled' && cResResult.value.data) {
         const d = cResResult.value.data;
+        const contractMilestones = Array.isArray(d.milestones) ? d.milestones : [];
+        const fetchedMilestones =
+          milestoneRes.status === 'fulfilled' && Array.isArray(milestoneRes.value.data)
+            ? milestoneRes.value.data
+            : [];
         const updatedProject = {
           id: d.id,
           contractId: d.id,
@@ -341,8 +347,9 @@ export default function ProjectDetailsScreen() {
           localStorage.setItem(`project_cache_${cleanId}`, JSON.stringify(updatedProject));
         }
 
-        if (d.milestones && d.milestones.length > 0) {
-          const mappedM = d.milestones.map((m: any) => ({
+        const milestonesFromApi = contractMilestones.length > 0 ? contractMilestones : fetchedMilestones;
+        if (milestonesFromApi.length > 0) {
+          const mappedM = milestonesFromApi.map((m: any) => ({
             id: m.id,
             title: m.title,
             amount: m.amount || 2000,
@@ -350,6 +357,13 @@ export default function ProjectDetailsScreen() {
             status: m.status || 'PENDING',
           }));
           setMilestones(mappedM);
+          const persistedProgress = calculateProgressFromMilestones(mappedM);
+          setProject((prev: ProjectData) => ({
+            ...prev,
+            completionPercentage: persistedProgress,
+            statusBadge: persistedProgress === 100 ? 'Completed & Paid' : prev.statusBadge,
+          }));
+          persistProjectState(projectId, persistedProgress, mappedM);
           if (typeof window !== 'undefined') {
             localStorage.setItem(`project_milestones_${cleanId}`, JSON.stringify(mappedM));
           }
@@ -671,7 +685,10 @@ Integrity Checksum: SHA256-${Math.random().toString(36).substring(2, 10).toUpper
         if (res.data?.id) {
           newDeliv.id = res.data.id;
         }
-      } catch (err) { }
+      } catch {
+        showToast('Unable to save the deliverable. Progress was not changed.');
+        return;
+      }
 
       // Update local milestone status to SUBMITTED
       const updatedMilestones = milestones.map((m) =>
@@ -738,13 +755,15 @@ Integrity Checksum: SHA256-${Math.random().toString(36).substring(2, 10).toUpper
   };
 
   // Freelancer Remove Deliverable File (Automatically Decreases Progress Bar!)
-  const handleRemoveDeliverable = (deliverableId: string) => {
-
-        FreelancerApiService.deleteDeliverable(deliverableId).catch(() => {
-          showToast('Unable to remove the saved deliverable.');
-        });
+  const handleRemoveDeliverable = async (deliverableId: string) => {
     const targetDeliv = deliverables.find((d) => d.id === deliverableId);
     if (!targetDeliv) return;
+    try {
+      await FreelancerApiService.deleteDeliverable(deliverableId);
+    } catch {
+      showToast('Unable to remove the saved deliverable.');
+      return;
+    }
 
     const targetMilestoneId = targetDeliv.milestoneId;
     const remainingDeliverables = deliverables.filter((d) => d.id !== deliverableId);
@@ -777,10 +796,10 @@ Integrity Checksum: SHA256-${Math.random().toString(36).substring(2, 10).toUpper
   };
 
   // Freelancer Remove Deliverable by Milestone ID (Automatically Decreases Progress Bar!)
-  const handleRemoveDeliverableByMilestone = (milestoneId: string) => {
+  const handleRemoveDeliverableByMilestone = async (milestoneId: string) => {
     const deliv = deliverables.find((d) => d.milestoneId === milestoneId);
     if (deliv) {
-      handleRemoveDeliverable(deliv.id);
+      await handleRemoveDeliverable(deliv.id);
     } else {
       const updatedMilestones = milestones.map((m) =>
         m.id === milestoneId ? { ...m, status: 'FUNDED' } : m

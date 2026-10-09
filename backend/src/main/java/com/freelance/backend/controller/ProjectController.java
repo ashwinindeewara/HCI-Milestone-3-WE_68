@@ -51,6 +51,11 @@ public class ProjectController {
         return ResponseEntity.ok(List.of());
     }
 
+    @GetMapping("/api/client/projects")
+    public ResponseEntity<List<Project>> getClientProjects(@RequestParam String clientName) {
+        return ResponseEntity.ok(projectService.getClientProjects(clientName));
+    }
+
     @GetMapping("/api/projects/{id}")
     public ResponseEntity<Project> getProjectById(@PathVariable String id) {
         return ResponseEntity.ok(projectService.getProjectById(id));

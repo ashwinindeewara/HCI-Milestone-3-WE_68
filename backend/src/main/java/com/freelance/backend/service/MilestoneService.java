@@ -34,6 +34,9 @@ public class MilestoneService {
     private NotificationRepository notificationRepository;
 
     @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
     private TransactionRepository transactionRepository;
 
     @Autowired
@@ -77,6 +80,7 @@ public class MilestoneService {
         // Update milestone status to SUBMITTED
         milestone.setStatus("SUBMITTED");
         milestoneRepository.save(milestone);
+        recalculateProjectProgress(milestone.getContractId());
 
         // Notify client and log activity
         if (milestone.getContractId() != null) {
@@ -88,7 +92,7 @@ public class MilestoneService {
                         "review",
                         milestone.getAmount() != null ? "$" + String.format("%,.0f", milestone.getAmount()) : "$2,000",
                         "Deliverables",
-                        "/project-details?id=" + contract.getId(),
+                        "/client-milestone-review?contractId=" + contract.getId() + "&milestoneId=" + milestone.getId(),
                         "Review Deliverable",
                         true,
                         "Just now",
@@ -96,6 +100,9 @@ public class MilestoneService {
                         milestone.getId(),
                         "Freelancer " + contract.getFreelancerName() + " uploaded '" + savedDeliverable.getFileName() + "' for milestone '" + milestone.getTitle() + "'. Awaiting client approval."
                 );
+                notif.setRecipientName(contract.getClientName());
+                notif.setSenderName(contract.getFreelancerName());
+                findUserEmail(contract.getClientName()).ifPresent(notif::setRecipientEmail);
                 notificationRepository.save(notif);
 
                 projectService.logActivity(
@@ -133,10 +140,7 @@ public class MilestoneService {
     private void recalculateProjectProgress(String contractId) {
         if (contractId == null) return;
         List<Milestone> allMilestones = milestoneRepository.findByContractId(contractId);
-        long completedCount = allMilestones.stream()
-                .filter(m -> "COMPLETED".equalsIgnoreCase(m.getStatus()) || "RELEASED".equalsIgnoreCase(m.getStatus()) || "SUBMITTED".equalsIgnoreCase(m.getStatus()))
-                .count();
-        int progress = allMilestones.isEmpty() ? 0 : (int) ((completedCount * 100) / allMilestones.size());
+        int progress = calculateProgress(allMilestones, true);
         contractRepository.findById(contractId).ifPresent(contract -> {
             contract.setCompletionPercentage(progress);
             contractRepository.save(contract);
@@ -146,6 +150,24 @@ public class MilestoneService {
             if (progress < 100 && "COMPLETED".equalsIgnoreCase(project.getStatus())) project.setStatus("ACTIVE");
             projectRepository.save(project);
         });
+    }
+
+    private int calculateProgress(List<Milestone> milestones, boolean includeSubmitted) {
+        long completedCount = milestones.stream()
+                .filter(m -> "COMPLETED".equalsIgnoreCase(m.getStatus())
+                        || "RELEASED".equalsIgnoreCase(m.getStatus())
+                        || (includeSubmitted && "SUBMITTED".equalsIgnoreCase(m.getStatus())))
+                .count();
+        if (milestones.isEmpty()) return 0;
+        if (milestones.size() == 3) {
+            return switch ((int) completedCount) {
+                case 1 -> 30;
+                case 2 -> 65;
+                case 3 -> 100;
+                default -> 0;
+            };
+        }
+        return (int) ((completedCount * 100) / milestones.size());
     }
 
     public Deliverable getDeliverableById(String id) {
@@ -170,10 +192,7 @@ public class MilestoneService {
             if (contractId != null) {
                 // Update project & contract progress
                 List<Milestone> allMilestones = milestoneRepository.findByContractId(contractId);
-                long completedCount = allMilestones.stream()
-                        .filter(m -> "COMPLETED".equalsIgnoreCase(m.getStatus()) || "RELEASED".equalsIgnoreCase(m.getStatus()))
-                        .count();
-                int progress = allMilestones.isEmpty() ? 100 : (int) ((completedCount * 100) / allMilestones.size());
+                int progress = calculateProgress(allMilestones, true);
 
                 contractRepository.findById(contractId).ifPresent(c -> {
                     c.setCompletionPercentage(progress);
@@ -218,6 +237,9 @@ public class MilestoneService {
                             milestone.getId(),
                             "Congratulations! Client approved your deliverable for milestone '" + milestone.getTitle() + "'. Funds of $" + String.format("%,.0f", milestone.getAmount()) + " have been credited to your payout balance."
                     );
+                    notif.setRecipientName(c.getFreelancerName());
+                    notif.setSenderName(c.getClientName());
+                    findUserEmail(c.getFreelancerName()).ifPresent(notif::setRecipientEmail);
                     notificationRepository.save(notif);
 
                     projectService.logActivity(
@@ -256,6 +278,7 @@ public class MilestoneService {
         if (milestone != null) {
             milestone.setStatus("IN_PROGRESS");
             milestoneRepository.save(milestone);
+            recalculateProjectProgress(milestone.getContractId());
 
             String contractId = milestone.getContractId();
             if (contractId != null) {
@@ -275,6 +298,9 @@ public class MilestoneService {
                             milestone.getId(),
                             "Client has requested revisions on milestone '" + milestone.getTitle() + "'. Feedback provided: \"" + deliverable.getFeedback() + "\". Please revise and re-upload your files."
                     );
+                    notif.setRecipientName(c.getFreelancerName());
+                    notif.setSenderName(c.getClientName());
+                    findUserEmail(c.getFreelancerName()).ifPresent(notif::setRecipientEmail);
                     notificationRepository.save(notif);
 
                     projectService.logActivity(
@@ -289,5 +315,12 @@ public class MilestoneService {
         }
 
         return saved;
+    }
+
+    private java.util.Optional<String> findUserEmail(String fullName) {
+        if (fullName == null || fullName.isBlank()) {
+            return java.util.Optional.empty();
+        }
+        return userRepository.findByFullNameIgnoreCase(fullName.trim()).map(User::getEmail);
     }
 }

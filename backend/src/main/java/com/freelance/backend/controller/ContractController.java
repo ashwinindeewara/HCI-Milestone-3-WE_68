@@ -59,6 +59,11 @@ public class ContractController {
         return ResponseEntity.ok(contractService.updateContractStatus(id, status));
     }
 
+    @PostMapping("/{id}/send")
+    public ResponseEntity<Contract> sendContract(@PathVariable String id) {
+        return ResponseEntity.ok(contractService.updateContractStatus(id, "PENDING"));
+    }
+
     @PostMapping("/{id}/sign")
     public ResponseEntity<Contract> signContract(
             @PathVariable String id,

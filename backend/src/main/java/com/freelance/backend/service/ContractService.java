@@ -40,6 +40,14 @@ public class ContractService {
     }
 
     public Contract createContract(Contract contract) {
+        if (contract.getMilestones() != null) {
+            for (com.freelance.backend.entity.Milestone milestone : contract.getMilestones()) {
+                milestone.setContract(contract);
+                if (milestone.getContractId() == null || milestone.getContractId().isBlank()) {
+                    milestone.setContractId(contract.getId());
+                }
+            }
+        }
         if (contract.getFreelancerEmail() != null && !contract.getFreelancerEmail().isBlank()) {
             contract.setFreelancerEmail(contract.getFreelancerEmail().trim().toLowerCase());
         } else if (contract.getFreelancerName() != null && userRepository != null) {

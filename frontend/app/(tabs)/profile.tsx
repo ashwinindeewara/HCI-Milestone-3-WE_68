@@ -11,6 +11,7 @@ import {
   Platform,
   SafeAreaView,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import Colors from '../../src/constants/colors';
@@ -127,6 +128,26 @@ export default function FreelancerProfileScreen() {
   const [newSkillText, setNewSkillText] = useState('');
   const [saveToast, setSaveToast] = useState(false);
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+  const [deleteAccountModalVisible, setDeleteAccountModalVisible] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+
+  const handleDeleteAccount = async () => {
+    const email = getCurrentUser()?.email || profile.email;
+    if (!email) return;
+    setDeletingAccount(true);
+    try {
+      await FreelancerApiService.deleteAccount(email);
+      setDeleteAccountModalVisible(false);
+      setLogoutModalVisible(false);
+      clearAuthSession();
+      router.replace('/login');
+    } catch {
+      setDeletingAccount(false);
+      setDeleteAccountModalVisible(false);
+      setSaveToast(false);
+      alert('We could not delete your account. Please try again.');
+    }
+  };
 
   // Fetch live profile from Spring Boot Backend on mount and focus
   useFocusEffect(
@@ -302,6 +323,64 @@ export default function FreelancerProfileScreen() {
       } else {
         router.replace('/(tabs)/dashboard');
       }
+    }
+  };
+
+  const [deleting, setDeleting] = useState(false);
+
+  const executeDeleteProfile = async () => {
+    setDeleting(true);
+    try {
+      const activeUser = getCurrentUser();
+      const targetEmail = profile.email || activeUser?.email || '';
+      await FreelancerApiService.deleteProfile(targetEmail);
+
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+        const currentUser = getCurrentUser();
+        const k = `profile_cache_${currentUser?.email || currentUser?.fullName || 'default'}`;
+        localStorage.removeItem(k);
+        localStorage.removeItem('auth_user');
+        localStorage.removeItem('auth_email');
+        localStorage.removeItem('auth_name');
+        localStorage.removeItem('auth_role');
+      }
+
+      if (Platform.OS === 'web') {
+        window.alert('Profile deleted successfully.');
+      } else {
+        Alert.alert('Profile Deleted', 'Your profile record has been successfully removed.');
+      }
+
+      router.replace('/login');
+    } catch (err: any) {
+      console.warn('Profile delete error:', err);
+      Alert.alert('Delete Failed', err.message || 'Failed to delete profile. Please try again.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleDeleteProfile = () => {
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm(
+        'Are you sure you want to delete your profile? This action will permanently remove your profile data from the database and cannot be undone.'
+      );
+      if (confirmed) {
+        executeDeleteProfile();
+      }
+    } else {
+      Alert.alert(
+        'Delete Profile Confirmation',
+        'Are you sure you want to delete your profile? This action will permanently remove your profile data from the database and cannot be undone.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete Profile',
+            style: 'destructive',
+            onPress: executeDeleteProfile,
+          },
+        ]
+      );
     }
   };
 
@@ -630,8 +709,47 @@ export default function FreelancerProfileScreen() {
               </TouchableOpacity>
 
               <TouchableOpacity
+                style={styles.modalDeleteBtn}
+                onPress={() => setDeleteAccountModalVisible(true)}
+              >
+                <Text style={styles.modalDeleteBtnText}>🗑️ Delete Profile</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
                 style={styles.modalCancelBtn}
                 onPress={() => setLogoutModalVisible(false)}
+              >
+                <Text style={styles.modalCancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
+        <Modal
+          visible={deleteAccountModalVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => !deletingAccount && setDeleteAccountModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Delete Profile?</Text>
+              <Text style={styles.modalSub}>
+                This permanently deletes your freelancer account and profile. This action cannot be undone.
+              </Text>
+              <TouchableOpacity
+                style={styles.modalDeleteConfirmBtn}
+                disabled={deletingAccount}
+                onPress={handleDeleteAccount}
+              >
+                <Text style={styles.modalDeleteConfirmText}>
+                  {deletingAccount ? 'Deleting...' : 'Yes, Delete Profile'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                disabled={deletingAccount}
+                onPress={() => setDeleteAccountModalVisible(false)}
               >
                 <Text style={styles.modalCancelBtnText}>Cancel</Text>
               </TouchableOpacity>
@@ -1179,6 +1297,34 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#991B1B',
+  },
+  modalDeleteBtn: {
+    width: '100%',
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#FFF7ED',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  modalDeleteBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#C2410C',
+  },
+  modalDeleteConfirmBtn: {
+    width: '100%',
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#DC2626',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  modalDeleteConfirmText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   modalCancelBtn: {
     width: '100%',

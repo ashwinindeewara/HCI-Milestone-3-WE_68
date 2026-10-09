@@ -5,6 +5,7 @@ import com.freelance.backend.entity.User;
 import com.freelance.backend.entity.UserRole;
 import com.freelance.backend.exception.BadRequestException;
 import com.freelance.backend.repository.UserRepository;
+import com.freelance.backend.repository.ClientProfileRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,6 +29,9 @@ public class AuthService {
 
     @Autowired
     private com.freelance.backend.repository.FreelancerProfileRepository profileRepository;
+
+    @Autowired
+    private ClientProfileRepository clientProfileRepository;
 
     private final Map<String, String> resetCodeStore = new ConcurrentHashMap<>();
 
@@ -91,6 +95,14 @@ public class AuthService {
                     new com.freelance.backend.entity.FreelancerProfile(user.getEmail(), user.getFullName());
                 profileRepository.save(freshProfile);
             }
+        }
+        if (role == UserRole.CLIENT && user != null && user.getId() != null
+                && clientProfileRepository.findByUserId(user.getId()).isEmpty()) {
+            com.freelance.backend.entity.ClientProfile clientProfile =
+                    new com.freelance.backend.entity.ClientProfile();
+            clientProfile.setUser(user);
+            clientProfile.setMemberSince(java.time.LocalDate.now());
+            clientProfileRepository.save(clientProfile);
         }
         String mockJwt = "jwt_token_" + UUID.randomUUID().toString();
         Long id = (user != null && user.getId() != null) ? user.getId() : System.currentTimeMillis();
