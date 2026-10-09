@@ -13,8 +13,13 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 @Service
 public class FreelancerProfileService {
+
+    private static final Logger logger = LoggerFactory.getLogger(FreelancerProfileService.class);
 
     @Autowired
     private FreelancerProfileRepository profileRepository;
@@ -214,5 +219,52 @@ public class FreelancerProfileService {
         profile.setAvatarUrl("/api/files/" + attachment.getId() + "/preview");
         profile.setUpdatedAt(LocalDateTime.now());
         return profileRepository.save(profile);
+    }
+
+    @Transactional
+    public void deleteProfileById(Long id) {
+        logger.info("[FREELANCER PROFILE DELETE REQUEST] Initiating deletion for Profile ID: {}", id);
+        FreelancerProfile profile = profileRepository.findById(id)
+                .orElseThrow(() -> {
+                    logger.warn("[FREELANCER PROFILE DELETE WARN] Profile not found with ID: {}", id);
+                    return new ResourceNotFoundException("FreelancerProfile not found with id: " + id);
+                });
+
+        logger.info("[FREELANCER PROFILE DELETE PROCESS] Profile record found: ID={}, Email={}, Name={}. Executing database delete.", profile.getId(), profile.getEmail(), profile.getFullName());
+        String email = profile.getEmail();
+        profileRepository.delete(profile);
+
+        if (email != null && !email.isBlank()) {
+            userRepository.findByEmailIgnoreCase(email.trim().toLowerCase())
+                    .ifPresent(u -> {
+                        logger.info("[FREELANCER PROFILE DELETE PROCESS] Removing matching User entity with Email: {}", u.getEmail());
+                        userRepository.delete(u);
+                    });
+        }
+        logger.info("[FREELANCER PROFILE DELETE SUCCESS] Profile ID: {} permanently deleted from database.", id);
+    }
+
+    @Transactional
+    public void deleteProfileByEmail(String email) {
+        if (email == null || email.isBlank()) {
+            throw new ResourceNotFoundException("Email cannot be empty for profile deletion");
+        }
+        String cleanEmail = email.trim().toLowerCase();
+        logger.info("[FREELANCER PROFILE DELETE REQUEST] Initiating deletion for Email: {}", cleanEmail);
+        
+        boolean deletedAny = false;
+
+        profileRepository.findByEmailIgnoreCase(cleanEmail).ifPresent(profile -> {
+            logger.info("[FREELANCER PROFILE DELETE PROCESS] Profile record found: ID={}, Email={}. Executing database delete.", profile.getId(), profile.getEmail());
+            profileRepository.delete(profile);
+        });
+
+        userRepository.findByEmailIgnoreCase(cleanEmail).ifPresent(user -> {
+            logger.info("[FREELANCER PROFILE DELETE PROCESS] Removing matching User entity with Email: {}", user.getEmail());
+            userRepository.delete(user);
+            userRepository.flush();
+        });
+        
+        logger.info("[FREELANCER PROFILE DELETE SUCCESS] Profile for Email: {} permanently deleted from database.", cleanEmail);
     }
 }

@@ -127,13 +127,6 @@ export const performLogout = (router: any): void => {
 
   if (router) {
     try {
-      if (typeof router.dismissAll === 'function') {
-        router.dismissAll();
-      }
-    } catch {
-      // Ignored if stack has no dismissable screens
-    }
-    try {
       router.replace('/login');
     } catch {
       try {

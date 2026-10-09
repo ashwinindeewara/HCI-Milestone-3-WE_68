@@ -11,6 +11,7 @@ import {
   Modal,
   TextInput,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import Colors from '../src/constants/colors';
@@ -150,15 +151,72 @@ export default function StaffProfileScreen() {
     performLogout(router);
   };
 
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const executeDeleteStaffAccount = async () => {
+    setIsDeleting(true);
+    try {
+      const savedUser = getSavedUserData();
+      const targetId = savedUser?.userId || savedUser?.id || profile.id;
+      const targetEmail = savedUser?.email || profile.email;
+
+      let deleted = false;
+      if (targetEmail) {
+        try {
+          await apiClient.delete('/freelancer/profile', { params: { email: targetEmail } });
+          deleted = true;
+        } catch (e) {
+          console.warn('Delete profile by email failed, trying by ID', e);
+        }
+      }
+      if (!deleted && targetId) {
+        try {
+          await apiClient.delete(`/profile/${targetId}`);
+          deleted = true;
+        } catch (e) {
+          console.warn('Delete profile by ID failed', e);
+        }
+      }
+
+      performLogout(router);
+    } catch (err) {
+      console.warn('Staff account deletion error:', err);
+      performLogout(router);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleDeleteStaffAccount = () => {
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm(
+        'Are you sure you want to delete your staff account? This action will permanently delete your staff profile and cannot be undone.'
+      );
+      if (confirmed) {
+        executeDeleteStaffAccount();
+      }
+    } else {
+      Alert.alert(
+        'Delete Staff Account',
+        'Are you sure you want to delete your staff account? This action will permanently delete your staff profile and cannot be undone.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete Account',
+            style: 'destructive',
+            onPress: executeDeleteStaffAccount,
+          },
+        ]
+      );
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-        {/* Header Title & Logout Button */}
+        {/* Header Title */}
         <View style={styles.topHeader}>
           <Text style={styles.headerTitle}>Staff Profile</Text>
-          <TouchableOpacity style={styles.logoutBtn} onPress={handleLogoutPress} activeOpacity={0.7}>
-            <Text style={{ fontSize: 18 }}>🚪</Text>
-          </TouchableOpacity>
         </View>
 
         {/* Status Toast Banner */}
@@ -219,6 +277,24 @@ export default function StaffProfileScreen() {
           <Text style={styles.editBtnText}>✏️ Edit Profile</Text>
         </TouchableOpacity>
 
+        {/* Delete Staff Account Button */}
+        <TouchableOpacity
+          style={[styles.deleteAccountBtn, isDeleting && { opacity: 0.6 }]}
+          onPress={handleDeleteStaffAccount}
+          activeOpacity={0.8}
+          disabled={isDeleting}
+        >
+          {isDeleting ? (
+            <ActivityIndicator size="small" color="#EF4444" />
+          ) : (
+            <>
+              <Text style={styles.deleteAccountIcon}>🗑️</Text>
+              <Text style={styles.deleteAccountText}>Delete Staff Account</Text>
+            </>
+          )}
+        </TouchableOpacity>
+
+        {/* Sign Out of Staff Account Button */}
         <TouchableOpacity style={styles.fullLogoutBtn} onPress={handleLogoutPress} activeOpacity={0.85}>
           <Text style={styles.fullLogoutText}>Sign Out of Staff Account</Text>
         </TouchableOpacity>
@@ -555,6 +631,27 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: Colors.primary,
+  },
+  deleteAccountBtn: {
+    height: 48,
+    borderRadius: Theme.borderRadius.md,
+    borderWidth: 1.5,
+    borderColor: '#EF4444',
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexDirection: 'row',
+    marginTop: Theme.spacing.sm,
+    gap: 8,
+  },
+  deleteAccountIcon: {
+    fontSize: 14,
+    color: '#EF4444',
+  },
+  deleteAccountText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#EF4444',
   },
   fullLogoutBtn: {
     height: 48,

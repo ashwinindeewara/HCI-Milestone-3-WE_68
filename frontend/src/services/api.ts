@@ -377,6 +377,20 @@ export const FreelancerApiService = {
     }
     return res.json();
   },
+  deleteProfile: (idOrEmail?: string | number) => {
+    if (typeof idOrEmail === 'number' || (typeof idOrEmail === 'string' && /^\d+$/.test(idOrEmail))) {
+      return apiClient.delete(`/freelancer/profile/${idOrEmail}`);
+    }
+    const user = getCurrentUser();
+    const targetEmail = (typeof idOrEmail === 'string' ? idOrEmail : '') || user?.email || '';
+    if (targetEmail) {
+      return apiClient.delete('/freelancer/profile', { params: { email: targetEmail } });
+    }
+    return apiClient.delete('/freelancer/profile');
+  },
+  deleteUserProfileById: (id: number | string) => {
+    return apiClient.delete(`/profile/${id}`);
+  },
   uploadFile: async (file: any, relatedEntityType = 'PROJECT', relatedEntityId = 'GENERAL', uploadedBy?: string) => {
     const user = getCurrentUser();
     const formData = new FormData();

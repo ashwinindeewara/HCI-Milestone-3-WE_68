@@ -347,6 +347,63 @@ export default function EditProfileScreen() {
     }
   };
 
+  const [deleting, setDeleting] = useState(false);
+
+  const executeDeleteProfile = async () => {
+    setDeleting(true);
+    try {
+      const activeUser = getCurrentUser();
+      const targetEmail = profile.email || activeUser?.email || '';
+      await FreelancerApiService.deleteProfile(targetEmail);
+
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+        const k = `profile_cache_${currentUser?.email || currentUser?.fullName || 'default'}`;
+        localStorage.removeItem(k);
+        localStorage.removeItem('auth_user');
+        localStorage.removeItem('auth_email');
+        localStorage.removeItem('auth_name');
+        localStorage.removeItem('auth_role');
+      }
+
+      if (Platform.OS === 'web') {
+        window.alert('Profile deleted successfully.');
+      } else {
+        Alert.alert('Profile Deleted', 'Your profile record has been successfully removed.');
+      }
+
+      router.replace('/login');
+    } catch (err: any) {
+      console.warn('Profile delete error:', err);
+      Alert.alert('Delete Failed', err.message || 'Failed to delete profile. Please try again.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleDeleteProfile = () => {
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm(
+        'Are you sure you want to delete your profile? This action will permanently remove your profile data from the database and cannot be undone.'
+      );
+      if (confirmed) {
+        executeDeleteProfile();
+      }
+    } else {
+      Alert.alert(
+        'Delete Profile Confirmation',
+        'Are you sure you want to delete your profile? This action will permanently remove your profile data from the database and cannot be undone.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete Profile',
+            style: 'destructive',
+            onPress: executeDeleteProfile,
+          },
+        ]
+      );
+    }
+  };
+
   if (loading && !profile.fullName && !profile.email) {
     return (
       <View style={styles.centerContainer}>
@@ -649,6 +706,26 @@ export default function EditProfileScreen() {
                 </View>
               )))}
             </View>
+          </View>
+
+          {/* Danger Zone: Delete Profile */}
+          <View style={styles.dangerZoneCard}>
+            <Text style={styles.dangerZoneTitle}>DANGER ZONE</Text>
+            <Text style={styles.dangerZoneSubtitle}>
+              Permanently delete your profile and account record from the database.
+            </Text>
+            <TouchableOpacity
+              style={[styles.deleteProfileBtn, deleting && styles.btnDisabled]}
+              onPress={handleDeleteProfile}
+              activeOpacity={0.8}
+              disabled={deleting}
+            >
+              {deleting ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.deleteProfileBtnText}>🗑 Delete Profile</Text>
+              )}
+            </TouchableOpacity>
           </View>
 
           {/* Bottom Action Buttons: Cancel and Save Changes */}
@@ -1307,6 +1384,41 @@ const styles = StyleSheet.create({
   saveChangesText: {
     color: '#FFFFFF',
     fontSize: 16,
+    fontWeight: '800',
+  },
+  dangerZoneCard: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1.5,
+    borderColor: '#FCA5A5',
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  dangerZoneTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#DC2626',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  dangerZoneSubtitle: {
+    fontSize: 12,
+    color: '#7F1D1D',
+    marginBottom: 12,
+    lineHeight: 16,
+  },
+  deleteProfileBtn: {
+    backgroundColor: '#EF4444',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteProfileBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
     fontWeight: '800',
   },
 });

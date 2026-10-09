@@ -94,14 +94,6 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     private void seedUsers() {
-<<<<<<< HEAD
-        userRepository.findByEmail("chathuniimalsha.com").ifPresent(u -> {
-            if (!userRepository.existsByEmail("chathuni@design.com")) {
-                u.setEmail("chathuni@design.com");
-                userRepository.save(u);
-            }
-        });
-=======
         seedUser("Chathuni Imalsha", "chathuniimalsha.com", "Password123!", UserRole.FREELANCER, "Active");
         seedUser("Chathuni Imalsha", "chathuniimalsha@gmail.com", "Password123!", UserRole.FREELANCER, "Active");
         seedUser("Chathuni Imalsha", "chathuni@design.com", "Password123!", UserRole.FREELANCER, "Active");
@@ -111,7 +103,6 @@ public class DataInitializer implements CommandLineRunner {
         seedUser("System Admin", "admin@freelance.com", "Admin123!", UserRole.ADMIN, "Active");
         seedUser("Payment Staff", "staff@freelance.com", "Staff123!", UserRole.PAYMENT_STAFF, "Active");
     }
->>>>>>> dae831ea6603285dbdf38c48c16e57abab7143c3
 
     private void seedFreelancerProfiles() {
         if (profileRepository.count() == 0) {

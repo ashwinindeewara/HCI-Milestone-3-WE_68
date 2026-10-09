@@ -86,4 +86,25 @@ public class FreelancerProfileController {
         }
         return ResponseEntity.ok(profileService.uploadProfileImage(email.trim().toLowerCase(), file));
     }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteProfileById(@PathVariable Long id) {
+        profileService.deleteProfileById(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping
+    public ResponseEntity<Void> deleteProfile(
+            @RequestParam(value = "id", required = false) Long id,
+            @RequestParam(value = "email", required = false) String email
+    ) {
+        if (id != null) {
+            profileService.deleteProfileById(id);
+        } else if (email != null && !email.isBlank()) {
+            profileService.deleteProfileByEmail(email);
+        } else {
+            return ResponseEntity.badRequest().build();
+        }
+        return ResponseEntity.noContent().build();
+    }
 }
