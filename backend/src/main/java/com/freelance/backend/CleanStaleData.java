@@ -13,12 +13,16 @@ public class CleanStaleData implements CommandLineRunner {
     }
 
     @Override
-    public void run(String... args) throws Exception {
-        transactionRepository.findAll().stream()
-            .filter(t -> t.getMilestoneTitle() != null && t.getMilestoneTitle().contains("Account Suspension Appeal"))
-            .forEach(t -> {
-                System.out.println("Deleting stale transaction: " + t.getId());
-                transactionRepository.delete(t);
-            });
+    public void run(String... args) {
+        try {
+            transactionRepository.findAll().stream()
+                .filter(t -> t.getMilestoneTitle() != null && t.getMilestoneTitle().contains("Account Suspension Appeal"))
+                .forEach(t -> {
+                    System.out.println("Deleting stale transaction: " + t.getId());
+                    transactionRepository.delete(t);
+                });
+        } catch (Exception e) {
+            System.err.println("[CLEAN STALE DATA] Warning: Failed to clean stale data on startup: " + e.getMessage());
+        }
     }
 }
