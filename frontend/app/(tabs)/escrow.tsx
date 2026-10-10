@@ -203,11 +203,9 @@ export default function EscrowScreen() {
   useEffect(() => {
     const fetchEscrowSummary = async () => {
       try {
-        const activeName = currentUser?.fullName || (isChathuni ? 'Chathuni Imalsha' : '');
         const activeEmail = currentUser?.email || '';
         const res = await apiClient.get('/escrow/summary', {
           params: {
-            ...(activeEmail ? { email: activeEmail } : {}),
             ...(activeEmail ? { email: activeEmail } : {}),
           },
         });
@@ -219,18 +217,14 @@ export default function EscrowScreen() {
               localStorage.setItem(k, String(res.data.totalInEscrow));
             }
           }
-          if (res.data.releasedAmount != null) {
+          const serverAvailableBalance = res.data.availableBalance ?? res.data.releasedAmount;
+          if (serverAvailableBalance != null) {
             if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
               const k = `escrow_avail_${currentUser?.email || currentUser?.fullName || 'default'}`;
-              const storedAvailable = localStorage.getItem(k);
-              if (storedAvailable !== null) {
-                setAvailableBalance(Math.max(0, parseFloat(storedAvailable) || 0));
-              } else {
-                setAvailableBalance(res.data.releasedAmount);
-                localStorage.setItem(k, String(res.data.releasedAmount));
-              }
+              setAvailableBalance(serverAvailableBalance);
+              localStorage.setItem(k, String(serverAvailableBalance));
             } else {
-              setAvailableBalance(res.data.releasedAmount);
+              setAvailableBalance(serverAvailableBalance);
             }
           }
         }
@@ -245,16 +239,24 @@ export default function EscrowScreen() {
         const activeEmail = currentUser?.email || '';
         const res = await FreelancerApiService.getTransactions('ALL', activeName, activeEmail);
         const txs = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+        setTotalWithdrawn(txs
+          .filter((transaction: any) => transaction.type === 'WITHDRAW'
+            && transaction.status === 'WITHDRAWN')
+          .reduce((sum: number, transaction: any) => sum + Math.abs(Number(transaction.amount) || 0), 0));
         if (Array.isArray(txs) && txs.length > 0) {
-          const mapped: HistoryItem[] = txs.map((t: any) => ({
-            id: String(t.id),
-            title: t.projectTitle || t.description || 'Escrow Transaction',
-            sub: t.description || 'Milestone Payment',
-            date: t.date || 'Recent',
-            amount: t.amount || 0,
-            formattedAmount: t.amount != null ? `$${t.amount.toLocaleString()}` : '$0.00',
-            status: t.status === 'WITHDRAWN' ? 'Withdrawn' : t.status === 'RELEASED' ? 'Released' : 'In Escrow',
-          }));
+          const mapped: HistoryItem[] = txs.map((t: any) => {
+            const amount = Number(t.amount) || 0;
+            const isWithdrawal = t.type === 'WITHDRAW' && t.status === 'WITHDRAWN';
+            return {
+              id: String(t.id),
+              title: t.milestoneTitle || t.projectTitle || t.description || 'Escrow Transaction',
+              sub: t.description || (isWithdrawal ? 'Payout Withdrawal' : 'Milestone Payment'),
+              date: t.date || t.timestamp || 'Recent',
+              amount: Math.abs(amount),
+              formattedAmount: `${isWithdrawal ? '-' : ''}$${Math.abs(amount).toLocaleString()}`,
+              status: isWithdrawal ? 'Withdrawn' : t.status === 'RELEASED' ? 'Released' : 'In Escrow',
+            };
+          });
           setHistory(mapped);
           if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
             const k = `escrow_history_${currentUser?.email || currentUser?.fullName || 'default'}`;
@@ -498,7 +500,7 @@ export default function EscrowScreen() {
   };
 
   // Handle Withdrawal Submission
-  const handleWithdraw = () => {
+  const handleWithdraw = async () => {
     setWithdrawError(null);
     const amountVal = parseFloat(withdrawAmount);
     if (isNaN(amountVal) || amountVal <= 0) {
@@ -514,8 +516,12 @@ export default function EscrowScreen() {
     }
 
     setIsProcessingWithdrawal(true);
-
-    setTimeout(() => {
+    try {
+      const user = getCurrentUser();
+      if (!user?.email) {
+        setWithdrawError('Your account email is unavailable. Please sign in again.');
+        return;
+      }
       const defaultAcc = linkedAccounts.find((a) => a.isDefault) || linkedAccounts[0];
       const destinationLabel =
         selectedMethod === 'BANK'
@@ -523,6 +529,16 @@ export default function EscrowScreen() {
           : selectedMethod === 'PAYPAL'
             ? 'PayPal'
             : 'Debit Card';
+      const response = await apiClient.post('/escrow/withdraw', {
+        freelancerName: user.fullName || '',
+        freelancerEmail: user.email,
+        amount: amountVal,
+        destination: destinationLabel,
+      });
+      const withdrawalRecords = Array.isArray(response.data) ? response.data : [];
+      if (withdrawalRecords.length === 0) {
+        throw new Error('The withdrawal was not recorded by the server.');
+      }
 
       // Deduct from available balance
       const newAvail = Math.max(0, availableBalance - amountVal);
@@ -532,7 +548,7 @@ export default function EscrowScreen() {
 
       // Add payout transaction to ledger
       const newTx: HistoryItem = {
-        id: 'wdr-' + Date.now(),
+        id: String(withdrawalRecords[0].id),
         title: 'Payout Withdrawal',
         sub: `Transferred to ${destinationLabel}`,
         date: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
@@ -546,40 +562,33 @@ export default function EscrowScreen() {
 
       if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
         try {
-          const u = getCurrentUser();
-          const k = `escrow_avail_${u?.email || u?.fullName || 'default'}`;
+          const k = `escrow_avail_${user.email}`;
           localStorage.setItem(k, String(newAvail));
           localStorage.setItem(
-            `escrow_withdrawn_${u?.email || u?.fullName || 'default'}`,
+            `escrow_withdrawn_${user.email}`,
             String(newTotalWithdrawn)
           );
 
-          const historyKey = `escrow_history_${u?.email || u?.fullName || 'default'}`;
+          const historyKey = `escrow_history_${user.email}`;
           const existingHistory = JSON.parse(localStorage.getItem(historyKey) || '[]');
           localStorage.setItem(historyKey, JSON.stringify([newTx, ...existingHistory]));
-        } catch (e) {}
+        } catch (storageError) {
+          console.warn('Withdrawal succeeded but local balance cache could not be updated:', storageError);
+        }
       }
 
-      // Record transaction on backend if reachable
-      try {
-        const u = getCurrentUser();
-        apiClient.post('/transactions', {
-          projectTitle: 'Payout Withdrawal',
-          description: `Transferred to ${destinationLabel}`,
-          amount: -amountVal,
-          type: 'WITHDRAW',
-          status: 'WITHDRAWN',
-          freelancerName: u?.fullName || '',
-          email: u?.email || '',
-        }).catch(() => {});
-      } catch (e) {}
-
-      setIsProcessingWithdrawal(false);
       setWithdrawModalVisible(false);
       setWithdrawAmount('');
 
       showToast(`✓ Sent $${amountVal.toLocaleString()} to ${destinationLabel}`);
-    }, 600);
+    } catch (error: any) {
+      console.error('Failed to process withdrawal:', error?.response?.data || error);
+      setWithdrawError(
+        error?.response?.data?.message || error?.message || 'Unable to process withdrawal. Please try again.'
+      );
+    } finally {
+      setIsProcessingWithdrawal(false);
+    }
   };
 
   // Filter history

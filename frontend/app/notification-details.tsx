@@ -12,6 +12,7 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import Colors from '../src/constants/colors';
 import { FreelancerApiService, getCurrentUser } from '../src/services/api';
+import { getUserSession } from '../src/services/storage';
 
 interface NotificationDetailData {
   id: number | string;
@@ -54,15 +55,20 @@ export default function NotificationDetailsScreen() {
   const params = useLocalSearchParams();
   const notifId = (params.id as string) || '5';
   const currentUser = getCurrentUser();
+  const session = getUserSession();
+  const recipientRole = String(session?.role || currentUser?.role || 'FREELANCER').toUpperCase() as 'CLIENT' | 'FREELANCER';
+  const cacheIdentity = `${recipientRole}_${currentUser?.email || currentUser?.fullName || 'default'}_${notifId}`;
   const isChathuni =
-    currentUser?.email === 'chathuniimalsha.com' ||
-    (currentUser?.fullName && currentUser.fullName.toLowerCase().includes('chathuni')) ||
-    (currentUser?.email && currentUser.email.toLowerCase().includes('chathuni'));
+    recipientRole === 'FREELANCER' && (
+      currentUser?.email === 'chathuniimalsha.com' ||
+      (currentUser?.fullName && currentUser.fullName.toLowerCase().includes('chathuni')) ||
+      (currentUser?.email && currentUser.email.toLowerCase().includes('chathuni'))
+    );
 
   const [notification, setNotification] = useState<NotificationDetailData>(() => {
     if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
       try {
-        const s = localStorage.getItem(`notification_detail_cache_${notifId}`);
+        const s = localStorage.getItem(`notification_detail_cache_${cacheIdentity}`);
         if (s) {
           const p = JSON.parse(s);
           if (p && p.title) return p;
@@ -95,17 +101,27 @@ export default function NotificationDetailsScreen() {
 
   const fetchNotificationDetails = async () => {
     try {
-      const res = await FreelancerApiService.getNotification(notifId);
+      const res = await FreelancerApiService.getNotification(
+        notifId,
+        currentUser?.email,
+        currentUser?.fullName,
+        recipientRole
+      );
       if (res.data) {
         setNotification(res.data);
         if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
           try {
-            localStorage.setItem(`notification_detail_cache_${notifId}`, JSON.stringify(res.data));
+            localStorage.setItem(`notification_detail_cache_${cacheIdentity}`, JSON.stringify(res.data));
           } catch (e) {}
         }
         // Automatically mark as read
         if (res.data.unread) {
-          await FreelancerApiService.markNotificationAsRead(notifId);
+          await FreelancerApiService.markNotificationAsRead(
+            notifId,
+            currentUser?.email,
+            currentUser?.fullName,
+            recipientRole
+          );
         }
       }
     } catch {

@@ -321,6 +321,9 @@ export default function EditProfileScreen() {
           hourlyRate: parseFloat(profile.hourlyRate) || 0,
           status: profile.status,
           about: profile.about,
+          location: profile.location,
+          phone: profile.phone,
+          education: profile.education,
           skills: profile.skills,
           featuredProjects: featuredProjects,
           rating: profile.rating,
@@ -344,63 +347,6 @@ export default function EditProfileScreen() {
       router.back();
     } else {
       router.replace('/(tabs)/profile');
-    }
-  };
-
-  const [deleting, setDeleting] = useState(false);
-
-  const executeDeleteProfile = async () => {
-    setDeleting(true);
-    try {
-      const activeUser = getCurrentUser();
-      const targetEmail = profile.email || activeUser?.email || '';
-      await FreelancerApiService.deleteProfile(targetEmail);
-
-      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-        const k = `profile_cache_${currentUser?.email || currentUser?.fullName || 'default'}`;
-        localStorage.removeItem(k);
-        localStorage.removeItem('auth_user');
-        localStorage.removeItem('auth_email');
-        localStorage.removeItem('auth_name');
-        localStorage.removeItem('auth_role');
-      }
-
-      if (Platform.OS === 'web') {
-        window.alert('Profile deleted successfully.');
-      } else {
-        Alert.alert('Profile Deleted', 'Your profile record has been successfully removed.');
-      }
-
-      router.replace('/login');
-    } catch (err: any) {
-      console.warn('Profile delete error:', err);
-      Alert.alert('Delete Failed', err.message || 'Failed to delete profile. Please try again.');
-    } finally {
-      setDeleting(false);
-    }
-  };
-
-  const handleDeleteProfile = () => {
-    if (Platform.OS === 'web') {
-      const confirmed = window.confirm(
-        'Are you sure you want to delete your profile? This action will permanently remove your profile data from the database and cannot be undone.'
-      );
-      if (confirmed) {
-        executeDeleteProfile();
-      }
-    } else {
-      Alert.alert(
-        'Delete Profile Confirmation',
-        'Are you sure you want to delete your profile? This action will permanently remove your profile data from the database and cannot be undone.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Delete Profile',
-            style: 'destructive',
-            onPress: executeDeleteProfile,
-          },
-        ]
-      );
     }
   };
 
@@ -581,6 +527,37 @@ export default function EditProfileScreen() {
             </View>
           </View>
 
+          <View style={styles.sectionBlock}>
+            <Text style={styles.sectionHeading}>Professional Details</Text>
+            <View style={styles.aboutCard}>
+              <Text style={styles.detailFieldLabel}>Location</Text>
+              <TextInput
+                style={styles.detailFieldInput}
+                value={profile.location}
+                onChangeText={(text) => setProfile((p) => ({ ...p, location: text }))}
+                placeholder="City, country"
+                placeholderTextColor="#9CA3AF"
+              />
+              <Text style={styles.detailFieldLabel}>Phone</Text>
+              <TextInput
+                style={styles.detailFieldInput}
+                value={profile.phone}
+                onChangeText={(text) => setProfile((p) => ({ ...p, phone: text }))}
+                placeholder="Phone number"
+                placeholderTextColor="#9CA3AF"
+                keyboardType="phone-pad"
+              />
+              <Text style={styles.detailFieldLabel}>Education</Text>
+              <TextInput
+                style={styles.detailFieldInput}
+                value={profile.education}
+                onChangeText={(text) => setProfile((p) => ({ ...p, education: text }))}
+                placeholder="Degree, institution"
+                placeholderTextColor="#9CA3AF"
+              />
+            </View>
+          </View>
+
           {/* Skills Section */}
           <View style={styles.sectionBlock}>
             <Text style={styles.sectionHeading}>Skills</Text>
@@ -708,26 +685,6 @@ export default function EditProfileScreen() {
             </View>
           </View>
 
-          {/* Danger Zone: Delete Profile */}
-          <View style={styles.dangerZoneCard}>
-            <Text style={styles.dangerZoneTitle}>DANGER ZONE</Text>
-            <Text style={styles.dangerZoneSubtitle}>
-              Permanently delete your profile and account record from the database.
-            </Text>
-            <TouchableOpacity
-              style={[styles.deleteProfileBtn, deleting && styles.btnDisabled]}
-              onPress={handleDeleteProfile}
-              activeOpacity={0.8}
-              disabled={deleting}
-            >
-              {deleting ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <Text style={styles.deleteProfileBtnText}>🗑 Delete Profile</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-
           {/* Bottom Action Buttons: Cancel and Save Changes */}
           <View style={styles.actionBtnRow}>
             <TouchableOpacity
@@ -765,7 +722,6 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    maxWidth: 600,
     width: '100%',
     alignSelf: 'center',
     backgroundColor: '#F8FAFC',
@@ -867,8 +823,9 @@ const styles = StyleSheet.create({
   },
   mainProfileCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 24,
+    borderRadius: 24,
+    paddingVertical: 24,
+    paddingHorizontal: 16,
     alignItems: 'center',
     marginBottom: 16,
     borderWidth: 1,
@@ -1002,7 +959,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: 8,
-    marginBottom: 20,
+    marginBottom: 24,
   },
   statCard: {
     flex: 1,
@@ -1010,11 +967,11 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#E5E7EB',
-    paddingVertical: 12,
+    paddingVertical: 14,
     paddingHorizontal: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 80,
+    minHeight: 74,
   },
   statusCardActive: {
     backgroundColor: '#ECFDF5',
@@ -1090,7 +1047,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   sectionBlock: {
-    marginBottom: 20,
+    marginBottom: 24,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
@@ -1133,6 +1090,23 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 12,
     minHeight: 90,
+  },
+  detailFieldLabel: {
+    color: '#475569',
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  detailFieldInput: {
+    fontSize: 14,
+    color: '#1E293B',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 14,
   },
   skillsWrapper: {
     flexDirection: 'row',
@@ -1198,11 +1172,11 @@ const styles = StyleSheet.create({
   },
   emptyFeaturedCard: {
     width: '100%',
-    padding: 24,
+    padding: 16,
     backgroundColor: '#F8FAFC',
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: '#CBD5E1',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1238,7 +1212,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 200,
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: '#E5E7EB',
@@ -1384,41 +1358,6 @@ const styles = StyleSheet.create({
   saveChangesText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '800',
-  },
-  dangerZoneCard: {
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1.5,
-    borderColor: '#FCA5A5',
-    borderRadius: 16,
-    padding: 16,
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  dangerZoneTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#DC2626',
-    letterSpacing: 0.5,
-    marginBottom: 4,
-  },
-  dangerZoneSubtitle: {
-    fontSize: 12,
-    color: '#7F1D1D',
-    marginBottom: 12,
-    lineHeight: 16,
-  },
-  deleteProfileBtn: {
-    backgroundColor: '#EF4444',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  deleteProfileBtnText: {
-    color: '#FFFFFF',
-    fontSize: 14,
     fontWeight: '800',
   },
 });

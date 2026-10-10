@@ -38,6 +38,9 @@ export interface FreelancerProfileData {
   hourlyRate: number;
   status: 'Available' | 'Busy' | 'On Leave';
   about: string;
+  location: string;
+  phone: string;
+  education: string;
   skills: string[];
   featuredProjects: ProjectItem[];
 }
@@ -54,6 +57,9 @@ const DEFAULT_PROFILE: FreelancerProfileData = {
   status: 'Available',
   about:
     'Productive UI/UX designer with 4+ years of expertise. Specializing in high-fidelity design systems, mobile workflows, and interactive prototyping.',
+  location: 'Colombo, Sri Lanka',
+  phone: '+94 77 123 4567',
+  education: 'B.Sc. in Software Engineering, SLIIT',
   skills: ['Figma', 'UI Design', 'UX Research', 'Prototyping', 'Design Systems'],
   featuredProjects: [
     {
@@ -105,6 +111,9 @@ const getInitialProfile = (): FreelancerProfileData => {
     hourlyRate: 0,
     status: 'Available',
     about: '',
+    location: '',
+    phone: '',
+    education: '',
     skills: [],
     featuredProjects: [],
   };
@@ -124,6 +133,9 @@ export default function FreelancerProfileScreen() {
   const [editRate, setEditRate] = useState(profile.hourlyRate.toString());
   const [editStatus, setEditStatus] = useState(profile.status);
   const [editAbout, setEditAbout] = useState(profile.about);
+  const [editLocation, setEditLocation] = useState(profile.location);
+  const [editPhone, setEditPhone] = useState(profile.phone);
+  const [editEducation, setEditEducation] = useState(profile.education);
   const [editSkills, setEditSkills] = useState<string[]>([...profile.skills]);
   const [newSkillText, setNewSkillText] = useState('');
   const [saveToast, setSaveToast] = useState(false);
@@ -220,6 +232,9 @@ export default function FreelancerProfileScreen() {
           hourlyRate: data.hourlyRate != null ? data.hourlyRate : fallback.hourlyRate,
           status: (data.status as any) || fallback.status,
           about: data.about != null ? data.about : fallback.about,
+          location: data.location != null ? data.location : fallback.location,
+          phone: data.phone != null ? data.phone : fallback.phone,
+          education: data.education != null ? data.education : fallback.education,
           skills: Array.isArray(data.skills) ? data.skills : fallback.skills,
           featuredProjects: Array.isArray(data.featuredProjects) ? data.featuredProjects : fallback.featuredProjects,
         };
@@ -246,6 +261,9 @@ export default function FreelancerProfileScreen() {
     setEditRate(profile.hourlyRate.toString());
     setEditStatus(profile.status);
     setEditAbout(profile.about);
+    setEditLocation(profile.location);
+    setEditPhone(profile.phone);
+    setEditEducation(profile.education);
     setEditSkills([...profile.skills]);
     setIsEditing(true);
   };
@@ -292,6 +310,9 @@ export default function FreelancerProfileScreen() {
     const updatedRate = parseFloat(editRate) || 0;
     const updatedStatus = editStatus;
     const updatedAbout = editAbout.trim();
+    const updatedLocation = editLocation.trim();
+    const updatedPhone = editPhone.trim();
+    const updatedEducation = editEducation.trim();
     const updatedSkills = editSkills;
 
     const newProfileState: FreelancerProfileData = {
@@ -302,6 +323,9 @@ export default function FreelancerProfileScreen() {
       hourlyRate: updatedRate,
       status: updatedStatus,
       about: updatedAbout,
+      location: updatedLocation,
+      phone: updatedPhone,
+      education: updatedEducation,
       skills: updatedSkills,
     };
 
@@ -323,6 +347,9 @@ export default function FreelancerProfileScreen() {
           hourlyRate: updatedRate,
           status: updatedStatus,
           about: updatedAbout,
+          location: updatedLocation,
+          phone: updatedPhone,
+          education: updatedEducation,
           skills: updatedSkills,
           featuredProjects: profile.featuredProjects,
         },
@@ -608,6 +635,34 @@ export default function FreelancerProfileScreen() {
                 )}
               </View>
               {isEditing && <Text style={styles.sectionPencil}>✎</Text>}
+            </View>
+
+            <View style={styles.sectionBlock}>
+              <Text style={styles.sectionHeading}>Professional Details</Text>
+              <View style={styles.aboutCard}>
+                {([
+                  ['Location', 'location', editLocation, setEditLocation],
+                  ['Phone', 'phone', editPhone, setEditPhone],
+                  ['Education', 'education', editEducation, setEditEducation],
+                ] as const).map(([label, key, value, setValue]) => (
+                  <View key={key} style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>{label}</Text>
+                    {isEditing ? (
+                      <TextInput
+                        style={styles.detailInput}
+                        value={value}
+                        onChangeText={setValue}
+                        placeholder={label}
+                        keyboardType={key === 'phone' ? 'phone-pad' : 'default'}
+                      />
+                    ) : (
+                      <Text style={value ? styles.aboutText : styles.emptyNoticeText}>
+                        {value || `No ${label.toLowerCase()} added`}
+                      </Text>
+                    )}
+                  </View>
+                ))}
+              </View>
             </View>
 
             {/* Skills Section */}
@@ -1136,6 +1191,25 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     color: '#374151',
     fontWeight: '400',
+  },
+  detailRow: {
+    marginBottom: 12,
+  },
+  detailLabel: {
+    color: '#6B7280',
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  detailInput: {
+    fontSize: 14,
+    color: '#111827',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
   },
   aboutInput: {
     fontSize: 14,

@@ -49,19 +49,13 @@ export default function ClientFindTalentScreen() {
       setErrorMessage('');
 
       const response = await apiClient.get('/freelancer/profile/all');
-      console.log('FREELANCER PROFILES:', response);
       const data = response.data;
 
-      /*
-       * Depending on your backend response,
-       * data may already be an array.
-       */
       const profiles = Array.isArray(data)
         ? data
         : data
           ? [data]
           : [];
-        console.log('profiles:', profiles);
       const mappedProfiles: Freelancer[] = profiles.map(
         (profile: any) => ({
           id: profile.id,

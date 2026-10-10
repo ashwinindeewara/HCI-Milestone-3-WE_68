@@ -18,6 +18,7 @@ import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
 import apiClient, { getCurrentUser } from '../src/services/api';
 import { getSavedUserData, updateSavedUserData } from '../src/services/authService';
+import ClientBottomTabBar from '../src/components/ClientBottomTabBar';
 
 interface ClientProfileData {
   userId?: number | string;
@@ -27,10 +28,12 @@ interface ClientProfileData {
 
   location?: string;
   companyName?: string;
+  company?: string;
   about?: string;
   status?: string;
 
   memberSince?: number | string;
+  createdAt?: string;
   projectsPosted?: number;
 }
 
@@ -43,14 +46,11 @@ export default function ClientEditProfileScreen() {
   const [saving, setSaving] = useState(false);
 
   // Editable fields
+  const [fullName, setFullName] = useState('');
   const [location, setLocation] = useState('');
   const [companyName, setCompanyName] = useState('');
   const [about, setAbout] = useState('');
 
-  /*
-   * Get currently logged-in user and load
-   * their real client profile.
-   */
   useEffect(() => {
     loadProfile();
   }, []);
@@ -60,58 +60,68 @@ export default function ClientEditProfileScreen() {
       const savedUser = getSavedUserData();
       const apiUser = getCurrentUser();
       const currentUser = savedUser || apiUser || {};
-      const userId = currentUser.id || currentUser.userId || 1;
-      const userFullName = currentUser.fullName || currentUser.name || 'Sysco Labs Client';
-      const userEmail = currentUser.email || 'client@syscolabs.com';
+      const userId = currentUser.id || currentUser.userId;
 
-      let data: ClientProfileData = {
-        userId,
-        fullName: userFullName,
-        email: userEmail,
-        location: 'Colombo, Sri Lanka',
-        companyName: 'Sysco Labs',
-        about: 'Creative UI/UX Designer and project manager with a strong command of Figma, usability research, and modern software development workflows.',
-        status: 'Available',
-        memberSince: '2024',
-        projectsPosted: 3,
-      };
-
-      try {
-        const response = await apiClient.get(`/clients/${userId}/profile`);
-        if (response.data) {
-          data = {
-            ...data,
-            ...response.data,
-            fullName: response.data.fullName || userFullName,
-            email: response.data.email || userEmail,
-          };
-        }
-      } catch (err) {
-        console.info('[ClientEditProfile] API profile fetch fallback used:', err);
+      if (!userId) {
+        throw new Error('Your account ID is unavailable. Please sign in again.');
       }
 
+      const initialProfile: ClientProfileData = {
+        userId,
+        fullName: currentUser.fullName || currentUser.name || '',
+        email: currentUser.email || '',
+        location: currentUser.location || '',
+        companyName: currentUser.company || currentUser.companyName || '',
+        about: currentUser.about || '',
+      };
+      setProfile(initialProfile);
+      setFullName(initialProfile.fullName || '');
+      setLocation(initialProfile.location || '');
+      setCompanyName(initialProfile.companyName || '');
+      setAbout(initialProfile.about || '');
+
+      const response = await apiClient.get(`/clients/${userId}/profile`);
+      const data: ClientProfileData = {
+        ...initialProfile,
+        ...response.data,
+        userId,
+        fullName: response.data?.fullName || initialProfile.fullName,
+        email: response.data?.email || initialProfile.email,
+        companyName: response.data?.company || response.data?.companyName || initialProfile.companyName,
+      };
+
       setProfile(data);
-      setLocation(data.location || 'Colombo, Sri Lanka');
-      setCompanyName(data.companyName || 'Sysco Labs');
-      setAbout(data.about || 'Creative UI/UX Designer and project manager with a strong command of Figma.');
+      setFullName(data.fullName || '');
+      setLocation(data.location || '');
+      setCompanyName(data.companyName || '');
+      setAbout(data.about || '');
     } catch (error: any) {
-      console.error('Failed to load client profile:', error);
+      console.error('Failed to load client profile:', error?.response?.data || error);
+      Alert.alert(
+        'Unable to load profile',
+        error?.response?.data?.message || error?.message || 'Please try again.'
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  /*
-   * Save edited profile to backend.
-   */
   const handleSave = async () => {
     try {
       const savedUser = getSavedUserData();
       const apiUser = getCurrentUser();
       const currentUser = savedUser || apiUser || {};
-      const userId = currentUser.id || currentUser.userId || 1;
+      const userId = profile?.userId || currentUser.id || currentUser.userId;
 
-      // Basic validation
+      if (!userId) {
+        Alert.alert('Unable to save profile', 'Your account ID is unavailable. Please sign in again.');
+        return;
+      }
+
+      if (!fullName.trim()) {
+        Alert.alert('Name required', 'Please enter your name.');
+        return;
+      }
       if (!location.trim()) {
         Alert.alert('Location required', 'Please enter your location.');
         return;
@@ -129,23 +139,36 @@ export default function ClientEditProfileScreen() {
 
       setSaving(true);
       const requestBody = {
+        fullName: fullName.trim(),
         location: location.trim(),
-        companyName: companyName.trim(),
+        company: companyName.trim(),
         about: about.trim(),
       };
 
-      try {
-        await apiClient.put(`/clients/${userId}/profile`, requestBody);
-      } catch (err) {
-        console.info('[ClientEditProfile] Backend update fallback:', err);
-      }
-
-      setProfile((prev) => (prev ? { ...prev, ...requestBody } : null));
-      updateSavedUserData(requestBody);
+      const response = await apiClient.put(`/clients/${userId}/profile`, requestBody);
+      const updatedProfile: ClientProfileData = {
+        ...profile,
+        ...response.data,
+        companyName: response.data?.company || requestBody.company,
+      };
+      setProfile(updatedProfile);
+      setFullName(updatedProfile.fullName || requestBody.fullName);
+      setLocation(updatedProfile.location || requestBody.location);
+      setCompanyName(updatedProfile.companyName || requestBody.company);
+      setAbout(updatedProfile.about || requestBody.about);
+      updateSavedUserData({
+        fullName: requestBody.fullName,
+        location: requestBody.location,
+        company: requestBody.company,
+        about: requestBody.about,
+      });
       setShowSuccess(true);
     } catch (error: any) {
-      console.error('Failed to update profile:', error);
-      Alert.alert('Update Failed', 'Unable to update your profile.');
+      console.error('Failed to update client profile:', error?.response?.data || error);
+      Alert.alert(
+        'Update Failed',
+        error?.response?.data?.message || 'Unable to update your profile. Please try again.'
+      );
     } finally {
       setSaving(false);
     }
@@ -294,6 +317,22 @@ export default function ClientEditProfileScreen() {
           <View style={styles.formSection}>
 
             {/* Location */}
+
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>
+                Full Name
+              </Text>
+
+              <TextInput
+                value={fullName}
+                onChangeText={setFullName}
+                placeholder="Your name"
+                placeholderTextColor={Colors.neutralLight}
+                style={styles.input}
+                autoCapitalize="words"
+                textContentType="name"
+              />
+            </View>
 
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>
@@ -513,121 +552,7 @@ export default function ClientEditProfileScreen() {
           </View>
         )}
 
-        {/* ================= BOTTOM NAV ================= */}
-
-        <View style={styles.bottomTabBar}>
-
-          {/* Home */}
-
-          <TouchableOpacity
-            style={styles.tabItem}
-            onPress={() =>
-              router.replace('/client-dashboard')
-            }
-            activeOpacity={0.8}
-          >
-            <Ionicons
-              name="home-outline"
-              size={20}
-              color={Colors.primary}
-            />
-
-            <Text
-              style={[
-                styles.tabLabel,
-                styles.tabLabelActive,
-              ]}
-            >
-              Home
-            </Text>
-          </TouchableOpacity>
-
-          {/* Projects */}
-
-          <TouchableOpacity
-            style={styles.tabItem}
-            onPress={() =>
-              router.push('/client-projects')
-            }
-            activeOpacity={0.8}
-          >
-            <Ionicons
-              name="folder-outline"
-              size={20}
-              color={Colors.neutralMedium}
-            />
-
-            <Text style={styles.tabLabel}>
-              Projects
-            </Text>
-          </TouchableOpacity>
-
-          {/* Find Talent */}
-
-          <TouchableOpacity
-            style={styles.tabItem}
-            onPress={() =>
-              router.push('/client-find-talent')
-            }
-            activeOpacity={0.8}
-          >
-            <Ionicons
-              name="search-outline"
-              size={20}
-              color={Colors.neutralMedium}
-            />
-
-            <Text style={styles.tabLabel}>
-              Find Talent
-            </Text>
-          </TouchableOpacity>
-
-          {/* Payments */}
-
-          <TouchableOpacity
-            style={styles.tabItem}
-            onPress={() =>
-              router.push('/client-payments')
-            }
-            activeOpacity={0.8}
-          >
-            <Ionicons
-              name="card-outline"
-              size={20}
-              color={Colors.neutralMedium}
-            />
-
-            <Text style={styles.tabLabel}>
-              Payments
-            </Text>
-          </TouchableOpacity>
-
-          {/* Profile */}
-
-          <TouchableOpacity
-            style={styles.tabItem}
-            onPress={() =>
-              router.replace('/client-profile')
-            }
-            activeOpacity={0.8}
-          >
-            <Ionicons
-              name="person-outline"
-              size={20}
-              color={Colors.primary}
-            />
-
-            <Text
-              style={[
-                styles.tabLabel,
-                styles.tabLabelActive,
-              ]}
-            >
-              Profile
-            </Text>
-          </TouchableOpacity>
-
-        </View>
+        <ClientBottomTabBar activeTab="profile" />
 
       </View>
     </SafeAreaView>
@@ -705,7 +630,7 @@ const styles = StyleSheet.create({
   contentContainer: {
     paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: 20,
+    paddingBottom: 80,
   },
 
   /* ================= PROFILE CARD ================= */
@@ -1008,38 +933,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: Colors.dark,
-  },
-
-  /* ================= BOTTOM NAV ================= */
-
-  bottomTabBar: {
-    height: 66,
-    backgroundColor: Colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    paddingHorizontal: 4,
-  },
-
-  tabItem: {
-    flex: 1,
-    minHeight: 58,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  tabLabel: {
-    marginTop: 3,
-    fontSize: 9,
-    fontWeight: '600',
-    color: Colors.neutralMedium,
-  },
-
-  tabLabelActive: {
-    color: Colors.primary,
-    fontWeight: '700',
   },
 
     successOverlay: {

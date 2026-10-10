@@ -27,6 +27,7 @@ interface ClientProfileData {
   profileImageUrl?: string;
   location?: string;
   companyName?: string;
+  company?: string;
   about?: string;
   status?: string;
   projectsPosted?: number;
@@ -63,20 +64,15 @@ export default function ClientProfileScreen() {
       }
   };
 
-  /*
-   * At the moment the login response may only contain User data.
-   * Later, when you call GET /clients/{userId}/profile,
-   * you can replace this with the API response.
-   */
   const clientProfile: ClientProfileData = {
     ...currentUser,
-
-    // Temporary fallback values for fields not yet returned by login
-    location: profile?.location || 'Colombo',
-    companyName: profile?.companyName || 'Sysco Labs',
-    memberSince: profile?.memberSince || '2025',
-    about: profile?.about || 'Creative UI/UX Designer with a strong command of Figma, usability research, and modern design workflows. Dedicated to crafting accessible, user-tested interfaces that delight users and drive business goals',
-    status: profile?.status || 'Available',
+    ...profile,
+    profileImageUrl: profile?.profileImageUrl || currentUser?.profileImageUrl,
+    location: profile?.location || currentUser?.location || '',
+    companyName: profile?.company || profile?.companyName || currentUser?.company || '',
+    memberSince: profile?.memberSince || profile?.createdAt || currentUser?.createdAt,
+    about: profile?.about || currentUser?.about || '',
+    status: profile?.status || currentUser?.status || 'Active',
     projectsPosted: profile?.projectsPosted ?? 0,
   };
 
@@ -112,7 +108,7 @@ export default function ClientProfileScreen() {
       }
     }
 
-    return '2024';
+    return '—';
   };
 
   const handleLogout = () => {
@@ -126,7 +122,6 @@ export default function ClientProfileScreen() {
   };
 
   const handleEditProfile = () => {
-    // Change this route to the actual edit-profile screen
     router.push('/client-edit-profile');
   };
 

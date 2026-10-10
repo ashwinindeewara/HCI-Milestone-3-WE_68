@@ -3,6 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
+  Alert,
   ScrollView,
   TextInput,
   TouchableOpacity,
@@ -60,9 +61,7 @@ export default function CreateDisputeScreen() {
       : ''
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [uploadedFiles, setUploadedFiles] = useState<string[]>(
-    isChathuni ? ['contract-agreement.pdf', 'approved-screens-specs.png'] : []
-  );
+  const [uploadedFiles, setUploadedFiles] = useState<string[]>([]);
 
   const [projectModalVisible, setProjectModalVisible] = useState(false);
   const [issueModalVisible, setIssueModalVisible] = useState(false);
@@ -134,7 +133,12 @@ export default function CreateDisputeScreen() {
 
   React.useEffect(() => {
     if (!editId) return;
-    FreelancerApiService.getDispute(editId)
+    FreelancerApiService.getDispute(
+      editId,
+      currentUser?.fullName,
+      currentUser?.email,
+      currentRole
+    )
       .then((res: any) => {
         const dispute = res?.data || res;
         setProject(dispute.project || '');
@@ -144,13 +148,20 @@ export default function CreateDisputeScreen() {
           (dispute.evidenceFile || '')
             .split(',')
             .map((file: string) => file.trim())
-            .filter(Boolean)
+            .filter((file: string) => file && ![
+              'contract-agreement.pdf',
+              'approved-screens-specs.png',
+            ].includes(file.toLowerCase()))
         );
       })
-      .catch(() => {
-        router.replace('/freelancer-disputes');
+      .catch((error: any) => {
+        console.error('Failed to load dispute for editing:', error?.response?.data || error);
+        Alert.alert(
+          'Unable to load dispute',
+          error?.response?.data?.message || 'The dispute could not be loaded. You can retry or go back to the dispute list.'
+        );
       });
-  }, [editId]);
+  }, [editId, currentRole, currentUser?.email, currentUser?.fullName]);
 
   React.useEffect(() => {
     const activeFreelancer = currentUser?.fullName || '';
@@ -208,10 +219,11 @@ export default function CreateDisputeScreen() {
         amount,
         parties: `${project || 'Project'} Client vs. ${activeFreelancer}`,
         clientName: (selectedProj as any)?.client || (isChathuni ? 'TechVentures Inc.' : 'Client'),
-        clientEmail: currentUser?.email || '',
+        clientEmail: isClientMode ? currentUser?.email || '' : (selectedProj as any)?.clientEmail || '',
         freelancerName: activeFreelancer,
         freelancerEmail: (selectedProj as any)?.freelancerEmail || (isClientMode ? '' : currentUser?.email || ''),
         contractId: (selectedProj as any)?.contractId || (isChathuni ? 'C-101' : ''),
+        reporterRole: currentRole,
       };
       const res = editId
         ? await FreelancerApiService.updateDispute(editId, payload)

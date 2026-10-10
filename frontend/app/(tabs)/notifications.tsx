@@ -13,7 +13,7 @@ import {
 import { useRouter, useFocusEffect } from 'expo-router';
 import Colors from '../../src/constants/colors';
 import Theme from '../../src/constants/theme';
-import { apiClient, getCurrentUser, FreelancerApiService } from '../../src/services/api';
+import { getCurrentUser, FreelancerApiService } from '../../src/services/api';
 
 interface NotificationCardItem {
   id: number | string;
@@ -109,11 +109,11 @@ export default function NotificationsScreen() {
     if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
       try {
         const u = getCurrentUser();
-        const k = `notifications_list_${u?.email || u?.fullName || 'default'}`;
+        const k = `notifications_list_FREELANCER_${u?.email || u?.fullName || 'default'}`;
         const s = localStorage.getItem(k);
         if (s) {
           const p = JSON.parse(s);
-          if (Array.isArray(p)) return p;
+          if (Array.isArray(p)) return p.filter((item) => item.recipientRole === 'FREELANCER');
         }
       } catch (e) {}
     }
@@ -126,18 +126,21 @@ export default function NotificationsScreen() {
   const fetchNotifications = async () => {
     try {
       const activeName = currentUser?.fullName || (isChathuni ? 'Chathuni Imalsha' : '');
-      const res = await FreelancerApiService.getNotifications(activeName, currentUser?.email);
+      const res = await FreelancerApiService.getNotifications(activeName, currentUser?.email, 'FREELANCER');
       const data = Array.isArray(res) ? res : (res?.data || []);
-      if (Array.isArray(data) && data.length > 0) {
-        setNotifications(data);
+      const freelancerNotifications = Array.isArray(data)
+        ? data.filter((item: NotificationCardItem & { recipientRole?: string }) => item.recipientRole === 'FREELANCER')
+        : [];
+      if (freelancerNotifications.length > 0) {
+        setNotifications(freelancerNotifications);
         if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-          const k = `notifications_list_${currentUser?.email || currentUser?.fullName || 'default'}`;
-          localStorage.setItem(k, JSON.stringify(data));
+          const k = `notifications_list_FREELANCER_${currentUser?.email || currentUser?.fullName || 'default'}`;
+          localStorage.setItem(k, JSON.stringify(freelancerNotifications));
         }
       } else if (!isChathuni) {
         setNotifications([]);
         if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-          const k = `notifications_list_${currentUser?.email || currentUser?.fullName || 'default'}`;
+          const k = `notifications_list_FREELANCER_${currentUser?.email || currentUser?.fullName || 'default'}`;
           localStorage.setItem(k, JSON.stringify([]));
         }
       }
@@ -145,7 +148,7 @@ export default function NotificationsScreen() {
       if (!isChathuni) {
         setNotifications([]);
         if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-          const k = `notifications_list_${currentUser?.email || currentUser?.fullName || 'default'}`;
+          const k = `notifications_list_FREELANCER_${currentUser?.email || currentUser?.fullName || 'default'}`;
           localStorage.setItem(k, JSON.stringify([]));
         }
       }
@@ -169,7 +172,11 @@ export default function NotificationsScreen() {
   const handleMarkAllRead = async () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, unread: false })));
     try {
-      await apiClient.patch('/notifications/read-all');
+      await FreelancerApiService.markAllNotificationsAsRead(
+        currentUser?.email,
+        currentUser?.fullName,
+        'FREELANCER'
+      );
     } catch {
       // offline state
     }
@@ -180,7 +187,12 @@ export default function NotificationsScreen() {
     setNotifications((prev) =>
       prev.map((n) => (n.id === item.id ? { ...n, unread: false } : n))
     );
-    apiClient.patch(`/notifications/${item.id}/read`).catch(() => {});
+    FreelancerApiService.markNotificationAsRead(
+      item.id,
+      currentUser?.email,
+      currentUser?.fullName,
+      'FREELANCER'
+    ).catch(() => {});
     if (item.actionUrl) {
       router.push(item.actionUrl as any);
     } else {

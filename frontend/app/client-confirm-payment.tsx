@@ -14,8 +14,7 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
-import { apiClient, FreelancerApiService, getCurrentUser } from '../src/services/api';
-import ContractService from '../src/services/contractService';
+import { apiClient } from '../src/services/api';
 
 interface FreelancerBankDetails {
   id?: string;
@@ -130,20 +129,9 @@ export default function ClientConfirmPaymentScreen() {
     }
     setProcessing(true);
     try {
-      // 1. Post to backend escrow release endpoint
-      try {
-        await apiClient.post('/escrow/release', { milestoneId }, { timeout: 8000 });
-      } catch (e1) {
-        console.info('[ConfirmPayment] /escrow/release fallback to /milestones/approve', e1);
-        try {
-          await apiClient.post(`/milestones/${encodeURIComponent(milestoneId)}/approve`, {}, { timeout: 8000 });
-        } catch (e2) {
-          console.info('[ConfirmPayment] Fallback to ContractService.releasePayment', e2);
-          await ContractService.releasePayment(milestoneId);
-        }
-      }
+      await apiClient.post('/escrow/release', { milestoneId });
 
-      // 2. Credit funds to freelancer balance in localStorage for instant sync
+      // Keep the locally displayed balance in sync after the backend confirms release.
       if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
         try {
           const freelancerKey = `escrow_avail_${freelancerEmail || freelancerName || 'default'}`;
@@ -172,10 +160,9 @@ export default function ClientConfirmPaymentScreen() {
     } catch (err: any) {
       setProcessing(false);
       Alert.alert(
-        'Payment Complete',
-        'Milestone payment has been released to freelancer.'
+        'Payment Failed',
+        err?.response?.data?.message || err?.message || 'The milestone payment could not be released. Please try again.'
       );
-      setSuccessModalVisible(true);
     }
   };
 

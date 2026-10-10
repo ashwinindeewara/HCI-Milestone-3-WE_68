@@ -55,7 +55,7 @@ const DEFAULT_DISPUTE_DETAIL: DisputeDetailData = {
   issueType: 'Payment Delay',
   description:
     'Completed Milestone: UI Design Phase. Deliverable was uploaded on time and approved by client internally, but the payment escrow remains locked.',
-  evidenceFilesList: ['contract-agreement.pdf', 'approved-screens-specs.png'],
+  evidenceFilesList: [],
   amount: '$2,400',
   status: 'Under Review',
   statusType: 'review',
@@ -79,6 +79,11 @@ const DEFAULT_DISPUTE_DETAIL: DisputeDetailData = {
   ],
 };
 
+const isExampleEvidenceFile = (file: string) => {
+  const fileName = file.split(/[\\/]/).pop()?.toLowerCase();
+  return fileName === 'contract-agreement.pdf' || fileName === 'approved-screens-specs.png';
+};
+
 export default function DisputeDetailsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
@@ -98,7 +103,14 @@ export default function DisputeDetailsScreen() {
         const s = localStorage.getItem(`dispute_detail_cache_${disputeId}`);
         if (s) {
           const p = JSON.parse(s);
-          if (p && p.project) return p;
+          if (p && p.project) {
+            return {
+              ...p,
+              evidenceFilesList: (p.evidenceFilesList || []).filter(
+                (file: string) => !isExampleEvidenceFile(file)
+              ),
+            };
+          }
         }
       } catch (e) {}
     }
@@ -146,8 +158,8 @@ export default function DisputeDetailsScreen() {
           description: d.description || (isChathuniDemo ? DEFAULT_DISPUTE_DETAIL.description : ''),
           evidenceFilesList:
             d.evidenceFilesList && d.evidenceFilesList.length > 0
-              ? d.evidenceFilesList
-              : (isChathuniDemo ? ['contract-agreement.pdf', 'approved-screens-specs.png'] : []),
+              ? d.evidenceFilesList.filter((file: string) => !isExampleEvidenceFile(file))
+              : [],
           amount: typeof d.amount === 'number' ? `$${d.amount.toLocaleString()}` : (d.amount || (isChathuniDemo ? '$2,400' : '$0')),
           status: d.status || 'Under Review',
           statusType: d.statusType || 'review',
@@ -243,7 +255,9 @@ export default function DisputeDetailsScreen() {
           <View style={styles.headerBar}>
             <TouchableOpacity
               style={styles.backBtn}
-              onPress={() => router.replace('/freelancer-disputes')}
+              onPress={() => router.replace(
+                viewerRole === 'CLIENT' ? '/client-disputes' : '/freelancer-disputes'
+              )}
               activeOpacity={0.7}
             >
               <Text style={styles.backArrow}>‹</Text>

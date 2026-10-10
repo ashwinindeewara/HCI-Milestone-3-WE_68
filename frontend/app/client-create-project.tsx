@@ -15,6 +15,7 @@ import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
 import { getSavedUserData } from '../src/services/authService';
 import apiClient from '../src/services/api';
+import ClientBottomTabBar from '../src/components/ClientBottomTabBar';
 
 interface ProjectDeliverable {
   id: string;
@@ -227,6 +228,7 @@ export default function CreateProjectScreen() {
         paymentStrategy,
         paymentTerms: paymentStrategy,
         clientName: currentUser?.company || currentUser?.fullName || currentUser?.email || 'Client',
+        clientEmail: currentUser?.email || '',
         freelancerName: talent.name,
         freelancerEmail: talent.email || '',
         totalBudget,
@@ -603,32 +605,7 @@ export default function CreateProjectScreen() {
               </View>
             )}
           </ScrollView>
-        <View style={styles.clientTabBar}>
-            <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-dashboard')}>
-              <Text style={[styles.tabIcon, styles.tabIconActive]}>🏠</Text>
-              <Text style={[styles.tabLabel, styles.tabLabelActive]}>Home</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-contracts')}>
-              <Text style={styles.tabIcon}>📁</Text>
-              <Text style={styles.tabLabel}>Projects</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-find-talent')}>
-              <Text style={styles.tabIcon}>🔍</Text>
-              <Text style={styles.tabLabel}>Find Talent</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-reports')}>
-              <Text style={styles.tabIcon}>💳</Text>
-              <Text style={styles.tabLabel}>Payments</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-profile')}>
-              <Text style={styles.tabIcon}>👤</Text>
-              <Text style={styles.tabLabel}>Profile</Text>
-            </TouchableOpacity>
-        </View>
+        <ClientBottomTabBar activeTab="projects" />
     </SafeAreaView>
   );
 }
@@ -1075,22 +1052,4 @@ const styles = StyleSheet.create({
   buttonDisabled: {
     opacity: 0.6,
   },
-  clientTabBar: {
-      position: 'absolute',
-      bottom: 0,
-      left: 0,
-      right: 0,
-      height: 64,
-      backgroundColor: Colors.surface,
-      borderTopWidth: 1,
-      borderTopColor: Colors.border,
-      flexDirection: 'row',
-      justifyContent: 'space-around',
-      alignItems: 'center',
-  },
-  tabItem: { alignItems: 'center', justifyContent: 'center' },
-  tabIcon: { fontSize: 18, opacity: 0.6 },
-  tabIconActive: { opacity: 1, transform: [{ scale: 1.1 }] },
-  tabLabel: { fontSize: 10, fontWeight: '600', color: Colors.neutralMedium, marginTop: 2 },
-  tabLabelActive: { color: Colors.primary, fontWeight: '700' },
 });

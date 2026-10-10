@@ -229,7 +229,9 @@ Executed on:                    ${new Date().toLocaleDateString('en-US', { year:
 
       // 2. Notifications
       if (notifRes.status === 'fulfilled' && Array.isArray(notifRes.value.data)) {
-        const unreadCount = notifRes.value.data.filter((n: any) => n.unread).length;
+        const unreadCount = notifRes.value.data.filter(
+          (n: any) => n.unread && n.recipientRole === 'FREELANCER'
+        ).length;
         setUnreadNotifications(unreadCount);
       } else {
         setUnreadNotifications(0);

@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import Colors from '../src/constants/colors';
-import { FreelancerApiService, API_BASE_URL, resolveMediaUrl, apiClient, getCurrentUser } from '../src/services/api';
+import { FreelancerApiService, API_BASE_URL, apiClient, getCurrentUser } from '../src/services/api';
 
 interface MilestoneItem {
   id: string;
@@ -413,81 +413,6 @@ export default function ProjectDetailsScreen() {
   const showToast = (msg: string) => {
     setSuccessToast(msg);
     setTimeout(() => setSuccessToast(null), 3000);
-  };
-
-  // Download Project File
-  const handleDownloadFile = async (file: FileItem) => {
-    try {
-      showToast(`Downloading ${file.originalFileName}...`);
-
-      if (file.fileUrl && !file.fileUrl.startsWith('blob:') && file.fileUrl.startsWith('http')) {
-        if (Platform.OS === 'web') {
-          const a = document.createElement('a');
-          a.href = resolveMediaUrl(file.fileUrl);
-          a.download = file.originalFileName;
-          a.target = '_blank';
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          showToast(`✓ Downloaded ${file.originalFileName}`);
-          return;
-        }
-      }
-
-      if (file.id && !file.id.startsWith('f')) {
-        const downloadUrl = `${API_BASE_URL}/files/${file.id}/download`;
-        if (Platform.OS === 'web') {
-          const a = document.createElement('a');
-          a.href = downloadUrl;
-          a.download = file.originalFileName;
-          a.target = '_blank';
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          showToast(`✓ Downloaded ${file.originalFileName}`);
-          return;
-        }
-      }
-
-      // Authentic file download generation for web
-      if (Platform.OS === 'web') {
-        const ext = file.originalFileName.split('.').pop()?.toLowerCase();
-        let mime = 'application/octet-stream';
-        if (ext === 'pdf') mime = 'application/pdf';
-        else if (ext === 'fig') mime = 'application/x-figma';
-        else if (ext === 'png') mime = 'image/png';
-        else if (ext === 'jpg' || ext === 'jpeg') mime = 'image/jpeg';
-        else if (ext === 'zip') mime = 'application/zip';
-
-        const fileContent = `================================================================================
-PROJECT ATTACHMENT: ${file.originalFileName}
-Project: ${project.title}
-Client: ${project.clientName}
-Uploaded By: ${file.uploadedBy}
-File Size: ${file.fileSizeFormatted}
-Date: ${file.createdAt || new Date().toLocaleDateString()}
-================================================================================
-Verified Deliverable Attachment File
-Integrity Checksum: SHA256-${Math.random().toString(36).substring(2, 10).toUpperCase()}
-================================================================================`;
-
-        const blob = new Blob([fileContent], { type: mime });
-        const blobUrl = (window as any).URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = blobUrl;
-        a.download = file.originalFileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        (window as any).URL.revokeObjectURL(blobUrl);
-      } else {
-        Alert.alert('File Downloaded', `Successfully saved ${file.originalFileName}`);
-      }
-
-      showToast(`✓ Downloaded ${file.originalFileName}`);
-    } catch (err) {
-      showToast(`Download failed for ${file.originalFileName}`);
-    }
   };
 
   // Remove Project File / Wrong Folder
@@ -1189,13 +1114,6 @@ Integrity Checksum: SHA256-${Math.random().toString(36).substring(2, 10).toUpper
                         </View>
                         <View style={styles.fileActionsRow}>
                           <TouchableOpacity
-                            style={styles.downloadBtn}
-                            onPress={() => handleDownloadFile(file)}
-                            activeOpacity={0.75}
-                          >
-                            <Text style={styles.downloadBtnText}>⬇ Download</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
                             style={styles.removeFileBtn}
                             onPress={() => handleRemoveFile(file.id || idx.toString(), file.originalFileName)}
                             activeOpacity={0.75}
@@ -1862,17 +1780,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#64748B',
     marginTop: 2,
-  },
-  downloadBtn: {
-    backgroundColor: '#F1F5F9',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 6,
-  },
-  downloadBtnText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#334155',
   },
   fileActionsRow: {
     flexDirection: 'row',

@@ -9,7 +9,7 @@ import {
   RefreshControl,
   ActivityIndicator,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useLocalSearchParams } from 'expo-router';
 import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
@@ -26,6 +26,7 @@ export default function ClientDashboardScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [projects, setProjects] = useState<any[]>([]);
   const [upcomingProjects, setUpcomingProjects] = useState<any[]>([]);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [metrics, setMetrics] = useState({
     activeProjects: 3,
     pendingApprovals: 2,
@@ -35,6 +36,24 @@ export default function ClientDashboardScreen() {
   const currentUser = getSavedUserData();
   const session = getUserSession();
   const currentRole = String(session?.role || currentUser?.role || 'FREELANCER').toUpperCase();
+  const clientIdentity = getCurrentUser();
+
+  const loadClientNotifications = async () => {
+    try {
+      const response = await FreelancerApiService.getNotifications(
+        clientIdentity?.fullName || currentUser?.fullName || '',
+        clientIdentity?.email || currentUser?.email || '',
+        'CLIENT'
+      );
+      const notifications = Array.isArray(response.data) ? response.data : [];
+      setUnreadNotifications(notifications.filter(
+        (notification: any) => notification.unread && notification.recipientRole === 'CLIENT'
+      ).length);
+    } catch (error) {
+      console.warn('Failed to load client notifications:', error);
+      setUnreadNotifications(0);
+    }
+  };
 
   const getInitials = (fullName: string) => {
     return fullName
@@ -129,6 +148,14 @@ export default function ClientDashboardScreen() {
     loadData();
   }, [currentRole]);
 
+  useFocusEffect(
+    React.useCallback(() => {
+      if (currentRole === 'CLIENT') {
+        loadClientNotifications();
+      }
+    }, [currentRole, clientIdentity?.email, currentUser?.email])
+  );
+
   const onRefresh = () => {
     setRefreshing(true);
     loadData();
@@ -162,7 +189,22 @@ export default function ClientDashboardScreen() {
                 <Text style={styles.userName}>{currentUser.fullName}</Text>
               </View>
             </View>
-
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={`Client notifications${unreadNotifications ? `, ${unreadNotifications} unread` : ''}`}
+              style={styles.notificationBell}
+              onPress={() => router.push('/client-notifications')}
+              activeOpacity={0.75}
+            >
+              <Text style={styles.notificationBellIcon}>🔔</Text>
+              {unreadNotifications > 0 && (
+                <View style={styles.notificationBadge}>
+                  <Text style={styles.notificationBadgeText}>
+                    {unreadNotifications > 99 ? '99+' : unreadNotifications}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
           </View>
 
           {/* 2x2 Metric Summary Grid (Matching Screenshot 1) */}
@@ -354,6 +396,36 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: Theme.spacing.lg,
+  },
+  notificationBell: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notificationBellIcon: {
+    fontSize: 20,
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: -3,
+    right: -3,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    borderRadius: 9,
+    backgroundColor: '#EF4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notificationBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
   },
   userGreetingRow: {
     flexDirection: 'row',

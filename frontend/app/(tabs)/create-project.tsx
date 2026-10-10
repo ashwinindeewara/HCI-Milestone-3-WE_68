@@ -137,6 +137,7 @@ export default function CreateProjectScreen() {
         paymentStrategy,
         paymentTerms: paymentStrategy,
         clientName: currentUser?.company || currentUser?.fullName || currentUser?.email || 'Client',
+        clientEmail: currentUser?.email || '',
         freelancerName: talent.name,
         totalBudget,
         status,

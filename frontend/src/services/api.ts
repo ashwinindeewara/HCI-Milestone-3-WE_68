@@ -460,18 +460,45 @@ export const FreelancerApiService = {
 
 
   // Notifications
-  getNotifications: (freelancerName?: string, freelancerEmail?: string) => {
+  getNotifications: (
+    recipientName?: string,
+    recipientEmail?: string,
+    recipientRole: 'CLIENT' | 'FREELANCER' = 'FREELANCER'
+  ) => {
     const user = getCurrentUser();
-    const name = freelancerName || user?.fullName || '';
-    const email = freelancerEmail || user?.email || '';
-    const params: any = {};
-    if (name) params.freelancerName = name;
-    if (email) params.freelancerEmail = email;
+    const name = recipientName || user?.fullName || '';
+    const email = recipientEmail || user?.email || '';
+    const params: Record<string, string> = { recipientRole };
+    if (name) params[recipientRole === 'CLIENT' ? 'clientName' : 'freelancerName'] = name;
+    if (email) params.email = email;
     return apiClient.get('/notifications', { params });
   },
-  getNotification: (id: number | string) => apiClient.get(`/notifications/${id}`),
-  markNotificationAsRead: (id: number | string) => apiClient.put(`/notifications/${id}/read`),
-  markAllNotificationsAsRead: () => apiClient.put('/notifications/read-all'),
+  getNotification: (
+    id: number | string,
+    recipientEmail?: string,
+    recipientName?: string,
+    recipientRole: 'CLIENT' | 'FREELANCER' = 'FREELANCER'
+  ) =>
+    apiClient.get(`/notifications/${id}`, {
+      params: { email: recipientEmail, name: recipientName, recipientRole },
+    }),
+  markNotificationAsRead: (
+    id: number | string,
+    recipientEmail?: string,
+    recipientName?: string,
+    recipientRole: 'CLIENT' | 'FREELANCER' = 'FREELANCER'
+  ) =>
+    apiClient.put(`/notifications/${id}/read`, null, {
+      params: { email: recipientEmail, name: recipientName, recipientRole },
+    }),
+  markAllNotificationsAsRead: (
+    recipientEmail?: string,
+    recipientName?: string,
+    recipientRole: 'CLIENT' | 'FREELANCER' = 'FREELANCER'
+  ) =>
+    apiClient.put('/notifications/read-all', null, {
+      params: { email: recipientEmail, name: recipientName, recipientRole },
+    }),
 
   // Escrow & Transactions
   getEscrowSummary: (freelancerName?: string, email?: string) => {
@@ -566,4 +593,3 @@ export const FreelancerApiService = {
 };
 
 export default apiClient;
-
