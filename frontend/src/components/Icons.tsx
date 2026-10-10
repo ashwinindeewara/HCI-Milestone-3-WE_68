@@ -176,6 +176,71 @@ export function ProfileIcon({ size = 22, color = '#6B7280' }: { size?: number; c
   return <Text style={{ fontSize: size, color }}>👤</Text>;
 }
 
+export function SearchIcon({ size = 22, color = '#6B7280' }: { size?: number; color?: string }) {
+  if (Platform.OS === 'web') {
+    return (
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke={color}
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <circle cx="11" cy="11" r="8" />
+        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+      </svg>
+    );
+  }
+  return <Text style={{ fontSize: size, color }}>🔍</Text>;
+}
+
+export function ReconcileIcon({ size = 22, color = '#6B7280' }: { size?: number; color?: string }) {
+  if (Platform.OS === 'web') {
+    return (
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke={color}
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M23 4v6h-6" />
+        <path d="M1 20v-6h6" />
+        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+      </svg>
+    );
+  }
+  return <Text style={{ fontSize: size, color }}>🔄</Text>;
+}
+
+export function ReportsIcon({ size = 22, color = '#6B7280' }: { size?: number; color?: string }) {
+  if (Platform.OS === 'web') {
+    return (
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke={color}
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <line x1="18" y1="20" x2="18" y2="10" />
+        <line x1="12" y1="20" x2="12" y2="4" />
+        <line x1="6" y1="20" x2="6" y2="14" />
+      </svg>
+    );
+  }
+  return <Text style={{ fontSize: size, color }}>📊</Text>;
+}
+
 const styles = StyleSheet.create({
   center: {
     justifyContent: 'center',

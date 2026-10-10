@@ -15,6 +15,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
 import apiClient from '../src/services/api';
+import StaffBottomTabBar from '../src/components/StaffBottomTabBar';
 
 export interface StaffTxn {
   id: string;
@@ -350,33 +351,8 @@ export default function StaffTransactionsScreen() {
         </SafeAreaView>
       </Modal>
 
-      {/* Payment Staff Bottom Tab Bar */}
-      <View style={styles.staffTabBar}>
-        <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/staff-dashboard')}>
-          <Text style={styles.tabIcon}>🟢</Text>
-          <Text style={styles.tabLabel}>Dashboard</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/staff-transactions')}>
-          <Text style={[styles.tabIcon, styles.tabIconActive]}>⬛</Text>
-          <Text style={[styles.tabLabel, styles.tabLabelActive]}>Transactions</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/staff-reconcile')}>
-          <Text style={styles.tabIcon}>🔄</Text>
-          <Text style={styles.tabLabel}>Reconcile</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/staff-reports')}>
-          <Text style={styles.tabIcon}>📊</Text>
-          <Text style={styles.tabLabel}>Reports</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/staff-profile')}>
-          <Text style={styles.tabIcon}>👤</Text>
-          <Text style={styles.tabLabel}>Profile</Text>
-        </TouchableOpacity>
-      </View>
+      {/* Standardized Payment Staff Bottom Tab Bar */}
+      <StaffBottomTabBar activeTab="transactions" />
     </SafeAreaView>
   );
 }

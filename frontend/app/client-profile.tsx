@@ -18,6 +18,7 @@ import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
 import apiClient from '../src/services/api';
 import { getSavedUserData, clearAuthSession } from '../src/services/authService';
+import ClientBottomTabBar from '../src/components/ClientBottomTabBar';
 
 interface ClientProfileData {
   id?: number | string;
@@ -444,33 +445,8 @@ export default function ClientProfileScreen() {
           </View>
         )}
 
-        {/* ================= BOTTOM TAB BAR ================= */}
-        <View style={styles.clientTabBar}>
-            <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-dashboard')}>
-              <Text style={[styles.tabIcon, styles.tabIconActive]}>🏠</Text>
-              <Text style={[styles.tabLabel, styles.tabLabelActive]}>Home</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-contracts')}>
-              <Text style={styles.tabIcon}>📁</Text>
-              <Text style={styles.tabLabel}>Projects</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-find-talent')}>
-              <Text style={styles.tabIcon}>🔍</Text>
-              <Text style={styles.tabLabel}>Find Talent</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-reports')}>
-              <Text style={styles.tabIcon}>💳</Text>
-              <Text style={styles.tabLabel}>Payments</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-profile')}>
-              <Text style={styles.tabIcon}>👤</Text>
-              <Text style={styles.tabLabel}>Profile</Text>
-            </TouchableOpacity>
-        </View>
+        {/* Standardized Client Bottom Tab Bar */}
+        <ClientBottomTabBar activeTab="profile" />
       </View>
     </SafeAreaView>
   );

@@ -18,6 +18,7 @@ import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
 import apiClient from '../src/services/api';
 import { performLogout, getSavedUserData, updateSavedUserData } from '../src/services/authService';
+import StaffBottomTabBar from '../src/components/StaffBottomTabBar';
 
 export interface ProfileState {
   id: number;
@@ -440,32 +441,7 @@ export default function StaffProfileScreen() {
       </Modal>
 
       {/* Payment Staff Bottom Tab Bar */}
-      <View style={styles.staffTabBar}>
-        <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/staff-dashboard')}>
-          <Text style={styles.tabIcon}>🟢</Text>
-          <Text style={styles.tabLabel}>Dashboard</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/staff-transactions')}>
-          <Text style={styles.tabIcon}>⬛</Text>
-          <Text style={styles.tabLabel}>Transactions</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/staff-reconcile')}>
-          <Text style={styles.tabIcon}>🔄</Text>
-          <Text style={styles.tabLabel}>Reconcile</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/staff-reports')}>
-          <Text style={styles.tabIcon}>📊</Text>
-          <Text style={styles.tabLabel}>Reports</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/staff-profile')}>
-          <Text style={[styles.tabIcon, styles.tabIconActive]}>👤</Text>
-          <Text style={[styles.tabLabel, styles.tabLabelActive]}>Profile</Text>
-        </TouchableOpacity>
-      </View>
+      <StaffBottomTabBar activeTab="profile" />
     </SafeAreaView>
   );
 }

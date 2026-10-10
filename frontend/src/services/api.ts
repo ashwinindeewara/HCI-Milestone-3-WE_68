@@ -526,6 +526,44 @@ export const FreelancerApiService = {
   getFileDownloadUrl: (fileId: string) => `${API_BASE_URL}/files/${fileId}/download`,
   getEntityFiles: (entityType: string, entityId: string) =>
     apiClient.get(`/files/entity/${entityType}/${entityId}`),
+
+  // Staff Payment & Financial Reports
+  getReportSummary: (email?: string, role?: string, days = 30) => {
+    const user = getCurrentUser();
+    const targetEmail = email || user?.email || '';
+    const targetRole = role || user?.role || 'PAYMENT_STAFF';
+    return apiClient.get('/staff/reports/summary', {
+      params: {
+        ...(targetEmail ? { email: targetEmail } : {}),
+        ...(targetRole ? { role: targetRole } : {}),
+        days,
+      },
+    });
+  },
+  generateReport: (email?: string, role?: string, days = 30) => {
+    const user = getCurrentUser();
+    const targetEmail = email || user?.email || '';
+    const targetRole = role || user?.role || 'PAYMENT_STAFF';
+    return apiClient.get('/staff/reports/generate', {
+      params: {
+        ...(targetEmail ? { email: targetEmail } : {}),
+        ...(targetRole ? { role: targetRole } : {}),
+        days,
+      },
+    });
+  },
+  exportReport: (email?: string, role?: string) => {
+    const user = getCurrentUser();
+    const targetEmail = email || user?.email || '';
+    const targetRole = role || user?.role || 'PAYMENT_STAFF';
+    return apiClient.get('/staff/reports/export', {
+      params: {
+        ...(targetEmail ? { email: targetEmail } : {}),
+        ...(targetRole ? { role: targetRole } : {}),
+      },
+    });
+  },
 };
 
 export default apiClient;
+

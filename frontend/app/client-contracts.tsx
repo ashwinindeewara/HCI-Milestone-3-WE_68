@@ -11,6 +11,7 @@ import { useRouter } from 'expo-router';
 import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
 import { FreelancerApiService, calculateMilestoneProgress, getCurrentUser } from '../src/services/api';
+import ClientBottomTabBar from '../src/components/ClientBottomTabBar';
 
 export default function ClientContractsScreen() {
   const router = useRouter();
@@ -153,32 +154,8 @@ export default function ClientContractsScreen() {
           ))}
         </View>
       </ScrollView>
-      <View style={styles.clientTabBar}>
-          <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-dashboard')}>
-            <Text style={[styles.tabIcon, styles.tabIconActive]}>🏠</Text>
-            <Text style={[styles.tabLabel, styles.tabLabelActive]}>Home</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-contracts')}>
-            <Text style={styles.tabIcon}>📁</Text>
-            <Text style={styles.tabLabel}>Projects</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-find-talent')}>
-            <Text style={styles.tabIcon}>🔍</Text>
-            <Text style={styles.tabLabel}>Find Talent</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-reports')}>
-            <Text style={styles.tabIcon}>💳</Text>
-            <Text style={styles.tabLabel}>Payments</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/client-profile')}>
-            <Text style={styles.tabIcon}>👤</Text>
-            <Text style={styles.tabLabel}>Profile</Text>
-          </TouchableOpacity>
-      </View>
+      {/* Standardized Client Bottom Tab Bar */}
+      <ClientBottomTabBar activeTab="projects" />
     </View>
   );
 }
