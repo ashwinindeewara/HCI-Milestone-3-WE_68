@@ -509,7 +509,23 @@ export default function ClientDashboardScreen() {
                 loadData();
               }}
             >
-              <Text style={styles.projectRetryText}>Retry</Text>
+              <Text style={styles.actionPillIcon}>🔍</Text>
+              <Text style={styles.actionPillTextDark}>Find Talents</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionPillWhite}
+              onPress={() => router.push('/client-disputes')}
+            >
+              <Text style={styles.actionPillIcon}>+</Text>
+              <Text style={styles.actionPillTextDark}>Disputes</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionPillGreen}
+              onPress={() => router.push('/client-contracts')}
+            >
+              <Text style={styles.actionPillTextWhite}>Milestones</Text>
             </TouchableOpacity>
           </View>
         ) : loading ? (

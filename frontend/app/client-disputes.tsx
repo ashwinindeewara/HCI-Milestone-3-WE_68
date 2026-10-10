@@ -158,6 +158,7 @@ export default function ClientDisputesScreen() {
           : error?.message ?? 'Unable to load disputes.'),
       );
       setCases([]);
+
     } finally {
       setLoading(false);
       setRefreshing(false);

@@ -121,7 +121,16 @@ export default function EscrowScreen() {
     }
     return isChathuni ? 5400 : 0;
   });
-  const [totalWithdrawn, setTotalWithdrawn] = useState<number>(0);
+  const [totalWithdrawn, setTotalWithdrawn] = useState<number>(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const u = getCurrentUser();
+        const stored = localStorage.getItem(`escrow_withdrawn_${u?.email || u?.fullName || 'default'}`);
+        if (stored) return parseFloat(stored);
+      } catch (e) {}
+    }
+    return 0;
+  });
 
   // Withdraw Modal State
   const [withdrawModalVisible, setWithdrawModalVisible] = useState(false);
@@ -140,13 +149,11 @@ export default function EscrowScreen() {
   // Add Bank Account Form State
   const [showAddBankForm, setShowAddBankForm] = useState(false);
   const [newBankName, setNewBankName] = useState('');
-  const [newAccountHolder, setNewAccountHolder] = useState(
-    currentUser?.fullName || (isChathuni ? 'Chathuni Imalsha' : '')
-  );
+  const [newAccountHolder, setNewAccountHolder] = useState('');
   const [newAccountNumber, setNewAccountNumber] = useState('');
   const [newRoutingNumber, setNewRoutingNumber] = useState('');
-  const [newAccountType, setNewAccountType] = useState<'Checking' | 'Savings'>('Checking');
-  const [newPaymentType, setNewPaymentType] = useState<string>('Direct Deposit (ACH)');
+  const [newAccountType, setNewAccountType] = useState<'Checking' | 'Savings' | ''>('');
+  const [newPaymentType, setNewPaymentType] = useState<string>('');
   const [bankFormError, setBankFormError] = useState<string | null>(null);
 
   // Milestone Detail Modal State
@@ -213,10 +220,17 @@ export default function EscrowScreen() {
             }
           }
           if (res.data.releasedAmount != null) {
-            setAvailableBalance(res.data.releasedAmount);
             if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
               const k = `escrow_avail_${currentUser?.email || currentUser?.fullName || 'default'}`;
-              localStorage.setItem(k, String(res.data.releasedAmount));
+              const storedAvailable = localStorage.getItem(k);
+              if (storedAvailable !== null) {
+                setAvailableBalance(Math.max(0, parseFloat(storedAvailable) || 0));
+              } else {
+                setAvailableBalance(res.data.releasedAmount);
+                localStorage.setItem(k, String(res.data.releasedAmount));
+              }
+            } else {
+              setAvailableBalance(res.data.releasedAmount);
             }
           }
         }
@@ -362,8 +376,36 @@ export default function EscrowScreen() {
       setBankFormError('Please enter the bank or provider name.');
       return;
     }
+    if (!newAccountHolder.trim()) {
+      setBankFormError('Please enter the account holder name.');
+      return;
+    }
+    if (newAccountHolder && !/^[A-Za-z ]+$/.test(newAccountHolder)) {
+      setBankFormError('Account holder name can contain English letters and spaces only.');
+      return;
+    }
     if (!newAccountNumber.trim()) {
       setBankFormError('Please enter the account or card number.');
+      return;
+    }
+    if (!/^[0-9 ]+$/.test(newAccountNumber)) {
+      setBankFormError('Account number can contain numbers and spaces only.');
+      return;
+    }
+    if (newRoutingNumber && !/^[0-9 ]+$/.test(newRoutingNumber)) {
+      setBankFormError('Routing (ABA) can contain numbers and spaces only.');
+      return;
+    }
+    if (!newRoutingNumber.trim()) {
+      setBankFormError('Please enter the routing (ABA) number.');
+      return;
+    }
+    if (!newAccountType) {
+      setBankFormError('Please select an account type.');
+      return;
+    }
+    if (!newPaymentType) {
+      setBankFormError('Please select a payment type.');
       return;
     }
 
@@ -450,7 +492,8 @@ export default function EscrowScreen() {
     setNewAccountHolder('');
     setNewAccountNumber('');
     setNewRoutingNumber('');
-    setNewPaymentType('Direct Deposit (ACH)');
+    setNewAccountType('');
+    setNewPaymentType('');
     setShowAddBankForm(false);
   };
 
@@ -483,8 +526,9 @@ export default function EscrowScreen() {
 
       // Deduct from available balance
       const newAvail = Math.max(0, availableBalance - amountVal);
+      const newTotalWithdrawn = totalWithdrawn + amountVal;
       setAvailableBalance(newAvail);
-      setTotalWithdrawn((prev) => prev + amountVal);
+      setTotalWithdrawn(newTotalWithdrawn);
 
       // Add payout transaction to ledger
       const newTx: HistoryItem = {
@@ -505,6 +549,10 @@ export default function EscrowScreen() {
           const u = getCurrentUser();
           const k = `escrow_avail_${u?.email || u?.fullName || 'default'}`;
           localStorage.setItem(k, String(newAvail));
+          localStorage.setItem(
+            `escrow_withdrawn_${u?.email || u?.fullName || 'default'}`,
+            String(newTotalWithdrawn)
+          );
 
           const historyKey = `escrow_history_${u?.email || u?.fullName || 'default'}`;
           const existingHistory = JSON.parse(localStorage.getItem(historyKey) || '[]');
@@ -901,7 +949,10 @@ export default function EscrowScreen() {
                     placeholder={currentUser?.fullName ? `e.g. ${currentUser.fullName}` : 'e.g. Alex Morgan'}
                     placeholderTextColor="#94A3B8"
                     value={newAccountHolder}
-                    onChangeText={setNewAccountHolder}
+                    onChangeText={(text) => {
+                      setBankFormError(null);
+                      setNewAccountHolder(text.replace(/[^A-Za-z ]/g, ''));
+                    }}
                   />
 
                   <View style={{ flexDirection: 'row', gap: 10 }}>
@@ -914,7 +965,7 @@ export default function EscrowScreen() {
                         value={newAccountNumber}
                         onChangeText={(t) => {
                           setBankFormError(null);
-                          setNewAccountNumber(t);
+                          setNewAccountNumber(t.replace(/[^0-9 ]/g, ''));
                         }}
                         keyboardType="numeric"
                       />
@@ -927,7 +978,10 @@ export default function EscrowScreen() {
                         placeholder="e.g. 021000021"
                         placeholderTextColor="#94A3B8"
                         value={newRoutingNumber}
-                        onChangeText={setNewRoutingNumber}
+                        onChangeText={(text) => {
+                          setBankFormError(null);
+                          setNewRoutingNumber(text.replace(/[^0-9 ]/g, ''));
+                        }}
                         keyboardType="numeric"
                       />
                     </View>
@@ -1008,7 +1062,8 @@ export default function EscrowScreen() {
                     setNewAccountHolder('');
                     setNewAccountNumber('');
                     setNewRoutingNumber('');
-                    setNewPaymentType('Direct Deposit (ACH)');
+                    setNewAccountType('');
+                    setNewPaymentType('');
                     setBankFormError(null);
                     setShowAddBankForm(true);
                   }}

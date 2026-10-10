@@ -26,13 +26,18 @@ public class DisputeController {
     @GetMapping
     public ResponseEntity<List<Dispute>> getAllDisputes(
             @RequestParam(required = false) String freelancerName,
-            @RequestParam(required = false) String email
+            @RequestParam(required = false) String email,
+            @RequestParam(required = false) String clientName,
+            @RequestParam(required = false) String clientEmail
     ) {
         if (email != null && !email.isBlank()) {
             return ResponseEntity.ok(disputeService.getFreelancerDisputesByEmail(email));
         }
         if (freelancerName != null && !freelancerName.isBlank()) {
             return ResponseEntity.ok(disputeService.getFreelancerDisputes(freelancerName));
+        }
+        if ((clientName != null && !clientName.isBlank()) || (clientEmail != null && !clientEmail.isBlank())) {
+            return ResponseEntity.ok(disputeService.getClientDisputes(clientName, clientEmail));
         }
         return ResponseEntity.ok(List.of());
     }
@@ -52,13 +57,32 @@ public class DisputeController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Dispute> getDisputeById(@PathVariable String id) {
-        return ResponseEntity.ok(disputeService.getDisputeById(id));
+    public ResponseEntity<Dispute> getDisputeById(
+            @PathVariable String id,
+            @RequestParam(required = false) String viewerName,
+            @RequestParam(required = false) String viewerEmail,
+            @RequestParam(required = false) String role
+    ) {
+        return ResponseEntity.ok(disputeService.getDisputeForViewer(id, viewerName, viewerEmail, role));
     }
 
     @PostMapping
     public ResponseEntity<Dispute> createDispute(@RequestBody CreateDisputeRequest request) {
         return ResponseEntity.ok(disputeService.createDispute(request));
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<Dispute> updateDispute(
+            @PathVariable String id,
+            @RequestBody CreateDisputeRequest request
+    ) {
+        return ResponseEntity.ok(disputeService.updateDispute(id, request));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteDispute(@PathVariable String id) {
+        disputeService.deleteDispute(id);
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/{id}/messages")

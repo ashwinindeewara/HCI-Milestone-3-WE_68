@@ -118,6 +118,23 @@ public class MilestoneService {
         return savedDeliverable;
     }
 
+    @Transactional
+    public Deliverable updateDeliverable(String deliverableId, DeliverableRequest request) {
+        Deliverable deliverable = getDeliverableById(deliverableId);
+        deliverable.setFileName(request.getFileName() != null ? request.getFileName() : deliverable.getFileName());
+        deliverable.setFileSize(request.getFileSize() != null ? request.getFileSize() : deliverable.getFileSize());
+        deliverable.setNotes(request.getNotes());
+        deliverable.setStatus("SUBMITTED");
+        deliverable.setFeedback(null);
+
+        Milestone milestone = getMilestoneById(deliverable.getMilestoneId());
+        milestone.setStatus("SUBMITTED");
+        milestoneRepository.save(milestone);
+        recalculateProjectProgress(milestone.getContractId());
+
+        return deliverableRepository.save(deliverable);
+    }
+
     public List<Deliverable> getDeliverablesForMilestone(String milestoneId) {
         return deliverableRepository.findByMilestoneId(milestoneId);
     }

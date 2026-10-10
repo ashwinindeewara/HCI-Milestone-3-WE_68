@@ -11,7 +11,7 @@ import {
   Modal,
   Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
 import { apiClient, getCurrentUser, API_BASE_URL, FreelancerApiService } from '../src/services/api';
@@ -41,8 +41,12 @@ const ISSUE_TYPE_OPTIONS = [
 
 export default function CreateDisputeScreen() {
   const router = useRouter();
+  const { editId } = useLocalSearchParams<{ editId?: string }>();
+  const isEditMode = Boolean(editId);
 
   const currentUser = getCurrentUser();
+  const currentRole = String(currentUser?.role || 'FREELANCER').toUpperCase();
+  const isClientMode = currentRole === 'CLIENT';
   const isChathuni =
     currentUser?.email === 'chathuniimalsha.com' ||
     (currentUser?.fullName && currentUser.fullName.toLowerCase().includes('chathuni')) ||
@@ -123,20 +127,46 @@ export default function CreateDisputeScreen() {
     setUploadedFiles(uploadedFiles.filter((f) => f !== fileToRemove));
   };
 
-  const [projectOptions, setProjectOptions] = useState<Array<{ label: string; amount: number; client?: string; contractId?: string }>>(
+  const [projectOptions, setProjectOptions] = useState<Array<{ label: string; amount: number; client?: string; clientEmail?: string; freelancer?: string; freelancerEmail?: string; contractId?: string }>>(
     isChathuni ? PROJECT_OPTIONS : []
   );
   const [createdDisputeId, setCreatedDisputeId] = useState<string | null>(null);
 
   React.useEffect(() => {
+    if (!editId) return;
+    FreelancerApiService.getDispute(editId)
+      .then((res: any) => {
+        const dispute = res?.data || res;
+        setProject(dispute.project || '');
+        setIssueType(dispute.issueType || 'Payment Delay');
+        setDescription(dispute.description || '');
+        setUploadedFiles(
+          (dispute.evidenceFile || '')
+            .split(',')
+            .map((file: string) => file.trim())
+            .filter(Boolean)
+        );
+      })
+      .catch(() => {
+        router.replace('/freelancer-disputes');
+      });
+  }, [editId]);
+
+  React.useEffect(() => {
     const activeFreelancer = currentUser?.fullName || '';
-    FreelancerApiService.getFreelancerProjects(activeFreelancer).then((res: any) => {
+    const projectsRequest = isClientMode
+      ? FreelancerApiService.getClientProjects(activeFreelancer)
+      : FreelancerApiService.getFreelancerProjects(activeFreelancer);
+    projectsRequest.then((res: any) => {
       const data = res?.data || res;
       if (data && Array.isArray(data) && data.length > 0) {
         const opts = data.map((p: any) => ({
           label: p.title,
           amount: p.inEscrowAmount || p.totalBudget || 2400,
           client: p.clientName,
+          clientEmail: p.clientEmail,
+          freelancer: p.freelancerName,
+          freelancerEmail: p.freelancerEmail,
           contractId: p.contractId || p.id,
         }));
         setProjectOptions(opts);
@@ -163,12 +193,14 @@ export default function CreateDisputeScreen() {
     const selectedProj = projectOptions.find((p) => p.label === project) || (isChathuni ? PROJECT_OPTIONS[0] : null);
     const amount = selectedProj ? selectedProj.amount : 2400;
 
-    let targetDisputeId = isChathuni ? 'DSP-409' : 'DSP-' + Math.floor(100 + Math.random() * 900);
+    let targetDisputeId = editId || (isChathuni ? 'DSP-409' : 'DSP-' + Math.floor(100 + Math.random() * 900));
 
-    const activeFreelancer = currentUser?.fullName || (isChathuni ? 'Chathuni Imalsha' : 'Freelancer');
+    const activeFreelancer = isClientMode
+      ? ((selectedProj as any)?.freelancer || 'Freelancer')
+      : (currentUser?.fullName || (isChathuni ? 'Chathuni Imalsha' : 'Freelancer'));
 
     try {
-      const res = await apiClient.post('/disputes', {
+      const payload = {
         project: project || 'General Project',
         issueType,
         description: finalDescription || 'Milestone deliverable submitted; dispute opened.',
@@ -176,10 +208,14 @@ export default function CreateDisputeScreen() {
         amount,
         parties: `${project || 'Project'} Client vs. ${activeFreelancer}`,
         clientName: (selectedProj as any)?.client || (isChathuni ? 'TechVentures Inc.' : 'Client'),
+        clientEmail: currentUser?.email || '',
         freelancerName: activeFreelancer,
-        freelancerEmail: currentUser?.email || '',
+        freelancerEmail: (selectedProj as any)?.freelancerEmail || (isClientMode ? '' : currentUser?.email || ''),
         contractId: (selectedProj as any)?.contractId || (isChathuni ? 'C-101' : ''),
-      });
+      };
+      const res = editId
+        ? await FreelancerApiService.updateDispute(editId, payload)
+        : await apiClient.post('/disputes', payload);
       if (res.data && res.data.id) {
         targetDisputeId = res.data.id;
         setCreatedDisputeId(res.data.id);
@@ -207,19 +243,19 @@ export default function CreateDisputeScreen() {
           <View style={styles.headerBar}>
             <TouchableOpacity
               style={styles.backBtn}
-              onPress={() => router.replace('/freelancer-disputes')}
+              onPress={() => router.replace(isClientMode ? '/client-disputes' : '/freelancer-disputes')}
               activeOpacity={0.7}
             >
               <Text style={styles.backArrow}>‹</Text>
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Create Dispute</Text>
+            <Text style={styles.headerTitle}>{isEditMode ? 'Edit Dispute' : 'Create Dispute'}</Text>
             <View style={{ width: 36 }} />
           </View>
 
           {showSuccessToast && (
             <View style={styles.toastSuccess}>
               <Text style={styles.toastText}>
-                ✓ Dispute created and saved to system database! Case ID: {createdDisputeId || 'DSP-New'}
+                ✓ Dispute {isEditMode ? 'updated' : 'created'} and saved to system database! Case ID: {createdDisputeId || editId || 'DSP-New'}
               </Text>
             </View>
           )}
@@ -346,7 +382,7 @@ export default function CreateDisputeScreen() {
             {isSubmitting ? (
               <ActivityIndicator color="#FFFFFF" size="small" />
             ) : (
-              <Text style={styles.submitBtnText}>Submit Dispute</Text>
+              <Text style={styles.submitBtnText}>{isEditMode ? 'Save Changes' : 'Submit Dispute'}</Text>
             )}
           </TouchableOpacity>
         </ScrollView>

@@ -42,27 +42,7 @@ public class PayoutAccountService {
             }
         }
 
-        // If no payout account is found, generate default bank account details for smooth payment integration
-        String nameForAccount = !targetName.isEmpty() ? targetName : (!targetEmail.isEmpty() ? targetEmail : "Freelancer");
-        String emailForAccount = !targetEmail.isEmpty() ? targetEmail : "freelancer@platform.com";
-
-        PayoutAccount defaultAccount = new PayoutAccount(
-                "acc-default-" + (nameForAccount.hashCode() & 0xffff),
-                emailForAccount,
-                nameForAccount,
-                "Chase Bank (Checking)",
-                "Routing: 122000218",
-                "• • • • 4829",
-                true,
-                "🏛️",
-                "JPMorgan Chase Bank, N.A.",
-                nameForAccount,
-                "•••• •••• 4829",
-                "122000218",
-                "Direct Deposit (ACH)",
-                "Checking"
-        );
-        return List.of(defaultAccount);
+        return List.of();
     }
 
     @Transactional

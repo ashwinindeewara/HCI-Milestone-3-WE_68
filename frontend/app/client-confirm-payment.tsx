@@ -59,15 +59,7 @@ export default function ClientConfirmPaymentScreen() {
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [successModalVisible, setSuccessModalVisible] = useState(false);
-  const [bankDetails, setBankDetails] = useState<FreelancerBankDetails>({
-    bankName: 'JPMorgan Chase Bank, N.A.',
-    accountHolder: freelancerName,
-    accountNumber: '•••• •••• 4829',
-    routingNumber: '122000218',
-    accountType: 'Checking',
-    paymentType: 'Direct Deposit (ACH)',
-    badge: 'Verified',
-  });
+  const [bankDetails, setBankDetails] = useState<FreelancerBankDetails | null>(null);
 
   useEffect(() => {
     fetchFreelancerBankDetails();
@@ -90,16 +82,16 @@ export default function ClientConfirmPaymentScreen() {
         const defaultAcc = accounts.find((a: any) => a.isDefault) || accounts[0];
         setBankDetails({
           id: defaultAcc.id,
-          bankName: defaultAcc.bankName || defaultAcc.name || 'JPMorgan Chase Bank, N.A.',
-          accountHolder: defaultAcc.accountHolder || freelancerName,
-          accountNumber: defaultAcc.accountNumber || defaultAcc.detail || '•••• •••• 4829',
-          routingNumber: defaultAcc.routingNumber || '122000218',
-          accountType: defaultAcc.accountType || 'Checking',
-          paymentType: defaultAcc.paymentType || 'Direct Deposit (ACH)',
-          badge: defaultAcc.badge || 'Verified',
+          bankName: defaultAcc.bankName || defaultAcc.name || '',
+          accountHolder: defaultAcc.accountHolder || '',
+          accountNumber: defaultAcc.accountNumber || '',
+          routingNumber: defaultAcc.routingNumber || '',
+          accountType: defaultAcc.accountType || '',
+          paymentType: defaultAcc.paymentType || '',
+          badge: defaultAcc.badge || 'Active',
         });
       } else {
-        // Check localStorage fallback
+        // Keep manually saved local data available when the API is temporarily unavailable.
         if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
           const k = `payout_accounts_${freelancerEmail || freelancerName || 'default'}`;
           const s = localStorage.getItem(k);
@@ -108,26 +100,34 @@ export default function ClientConfirmPaymentScreen() {
             if (Array.isArray(parsed) && parsed.length > 0) {
               const item = parsed[0];
               setBankDetails({
-                bankName: item.bankName || item.name || 'JPMorgan Chase Bank, N.A.',
-                accountHolder: item.accountHolder || freelancerName,
-                accountNumber: item.accountNumber || item.detail || '•••• •••• 4829',
-                routingNumber: item.routingNumber || '122000218',
-                accountType: item.accountType || 'Checking',
-                paymentType: item.paymentType || 'Direct Deposit (ACH)',
-                badge: item.badge || 'Verified',
+                id: item.id,
+                bankName: item.bankName || item.name || '',
+                accountHolder: item.accountHolder || '',
+                accountNumber: item.accountNumber || '',
+                routingNumber: item.routingNumber || '',
+                accountType: item.accountType || '',
+                paymentType: item.paymentType || '',
+                badge: item.badge || 'Active',
               });
             }
           }
         }
       }
     } catch {
-      // Keep default verified bank details
+      setBankDetails(null);
     } finally {
       setLoading(false);
     }
   };
 
   const handleConfirmPayment = async () => {
+    if (!bankDetails) {
+      Alert.alert(
+        'Bank account required',
+        'The freelancer must manually add and link a payment bank account before this payment can be released.'
+      );
+      return;
+    }
     setProcessing(true);
     try {
       // 1. Post to backend escrow release endpoint
@@ -227,50 +227,59 @@ export default function ClientConfirmPaymentScreen() {
               </View>
 
               {/* Freelancer Payout Bank Details Card */}
-              <View style={styles.bankCard}>
-                <View style={styles.bankHeaderRow}>
-                  <Text style={styles.bankIcon}>🏛️</Text>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.bankCardHeading}>Freelancer Bank Details</Text>
-                    <Text style={styles.bankSubText}>Receiving Account for Direct Deposit</Text>
+              {bankDetails ? (
+                <View style={styles.bankCard}>
+                  <View style={styles.bankHeaderRow}>
+                    <Text style={styles.bankIcon}>🏛️</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.bankCardHeading}>Freelancer Bank Details</Text>
+                      <Text style={styles.bankSubText}>Receiving Account for Direct Deposit</Text>
+                    </View>
+                    <View style={styles.verifiedBadge}>
+                      <Text style={styles.verifiedBadgeText}>✓ {bankDetails.badge || 'Active'}</Text>
+                    </View>
                   </View>
-                  <View style={styles.verifiedBadge}>
-                    <Text style={styles.verifiedBadgeText}>✓ {bankDetails.badge || 'Verified'}</Text>
+
+                  <View style={styles.divider} />
+
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Recipient</Text>
+                    <Text style={styles.detailValueBold}>{freelancerName}</Text>
+                  </View>
+
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Bank Name</Text>
+                    <Text style={styles.detailValue}>{bankDetails.bankName}</Text>
+                  </View>
+
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Account Holder</Text>
+                    <Text style={styles.detailValue}>{bankDetails.accountHolder}</Text>
+                  </View>
+
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Account Number</Text>
+                    <Text style={styles.detailValue}>{bankDetails.accountNumber}</Text>
+                  </View>
+
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Routing Number</Text>
+                    <Text style={styles.detailValue}>{bankDetails.routingNumber}</Text>
+                  </View>
+
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Payout Method</Text>
+                    <Text style={styles.detailValue}>{bankDetails.paymentType} ({bankDetails.accountType})</Text>
                   </View>
                 </View>
-
-                <View style={styles.divider} />
-
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Recipient</Text>
-                  <Text style={styles.detailValueBold}>{freelancerName}</Text>
+              ) : (
+                <View style={styles.bankCard}>
+                  <Text style={styles.bankCardHeading}>No payout account linked</Text>
+                  <Text style={styles.bankSubText}>
+                    The freelancer must manually add their bank account details before payment can be released.
+                  </Text>
                 </View>
-
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Bank Name</Text>
-                  <Text style={styles.detailValue}>{bankDetails.bankName}</Text>
-                </View>
-
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Account Holder</Text>
-                  <Text style={styles.detailValue}>{bankDetails.accountHolder}</Text>
-                </View>
-
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Account Number</Text>
-                  <Text style={styles.detailValue}>{bankDetails.accountNumber}</Text>
-                </View>
-
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Routing Number</Text>
-                  <Text style={styles.detailValue}>{bankDetails.routingNumber}</Text>
-                </View>
-
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Payout Method</Text>
-                  <Text style={styles.detailValue}>{bankDetails.paymentType} ({bankDetails.accountType})</Text>
-                </View>
-              </View>
+              )}
 
               {/* Payment Summary Box */}
               <View style={styles.summaryCard}>
@@ -296,9 +305,9 @@ export default function ClientConfirmPaymentScreen() {
 
               {/* Action Buttons */}
               <TouchableOpacity
-                style={[styles.confirmBtn, processing && styles.disabledBtn]}
+                style={[styles.confirmBtn, (processing || !bankDetails) && styles.disabledBtn]}
                 onPress={handleConfirmPayment}
-                disabled={processing}
+                disabled={processing || !bankDetails}
                 activeOpacity={0.88}
               >
                 {processing ? (
@@ -336,11 +345,11 @@ export default function ClientConfirmPaymentScreen() {
               You have successfully approved milestone "{milestoneTitle}" and released ${initialAmount.toLocaleString()} to {freelancerName}'s bank account.
             </Text>
 
-            <View style={styles.successBankPill}>
+            {bankDetails && <View style={styles.successBankPill}>
               <Text style={styles.successBankPillText}>
                 🏛️ {bankDetails.bankName} • {bankDetails.accountNumber}
               </Text>
-            </View>
+            </View>}
 
             <TouchableOpacity
               style={styles.modalDoneBtn}

@@ -22,6 +22,14 @@ public class DeliverableController {
         return ResponseEntity.ok(milestoneService.getDeliverableById(id));
     }
 
+    @PutMapping("/{id}")
+    public ResponseEntity<Deliverable> updateDeliverable(
+            @PathVariable String id,
+            @RequestBody DeliverableRequest request
+    ) {
+        return ResponseEntity.ok(milestoneService.updateDeliverable(id, request));
+    }
+
     @PostMapping("/{id}/approve")
     public ResponseEntity<Deliverable> approveDeliverable(@PathVariable String id) {
         return ResponseEntity.ok(milestoneService.approveDeliverable(id));

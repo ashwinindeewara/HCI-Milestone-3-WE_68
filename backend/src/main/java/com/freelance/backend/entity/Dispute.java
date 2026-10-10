@@ -44,6 +44,8 @@ public class Dispute {
     private String freelancerName;
     @Column(name = "freelancer_email")
     private String freelancerEmail;
+    @Column(name = "client_email")
+    private String clientEmail;
     private String contractId;
     private Integer timelineStep = 1; // 1: Open, 2: Reviewing, 3: Resolved
 
@@ -106,6 +108,14 @@ public class Dispute {
 
     public void setFreelancerEmail(String freelancerEmail) {
         this.freelancerEmail = freelancerEmail;
+    }
+
+    public String getClientEmail() {
+        return clientEmail;
+    }
+
+    public void setClientEmail(String clientEmail) {
+        this.clientEmail = clientEmail;
     }
 
     public void setId(String id) {

@@ -84,7 +84,8 @@ export default function DisputeDetailsScreen() {
   const params = useLocalSearchParams();
   const disputeId = (params.id as string) || 'DSP-409';
   const currentUser = getCurrentUser();
-  const activeFreelancerName = currentUser?.fullName || 'Freelancer';
+  const activeViewerName = currentUser?.fullName || 'User';
+  const viewerRole = String(currentUser?.role || 'FREELANCER').toUpperCase();
   const isChathuni =
     currentUser?.email === 'chathuniimalsha.com' ||
     (currentUser?.fullName && currentUser.fullName.toLowerCase().includes('chathuni')) ||
@@ -108,7 +109,7 @@ export default function DisputeDetailsScreen() {
       id: disputeId,
       dspNumber: disputeId,
       project: 'Dispute Case',
-      parties: `Client vs. ${activeFreelancerName}`,
+      parties: 'Client vs. Freelancer',
       issueType: 'Payment Delay',
       description: '',
       evidenceFilesList: [],
@@ -127,14 +128,20 @@ export default function DisputeDetailsScreen() {
 
   const fetchDisputeDetails = async () => {
     try {
-      const res = await apiClient.get(`/disputes/${disputeId}`);
+      const res = await apiClient.get(`/disputes/${disputeId}`, {
+        params: {
+          viewerName: activeViewerName,
+          viewerEmail: currentUser?.email || '',
+          role: viewerRole,
+        },
+      });
       if (res.data) {
         const d = res.data;
         const formatted: DisputeDetailData = {
           id: d.id || disputeId,
           dspNumber: d.dspNumber || disputeId,
           project: d.project || (isChathuniDemo ? 'E-Commerce Redesign' : 'Dispute Case'),
-          parties: d.parties || `Client vs. ${activeFreelancerName}`,
+          parties: d.parties || 'Client vs. Freelancer',
           issueType: d.issueType || 'Payment Delay',
           description: d.description || (isChathuniDemo ? DEFAULT_DISPUTE_DETAIL.description : ''),
           evidenceFilesList:
@@ -178,8 +185,8 @@ export default function DisputeDetailsScreen() {
 
     const timeNow = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const localMsg: DiscussionMessage = {
-      senderName: activeFreelancerName,
-      senderRole: 'FREELANCER',
+      senderName: activeViewerName,
+      senderRole: viewerRole,
       message: newMsgText,
       timestamp: timeNow,
     };
@@ -191,8 +198,8 @@ export default function DisputeDetailsScreen() {
 
     try {
       await apiClient.post(`/disputes/${disputeId}/messages`, {
-        senderName: activeFreelancerName,
-        senderRole: 'FREELANCER',
+        senderName: activeViewerName,
+        senderRole: viewerRole,
         message: newMsgText,
       });
     } catch (e: any) {
@@ -344,7 +351,7 @@ export default function DisputeDetailsScreen() {
                     dispute.messages.map((msg, index) => {
                     const isFreelancer =
                       msg.senderRole === 'FREELANCER' ||
-                      msg.senderName === activeFreelancerName ||
+                      msg.senderName === activeViewerName ||
                       msg.senderName === 'Sarah' ||
                       msg.senderName === 'Chathuni';
                     return (

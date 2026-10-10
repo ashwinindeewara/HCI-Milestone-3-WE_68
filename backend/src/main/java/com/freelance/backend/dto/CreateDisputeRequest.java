@@ -10,6 +10,7 @@ public class CreateDisputeRequest {
     private String clientName;
     private String freelancerName;
     private String freelancerEmail;
+    private String clientEmail;
     private String contractId;
     private String priority = "Medium";
 
@@ -85,6 +86,14 @@ public class CreateDisputeRequest {
 
     public void setFreelancerEmail(String freelancerEmail) {
         this.freelancerEmail = freelancerEmail;
+    }
+
+    public String getClientEmail() {
+        return clientEmail;
+    }
+
+    public void setClientEmail(String clientEmail) {
+        this.clientEmail = clientEmail;
     }
 
     public String getContractId() {

@@ -272,7 +272,7 @@ export default function ProjectDetailsScreen() {
   const [submitModalVisible, setSubmitModalVisible] = useState(false);
   const [selectedMilestone, setSelectedMilestone] = useState<MilestoneItem | null>(null);
   const [deliverableNotes, setDeliverableNotes] = useState('');
-  const [selectedFiles, setSelectedFiles] = useState<string[]>(['design-tokens-v1.zip', 'prototype-spec.pdf']);
+  const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
   const [isSubmittingDeliverable, setIsSubmittingDeliverable] = useState(false);
   const [successToast, setSuccessToast] = useState<string | null>(null);
 
@@ -666,8 +666,9 @@ Integrity Checksum: SHA256-${Math.random().toString(36).substring(2, 10).toUpper
       }
 
       const fileName = selectedFiles.join(', ');
+      const existingDeliv = deliverables.find((d) => d.milestoneId === selectedMilestone.id);
       const newDeliv: DeliverableItem = {
-        id: 'deliv-' + Date.now(),
+        id: existingDeliv?.id || 'deliv-' + Date.now(),
         milestoneId: selectedMilestone.id,
         fileName,
         fileSize: '6.4 MB',
@@ -677,11 +678,14 @@ Integrity Checksum: SHA256-${Math.random().toString(36).substring(2, 10).toUpper
       };
 
       try {
-        const res = await FreelancerApiService.submitDeliverable(selectedMilestone.id, {
+        const payload = {
           fileName,
           fileSize: '6.4 MB',
           notes: deliverableNotes || 'All milestone deliverables completed per statement of work.',
-        });
+        };
+        const res = existingDeliv
+          ? await FreelancerApiService.updateDeliverable(existingDeliv.id, payload)
+          : await FreelancerApiService.submitDeliverable(selectedMilestone.id, payload);
         if (res.data?.id) {
           newDeliv.id = res.data.id;
         }
@@ -694,7 +698,9 @@ Integrity Checksum: SHA256-${Math.random().toString(36).substring(2, 10).toUpper
       const updatedMilestones = milestones.map((m) =>
         m.id === selectedMilestone.id ? { ...m, status: 'SUBMITTED' } : m
       );
-      const updatedDeliverables = [newDeliv, ...deliverables.filter((d) => d.milestoneId !== selectedMilestone.id)];
+      const updatedDeliverables = existingDeliv
+        ? deliverables.map((d) => (d.id === existingDeliv.id ? newDeliv : d))
+        : [newDeliv, ...deliverables.filter((d) => d.milestoneId !== selectedMilestone.id)];
 
       // Calculate increased progress percentage
       const newProgress = calculateProgressFromMilestones(updatedMilestones);
@@ -711,7 +717,7 @@ Integrity Checksum: SHA256-${Math.random().toString(36).substring(2, 10).toUpper
 
       setSubmitModalVisible(false);
       setDeliverableNotes('');
-      showToast(`✓ Deliverable uploaded! Milestone progress increased to ${newProgress}% 🚀`);
+      showToast(`${existingDeliv ? '✓ Deliverable updated' : '✓ Deliverable uploaded'}! Milestone progress increased to ${newProgress}% 🚀`);
     } finally {
       setIsSubmittingDeliverable(false);
     }
@@ -758,12 +764,6 @@ Integrity Checksum: SHA256-${Math.random().toString(36).substring(2, 10).toUpper
   const handleRemoveDeliverable = async (deliverableId: string) => {
     const targetDeliv = deliverables.find((d) => d.id === deliverableId);
     if (!targetDeliv) return;
-    try {
-      await FreelancerApiService.deleteDeliverable(deliverableId);
-    } catch {
-      showToast('Unable to remove the saved deliverable.');
-      return;
-    }
 
     const targetMilestoneId = targetDeliv.milestoneId;
     const remainingDeliverables = deliverables.filter((d) => d.id !== deliverableId);
@@ -792,7 +792,17 @@ Integrity Checksum: SHA256-${Math.random().toString(36).substring(2, 10).toUpper
     }));
 
     persistProjectState(projectId, newProgress, updatedMilestones, remainingDeliverables);
-    showToast(`🗑️ Deliverable file removed. Progress bar automatically decreased to ${newProgress}%.`);
+    showToast(`🗑️ Deliverable deleted. Progress bar automatically decreased to ${newProgress}%.`);
+
+    try {
+      await FreelancerApiService.deleteDeliverable(deliverableId);
+    } catch (error: any) {
+      // Demo/local deliverables may not exist in the backend; the local deletion is still permanent
+      // for this project and the user should not see the card return after the request fails.
+      if (error?.response?.status !== 404) {
+        showToast('Deliverable removed from this page, but server deletion could not be confirmed.');
+      }
+    }
   };
 
   // Freelancer Remove Deliverable by Milestone ID (Automatically Decreases Progress Bar!)
@@ -1003,12 +1013,10 @@ Integrity Checksum: SHA256-${Math.random().toString(36).substring(2, 10).toUpper
                                     .split(',')
                                     .map((s) => s.trim())
                                     .filter(Boolean);
-                                  setSelectedFiles(
-                                    fileList.length > 0 ? fileList : ['design-tokens-v1.zip', 'prototype-spec.pdf']
-                                  );
+                                  setSelectedFiles(fileList);
                                   setDeliverableNotes(existingDeliv.notes || '');
                                 } else {
-                                  setSelectedFiles(['design-tokens-v1.zip', 'prototype-spec.pdf']);
+                                  setSelectedFiles([]);
                                   setDeliverableNotes('');
                                 }
                                 setSubmitModalVisible(true);
@@ -1034,39 +1042,11 @@ Integrity Checksum: SHA256-${Math.random().toString(36).substring(2, 10).toUpper
             <View style={styles.tabContent}>
               <View style={[styles.sectionHeaderRow, { justifyContent: 'space-between', alignItems: 'center' }]}>
                 <Text style={styles.descHeading}>Submitted Deliverables</Text>
-                <TouchableOpacity
-                  style={styles.uploadDeliverableHeaderBtn}
-                  onPress={() => {
-                    const targetM =
-                      milestones.find((m) => m.status !== 'COMPLETED' && m.status !== 'RELEASED' && m.status !== 'SUBMITTED') ||
-                      milestones.find((m) => m.status === 'SUBMITTED') ||
-                      milestones[0];
-                    if (targetM) {
-                      setSelectedMilestone(targetM);
-                      setSubmitModalVisible(true);
-                    }
-                  }}
-                  activeOpacity={0.85}
-                >
-                  <Text style={styles.uploadDeliverableHeaderBtnText}>+ Upload Deliverable File</Text>
-                </TouchableOpacity>
               </View>
 
               {deliverables.length === 0 ? (
                 <View style={styles.emptyCard}>
                   <Text style={styles.emptyText}>No deliverables submitted yet.</Text>
-                  <TouchableOpacity
-                    style={[styles.uploadDeliverableHeaderBtn, { alignSelf: 'center', marginTop: 12 }]}
-                    onPress={() => {
-                      const targetM = milestones.find((m) => m.status !== 'COMPLETED') || milestones[0];
-                      if (targetM) {
-                        setSelectedMilestone(targetM);
-                        setSubmitModalVisible(true);
-                      }
-                    }}
-                  >
-                    <Text style={styles.uploadDeliverableHeaderBtnText}>↑ Upload Milestone Deliverable</Text>
-                  </TouchableOpacity>
                 </View>
               ) : (
                 deliverables.map((d) => (
@@ -1111,31 +1091,27 @@ Integrity Checksum: SHA256-${Math.random().toString(36).substring(2, 10).toUpper
                       </View>
                     )}
 
-                    {/* Deliverable Action Buttons (Download & Remove) */}
+                    {/* Deliverable Action Buttons */}
                     <View style={styles.deliverableActionsRow}>
                       <TouchableOpacity
-                        style={styles.downloadDeliverableBtn}
-                        onPress={() =>
-                          handleDownloadFile({
-                            id: d.id,
-                            originalFileName: d.fileName,
-                            fileSizeFormatted: d.fileSize || '3.5 MB',
-                            uploadedBy: activeFreelancer,
-                            fileUrl: '',
-                            createdAt: d.uploadedAt || 'Recently',
-                          })
-                        }
+                        style={styles.editDeliverableBtn}
+                        onPress={() => {
+                          const targetMilestone = milestones.find((m) => m.id === d.milestoneId);
+                          if (!targetMilestone) return;
+                          setSelectedMilestone(targetMilestone);
+                          setSelectedFiles(
+                            d.fileName
+                              .split(',')
+                              .map((file) => file.trim())
+                              .filter(Boolean)
+                          );
+                          setDeliverableNotes(d.notes || '');
+                          setSubmitModalVisible(true);
+                        }}
                         activeOpacity={0.8}
+                        accessibilityLabel={`Edit deliverable ${d.fileName}`}
                       >
-                        <Text style={styles.downloadDeliverableBtnText}>⬇ Download File</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.removeDeliverableFileBtn}
-                        onPress={() => handleRemoveDeliverable(d.id)}
-                        activeOpacity={0.8}
-                      >
-                        <Text style={styles.removeDeliverableFileBtnText}>🗑️ Remove Deliverable File</Text>
+                        <Text style={styles.editDeliverableBtnText}>✏️ Edit</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -1267,7 +1243,11 @@ Integrity Checksum: SHA256-${Math.random().toString(36).substring(2, 10).toUpper
         <Modal visible={submitModalVisible} transparent animationType="slide">
           <View style={styles.modalOverlay}>
             <View style={styles.modalCard}>
-              <Text style={styles.modalTitle}>Submit Deliverable</Text>
+              <Text style={styles.modalTitle}>
+                {deliverables.some((d) => d.milestoneId === selectedMilestone?.id)
+                  ? 'Edit Deliverable'
+                  : 'Submit Deliverable'}
+              </Text>
               <Text style={styles.modalSub}>{selectedMilestone?.title}</Text>
 
               <Text style={styles.modalLabel}>Description & Comments</Text>
@@ -1324,7 +1304,11 @@ Integrity Checksum: SHA256-${Math.random().toString(36).substring(2, 10).toUpper
                   {isSubmittingDeliverable ? (
                     <ActivityIndicator size="small" color="#FFFFFF" />
                   ) : (
-                    <Text style={styles.modalSubmitBtnText}>Submit Deliverable</Text>
+                    <Text style={styles.modalSubmitBtnText}>
+                      {deliverables.some((d) => d.milestoneId === selectedMilestone?.id)
+                        ? 'Save Changes'
+                        : 'Submit Deliverable'}
+                    </Text>
                   )}
                 </TouchableOpacity>
               </View>
@@ -1547,6 +1531,20 @@ const styles = StyleSheet.create({
     gap: 10,
     marginTop: 6,
   },
+  editDeliverableBtn: {
+    flex: 1,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    borderRadius: 8,
+    paddingVertical: 9,
+    alignItems: 'center',
+  },
+  editDeliverableBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#2563EB',
+  },
   downloadDeliverableBtn: {
     flex: 1,
     backgroundColor: '#F1F5F9',
@@ -1560,7 +1558,7 @@ const styles = StyleSheet.create({
     color: '#334155',
   },
   removeDeliverableFileBtn: {
-    flex: 1.2,
+    flex: 1,
     backgroundColor: '#FEF2F2',
     borderWidth: 1,
     borderColor: '#FECACA',

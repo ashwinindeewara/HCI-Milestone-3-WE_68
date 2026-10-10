@@ -14,6 +14,7 @@ import com.freelance.backend.repository.NotificationRepository;
 import com.freelance.backend.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -123,11 +124,43 @@ public class DisputeService {
                 .toList();
     }
 
+    public List<Dispute> getClientDisputes(String clientName, String email) {
+        String cleanName = clientName == null ? "" : clientName.trim().toLowerCase();
+        String cleanEmail = email == null ? "" : email.trim().toLowerCase();
+        if (cleanName.isEmpty() && cleanEmail.isEmpty()) return List.of();
+        return disputeRepository.findAll().stream()
+                .filter(d -> (d.getClientEmail() != null && d.getClientEmail().equalsIgnoreCase(cleanEmail))
+                        || (d.getClientName() != null && d.getClientName().trim().equalsIgnoreCase(cleanName)))
+                .toList();
+    }
+
     public Dispute getDisputeById(String id) {
         Dispute dispute = disputeRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Dispute case not found: " + id));
         enrichDispute(dispute);
         return dispute;
+    }
+
+    public Dispute getDisputeForViewer(String id, String viewerName, String viewerEmail, String role) {
+        Dispute dispute = getDisputeById(id);
+        if (isAuthorizedViewer(dispute, viewerName, viewerEmail, role)) return dispute;
+        throw new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.FORBIDDEN, "You are not a party to this dispute");
+    }
+
+    private boolean isAuthorizedViewer(Dispute dispute, String viewerName, String viewerEmail, String role) {
+        if ("ADMIN".equalsIgnoreCase(role)) return true;
+        String email = viewerEmail == null ? "" : viewerEmail.trim();
+        String name = viewerName == null ? "" : viewerName.trim();
+        boolean freelancer = !email.isBlank() && dispute.getFreelancerEmail() != null
+                && dispute.getFreelancerEmail().equalsIgnoreCase(email);
+        boolean client = !email.isBlank() && dispute.getClientEmail() != null
+                && dispute.getClientEmail().equalsIgnoreCase(email);
+        freelancer = freelancer || (!name.isBlank() && dispute.getFreelancerName() != null
+                && dispute.getFreelancerName().equalsIgnoreCase(name));
+        client = client || (!name.isBlank() && dispute.getClientName() != null
+                && dispute.getClientName().equalsIgnoreCase(name));
+        return freelancer || client;
     }
 
     private void enrichDispute(Dispute dispute) {
@@ -173,6 +206,7 @@ public class DisputeService {
         dispute.setClientName(client);
         dispute.setFreelancerName(freelancer);
         dispute.setFreelancerEmail(request.getFreelancerEmail());
+        dispute.setClientEmail(request.getClientEmail());
         dispute.setContractId(request.getContractId());
         dispute.setPriority(request.getPriority() != null ? request.getPriority() : "Medium");
         dispute.setLastUpdatedDate(todayFormatted);
@@ -213,8 +247,42 @@ public class DisputeService {
         return saved;
     }
 
+    @Transactional
+    public Dispute updateDispute(String id, CreateDisputeRequest request) {
+        Dispute dispute = getDisputeById(id);
+        if (request.getProject() != null && !request.getProject().isBlank()) {
+            dispute.setProject(request.getProject().trim());
+        }
+        if (request.getIssueType() != null && !request.getIssueType().isBlank()) {
+            dispute.setIssueType(request.getIssueType().trim());
+        }
+        if (request.getDescription() != null) {
+            dispute.setDescription(request.getDescription().trim());
+        }
+        if (request.getEvidenceFile() != null) {
+            dispute.setEvidenceFile(request.getEvidenceFile());
+        }
+        if (request.getAmount() != null) {
+            dispute.setAmount(request.getAmount());
+        }
+        if (request.getPriority() != null && !request.getPriority().isBlank()) {
+            dispute.setPriority(request.getPriority().trim());
+        }
+        dispute.setLastUpdatedDate(LocalDateTime.now().format(DateTimeFormatter.ofPattern("MMM dd, yyyy")));
+        return disputeRepository.save(dispute);
+    }
+
+    @Transactional
+    public void deleteDispute(String id) {
+        Dispute dispute = disputeRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Dispute case not found: " + id));
+        messageRepository.deleteByDisputeId(id);
+        disputeRepository.delete(dispute);
+    }
+
     public DisputeMessage addMessage(String disputeId, AddDisputeMessageRequest request) {
-        Dispute dispute = getDisputeById(disputeId);
+        Dispute dispute = getDisputeForViewer(
+                disputeId, request.getSenderName(), null, request.getSenderRole());
 
         DateTimeFormatter timeFmt = DateTimeFormatter.ofPattern("hh:mm a");
         String currentTime = LocalDateTime.now().format(timeFmt);
