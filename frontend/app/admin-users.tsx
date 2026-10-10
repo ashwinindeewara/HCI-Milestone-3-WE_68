@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   SafeAreaView,
   useWindowDimensions,
+  RefreshControl,
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import SkeletonCard from '../src/components/SkeletonCard';
@@ -14,7 +15,7 @@ import Colors from '../src/constants/colors';
 import AdminTabBar from '../src/components/AdminTabBar';
 import AdminToast, { ToastType } from '../src/components/AdminToast';
 import UserAvatar from '../src/components/UserAvatar';
-import apiClient from '../src/services/api';
+import apiClient, { clearApiCache } from '../src/services/api';
 import {
   AdminCard,
   AdminScreenHeader,
@@ -60,8 +61,10 @@ export default function AdminUserManagementScreen() {
   const [formStatus, setFormStatus] = useState('Active');
   const [formPassword, setFormPassword] = useState('Password123!');
 
+  const [refreshing, setRefreshing] = useState(false);
+
   // Fetch Users
-  const { data: usersData, isLoading } = useQuery({
+  const { data: usersData, isLoading, refetch } = useQuery({
     queryKey: ['adminUsers'],
     queryFn: async () => {
       try {
@@ -87,6 +90,13 @@ export default function AdminUserManagementScreen() {
     retry: 2,
     retryDelay: 1000,
   });
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    clearApiCache();
+    await refetch();
+    setRefreshing(false);
+  };
 
   const users = usersData || [];
 
@@ -297,7 +307,13 @@ export default function AdminUserManagementScreen() {
         onDismiss={() => setToast((prev) => ({ ...prev, visible: false }))}
       />
 
-      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.contentContainer}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />
+        }
+      >
         <View style={adminLayout.content}>
           <ScreenHeaderWithActions title="User Management" subtitle={`${users.length} registered accounts`}>
             <AdminButton label="Export CSV" icon="download-outline" variant="secondary" onPress={handleExportCSV} />

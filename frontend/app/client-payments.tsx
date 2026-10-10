@@ -7,11 +7,12 @@ import {
   TouchableOpacity,
   SafeAreaView,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
-import { getCurrentUser, apiClient } from '../src/services/api';
+import { getCurrentUser, apiClient, clearApiCache } from '../src/services/api';
 import ClientBottomTabBar from '../src/components/ClientBottomTabBar';
 
 export default function ClientPaymentsScreen() {
@@ -19,6 +20,7 @@ export default function ClientPaymentsScreen() {
   const currentUser = getCurrentUser();
 
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [summary, setSummary] = useState({
     totalEscrow: 5400,
     totalPaid: 13100,
@@ -73,13 +75,25 @@ export default function ClientPaymentsScreen() {
       // Keep default state
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  };
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    clearApiCache();
+    fetchPaymentsSummary();
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        <ScrollView contentContainerStyle={styles.contentContainer}>
+        <ScrollView
+          contentContainerStyle={styles.contentContainer}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />
+          }
+        >
           {/* Header Bar */}
           <Text style={styles.headerTitle}>Client Payments & Escrow</Text>
 

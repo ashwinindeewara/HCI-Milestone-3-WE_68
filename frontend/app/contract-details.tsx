@@ -9,10 +9,11 @@ import {
   Platform,
   ActivityIndicator,
   TextInput,
+  RefreshControl,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import Colors from '../src/constants/colors';
-import { apiClient, getCurrentUser } from '../src/services/api';
+import { apiClient, getCurrentUser, clearApiCache } from '../src/services/api';
 import {
   HomeIcon,
   ProjectsIcon,
@@ -105,47 +106,56 @@ export default function ContractDetailsScreen() {
     };
   });
 
-  useEffect(() => {
-    if (id) {
-      apiClient
-        .get(`/contracts/${id}`)
-        .then((res) => {
-          if (res.data) {
-            const d = res.data;
-            const updated = {
-              id: d.id || id,
-              title: d.title || '',
-              clientName: d.clientName || '',
-              paymentTerms: d.paymentTerms || 'Milestone-based (Escrow Protection)',
-              totalBudget: d.totalBudget || 0,
-              deliverables: Array.isArray(d.deliverables)
-                ? d.deliverables
-                : (d.keyDeliverables ? d.keyDeliverables.split('\n') : []),
-              milestones: Array.isArray(d.milestones) && d.milestones.length > 0
-                ? d.milestones.map((m: any) => ({
-                    id: m.id,
-                    title: m.title,
-                    amount: typeof m.amount === 'number' ? `$${m.amount.toLocaleString()}` : (m.amount || '$0'),
-                  }))
-                : [],
-              signatoryName: d.signatoryName || '',
-              signedDate: d.signedDate || '',
-              isSigned: d.isSigned ?? false,
-              status: d.status || 'PENDING',
-            };
-            setContract(updated);
-            if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-              try {
-                localStorage.setItem(`contract_details_cache_${id}`, JSON.stringify(updated));
-              } catch (e) {}
-            }
-          }
-        })
-        .catch(() => {
-          // Keep current state
-        });
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchContractDetails = async () => {
+    if (!id) return;
+    try {
+      const res = await apiClient.get(`/contracts/${id}`);
+      if (res.data) {
+        const d = res.data;
+        const updated = {
+          id: d.id || id,
+          title: d.title || '',
+          clientName: d.clientName || '',
+          paymentTerms: d.paymentTerms || 'Milestone-based (Escrow Protection)',
+          totalBudget: d.totalBudget || 0,
+          deliverables: Array.isArray(d.deliverables)
+            ? d.deliverables
+            : (d.keyDeliverables ? d.keyDeliverables.split('\n') : []),
+          milestones: Array.isArray(d.milestones) && d.milestones.length > 0
+            ? d.milestones.map((m: any) => ({
+                id: m.id,
+                title: m.title,
+                amount: typeof m.amount === 'number' ? `$${m.amount.toLocaleString()}` : (m.amount || '$0'),
+              }))
+            : [],
+          signatoryName: d.signatoryName || '',
+          signedDate: d.signedDate || '',
+          isSigned: d.isSigned ?? false,
+          status: d.status || 'PENDING',
+        };
+        setContract(updated);
+        if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+          try {
+            localStorage.setItem(`contract_details_cache_${id}`, JSON.stringify(updated));
+          } catch (e) {}
+        }
+      }
+    } catch {} finally {
+      setRefreshing(false);
     }
+  };
+
+  useEffect(() => {
+    fetchContractDetails();
   }, [id]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    clearApiCache();
+    fetchContractDetails();
+  };
 
   const [rejecting, setRejecting] = useState(false);
   const [rejectedSuccess, setRejectedSuccess] = useState(false);
@@ -183,7 +193,13 @@ export default function ContractDetailsScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.wrapper}>
-        <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+        <ScrollView
+          style={styles.container}
+          contentContainerStyle={styles.contentContainer}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />
+          }
+        >
           {/* Top Back Link */}
           <TouchableOpacity
             style={styles.backLinkRow}

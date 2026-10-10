@@ -14,7 +14,7 @@ import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
 import { getSavedUserData } from '../src/services/authService';
 import { getUserSession } from '../src/services/storage';
-import { calculateMilestoneProgress, FreelancerApiService, getCurrentUser } from '../src/services/api';
+import { calculateMilestoneProgress, FreelancerApiService, getCurrentUser, clearApiCache } from '../src/services/api';
 import ClientBottomTabBar from '../src/components/ClientBottomTabBar';
 
 export default function ClientDashboardScreen() {
@@ -177,6 +177,7 @@ export default function ClientDashboardScreen() {
 
   const onRefresh = () => {
     setRefreshing(true);
+    clearApiCache();
     loadData();
   };
 

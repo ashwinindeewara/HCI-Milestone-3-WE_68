@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Image,
   Platform,
+  RefreshControl,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
@@ -18,7 +19,7 @@ import AdminTabBar from '../src/components/AdminTabBar';
 import AdminToast, { ToastType } from '../src/components/AdminToast';
 import SkeletonCard from '../src/components/SkeletonCard';
 import { useQuery } from '@tanstack/react-query';
-import apiClient, { API_BASE_URL } from '../src/services/api';
+import apiClient, { API_BASE_URL, clearApiCache } from '../src/services/api';
 import { formatAdminMoney } from '../src/services/moneyFormat';
 import { getUserSession, saveUserSession, clearUserSession } from '../src/services/storage';
 import { clearAuthSession } from '../src/services/authService';
@@ -90,7 +91,9 @@ export default function AdminDashboardScreen() {
     }
   }, []);
 
-  const { data: kpisData, isLoading: isLoadingKpis } = useQuery({
+  const [refreshing, setRefreshing] = useState(false);
+
+  const { data: kpisData, isLoading: isLoadingKpis, refetch: refetchKpis } = useQuery({
     queryKey: ['adminKpis'],
     queryFn: async () => {
       try {
@@ -103,7 +106,7 @@ export default function AdminDashboardScreen() {
     },
   });
 
-  const { data: activityData, isLoading: isLoadingActivity } = useQuery({
+  const { data: activityData, isLoading: isLoadingActivity, refetch: refetchActivity } = useQuery({
     queryKey: ['adminRecentActivity'],
     queryFn: async () => {
       try {
@@ -118,6 +121,13 @@ export default function AdminDashboardScreen() {
       }
     },
   });
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    clearApiCache();
+    await Promise.allSettled([refetchKpis(), refetchActivity()]);
+    setRefreshing(false);
+  };
 
   const kpis = kpisData || {
     totalUsers: 0,
@@ -293,7 +303,13 @@ export default function AdminDashboardScreen() {
         onDismiss={() => setToast((prev) => ({ ...prev, visible: false }))}
       />
 
-      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.contentContainer}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />
+        }
+      >
         <View style={adminLayout.content}>
           {/* Header Title & Admin Avatar (Clickable Profile Settings) */}
           <AdminScreenHeader

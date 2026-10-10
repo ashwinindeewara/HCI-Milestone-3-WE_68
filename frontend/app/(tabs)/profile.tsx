@@ -12,11 +12,12 @@ import {
   SafeAreaView,
   ActivityIndicator,
   Alert,
+  RefreshControl,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import Colors from '../../src/constants/colors';
 import { VerifiedBadge, StarIcon, ExitLogoutIcon } from '../../src/components/Icons';
-import apiClient, { resolveMediaUrl, getCurrentUser, API_BASE_URL, FreelancerApiService } from '../../src/services/api';
+import apiClient, { resolveMediaUrl, getCurrentUser, API_BASE_URL, FreelancerApiService, clearApiCache } from '../../src/services/api';
 import { clearAuthSession } from '../../src/services/authService';
 
 export interface ProjectItem {
@@ -126,8 +127,16 @@ export default function FreelancerProfileScreen() {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [profile, setProfile] = useState<FreelancerProfileData>(getInitialProfile());
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    clearApiCache();
+    await fetchProfile();
+    setRefreshing(false);
+  };
 
   // Edit form state
   const [editName, setEditName] = useState(profile.name);
@@ -498,6 +507,9 @@ export default function FreelancerProfileScreen() {
             style={styles.scrollArea}
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />
+            }
           >
             {/* Main Profile Info Card */}
             <View style={styles.mainProfileCard}>

@@ -9,11 +9,12 @@ import {
   TextInput,
   ActivityIndicator,
   Platform,
+  RefreshControl,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
-import { apiClient, getCurrentUser } from '../src/services/api';
+import { apiClient, getCurrentUser, clearApiCache } from '../src/services/api';
 import {
   HomeIcon,
   ProjectsIcon,
@@ -134,6 +135,7 @@ export default function DisputeDetailsScreen() {
     };
   });
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [replyText, setReplyText] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [downloadToast, setDownloadToast] = useState<string | null>(null);
@@ -181,12 +183,19 @@ export default function DisputeDetailsScreen() {
       console.warn('Fallback offline dispute detail view');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
   useEffect(() => {
     fetchDisputeDetails();
   }, [disputeId]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    clearApiCache();
+    fetchDisputeDetails();
+  };
 
   const handleSendMessage = async () => {
     if (!replyText.trim()) return;
@@ -250,6 +259,9 @@ export default function DisputeDetailsScreen() {
           style={styles.container}
           contentContainerStyle={styles.contentContainer}
           keyboardShouldPersistTaps="handled"
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />
+          }
         >
           {/* Top Header Bar */}
           <View style={styles.headerBar}>

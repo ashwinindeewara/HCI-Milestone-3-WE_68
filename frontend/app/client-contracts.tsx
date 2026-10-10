@@ -6,47 +6,58 @@ import {
   ScrollView,
   TextInput,
   TouchableOpacity,
+  RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
-import { FreelancerApiService, calculateMilestoneProgress, getCurrentUser } from '../src/services/api';
+import { FreelancerApiService, calculateMilestoneProgress, getCurrentUser, clearApiCache } from '../src/services/api';
 import ClientBottomTabBar from '../src/components/ClientBottomTabBar';
 
 export default function ClientContractsScreen() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState('All');
+  const [refreshing, setRefreshing] = useState(false);
 
   const [projects, setProjects] = useState<any[]>([]);
 
+  const loadProjects = async () => {
+    try {
+      const response = await FreelancerApiService.getClientProjects(getCurrentUser()?.fullName);
+      const loaded = await Promise.all((response.data || []).map(async (project: any) => {
+        let progress = project.completionPercentage || 0;
+        try {
+          const milestones = await FreelancerApiService.getProjectMilestones(project.id);
+          if (Array.isArray(milestones.data)) progress = calculateMilestoneProgress(milestones.data);
+        } catch {}
+        return {
+          ...project,
+          freelancer: project.freelancerName,
+          progress,
+          status: progress >= 100 ? 'Completed' : project.status === 'PENDING' ? 'Pending' : 'Active',
+          escrowTag: project.inEscrowAmount ? `$${project.inEscrowAmount.toLocaleString()} In Escrow` : '$0 In Escrow',
+          milestone: project.currentMilestoneTitle || 'Project milestones',
+          dueDate: project.dueDate ? `Due ${project.dueDate}` : 'Due soon',
+        };
+      }));
+      setProjects(loaded);
+    } catch {
+      setProjects([]);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   useEffect(() => {
-    const loadProjects = async () => {
-      try {
-        const response = await FreelancerApiService.getClientProjects(getCurrentUser()?.fullName);
-        const loaded = await Promise.all((response.data || []).map(async (project: any) => {
-          let progress = project.completionPercentage || 0;
-          try {
-            const milestones = await FreelancerApiService.getProjectMilestones(project.id);
-            if (Array.isArray(milestones.data)) progress = calculateMilestoneProgress(milestones.data);
-          } catch {}
-          return {
-            ...project,
-            freelancer: project.freelancerName,
-            progress,
-            status: progress >= 100 ? 'Completed' : project.status === 'PENDING' ? 'Pending' : 'Active',
-            escrowTag: project.inEscrowAmount ? `$${project.inEscrowAmount.toLocaleString()} In Escrow` : '$0 In Escrow',
-            milestone: project.currentMilestoneTitle || 'Project milestones',
-            dueDate: project.dueDate ? `Due ${project.dueDate}` : 'Due soon',
-          };
-        }));
-        setProjects(loaded);
-      } catch {
-        setProjects([]);
-      }
-    };
     loadProjects();
   }, []);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    clearApiCache();
+    loadProjects();
+  };
 
   const filteredProjects = projects.filter((p) => {
     const matchesFilter =
@@ -59,7 +70,12 @@ export default function ClientContractsScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.contentContainer}>
+      <ScrollView
+        contentContainerStyle={styles.contentContainer}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />
+        }
+      >
         {/* Title Header */}
         <Text style={styles.headerTitle}>My Projects</Text>
 

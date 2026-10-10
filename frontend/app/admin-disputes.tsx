@@ -7,13 +7,14 @@ import {
   TouchableOpacity,
   SafeAreaView,
   useWindowDimensions,
+  RefreshControl,
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import SkeletonCard from '../src/components/SkeletonCard';
 import Colors from '../src/constants/colors';
 import AdminTabBar from '../src/components/AdminTabBar';
 import AdminToast, { ToastType } from '../src/components/AdminToast';
-import apiClient from '../src/services/api';
+import apiClient, { clearApiCache } from '../src/services/api';
 import { formatAdminMoney } from '../src/services/moneyFormat';
 import {
   Tone,
@@ -71,8 +72,10 @@ export default function AdminDisputesScreen() {
   const [resolutionType, setResolutionType] = useState<'FULL_REFUND' | 'RELEASE_FREELANCER' | 'SPLIT_50_50' | 'CUSTOM' | 'UNSUSPEND_REINSTATE' | 'MAINTAIN_SUSPENSION'>('FULL_REFUND');
   const [resolutionNote, setResolutionNote] = useState('');
 
+  const [refreshing, setRefreshing] = useState(false);
+
   // Fetch Disputes
-  const { data: disputesData, isLoading } = useQuery({
+  const { data: disputesData, isLoading, refetch } = useQuery({
     queryKey: ['adminDisputes'],
     queryFn: async () => {
       try {
@@ -101,6 +104,13 @@ export default function AdminDisputesScreen() {
     retry: 2,
     retryDelay: 1000,
   });
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    clearApiCache();
+    await refetch();
+    setRefreshing(false);
+  };
 
   const disputes = disputesData || [];
 
@@ -309,7 +319,13 @@ export default function AdminDisputesScreen() {
         onDismiss={() => setToast((prev) => ({ ...prev, visible: false }))}
       />
 
-      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.contentContainer}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />
+        }
+      >
         <View style={adminLayout.content}>
           <AdminScreenHeader
             title="Dispute Center"

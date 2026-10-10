@@ -9,11 +9,12 @@ import {
   TextInput,
   ActivityIndicator,
   Platform,
+  RefreshControl,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import Colors from '../../src/constants/colors';
 import Theme from '../../src/constants/theme';
-import { apiClient, FreelancerApiService, getCurrentUser } from '../../src/services/api';
+import { apiClient, FreelancerApiService, getCurrentUser, clearApiCache } from '../../src/services/api';
 
 interface HistoryItem {
   id: string;
@@ -98,6 +99,7 @@ export default function EscrowScreen() {
     (currentUser?.fullName && currentUser.fullName.toLowerCase().includes('chathuni')) ||
     (currentUser?.email && currentUser.email.toLowerCase().includes('chathuni'));
 
+  const [refreshing, setRefreshing] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'ALL' | 'RELEASED' | 'ESCROW' | 'WITHDRAWN'>('ALL');
   const [availableBalance, setAvailableBalance] = useState<number>(() => {
     if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
@@ -284,6 +286,31 @@ export default function EscrowScreen() {
       loadLinkedAccounts();
     }, [currentUser?.email, currentUser?.fullName])
   );
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    clearApiCache();
+    const activeEmail = currentUser?.email || '';
+    const activeName = currentUser?.fullName || (isChathuni ? 'Chathuni Imalsha' : '');
+    try {
+      await Promise.allSettled([
+        apiClient.get('/escrow/summary', { params: activeEmail ? { email: activeEmail } : {} }).then((res) => {
+          if (res.data) {
+            if (res.data.totalInEscrow != null) setInEscrowBalance(res.data.totalInEscrow);
+            const avail = res.data.availableBalance ?? res.data.releasedAmount;
+            if (avail != null) setAvailableBalance(avail);
+          }
+        }),
+        FreelancerApiService.getTransactions('ALL', activeName, activeEmail).then((res) => {
+          const txs = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+          setTotalWithdrawn(txs.filter((t: any) => t.type === 'WITHDRAW' && t.status === 'WITHDRAWN').reduce((sum: number, t: any) => sum + Math.abs(Number(t.amount) || 0), 0));
+        }),
+        loadLinkedAccounts(),
+      ]);
+    } catch {} finally {
+      setRefreshing(false);
+    }
+  };
 
   // Handle clicking on an item in ledger
   const handleItemPress = (item: HistoryItem) => {
@@ -601,7 +628,13 @@ export default function EscrowScreen() {
 
   return (
     <View style={styles.outerWrapper}>
-      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.contentContainer}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />
+        }
+      >
         {/* Top Header Bar with Centered Title & Back Button */}
         <View style={styles.topHeaderBar}>
           <TouchableOpacity

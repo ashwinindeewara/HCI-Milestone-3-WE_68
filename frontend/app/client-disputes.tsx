@@ -2,7 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import Colors from '../src/constants/colors';
-import { FreelancerApiService, getCurrentUser } from '../src/services/api';
+import { FreelancerApiService, getCurrentUser, clearApiCache } from '../src/services/api';
 
 interface ClientDispute {
   id: string;
@@ -41,7 +41,7 @@ export default function ClientDisputesScreen() {
     <SafeAreaView style={styles.safeArea}>
       <ScrollView
         contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadDisputes(); }} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); clearApiCache(); loadDisputes(); }} />}
       >
         <TouchableOpacity onPress={() => router.back()}><Text style={styles.back}>‹ Back</Text></TouchableOpacity>
         <View style={styles.headerRow}>

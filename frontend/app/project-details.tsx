@@ -11,10 +11,11 @@ import {
   Platform,
   ActivityIndicator,
   Alert,
+  RefreshControl,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import Colors from '../src/constants/colors';
-import { FreelancerApiService, API_BASE_URL, apiClient, getCurrentUser } from '../src/services/api';
+import { FreelancerApiService, API_BASE_URL, apiClient, getCurrentUser, clearApiCache } from '../src/services/api';
 
 interface MilestoneItem {
   id: string;
@@ -75,6 +76,7 @@ export default function ProjectDetailsScreen() {
 
   const [activeTab, setActiveTab] = useState<'Overview' | 'Milestones' | 'Deliverables' | 'Payments' | 'Files' | 'Activity'>('Overview');
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Dynamic progress calculation helper
   const calculateProgressFromMilestones = (milestoneList: MilestoneItem[]) => {
@@ -403,12 +405,19 @@ export default function ProjectDetailsScreen() {
       }
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
   useEffect(() => {
     loadProjectData();
   }, [projectId]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    clearApiCache();
+    loadProjectData();
+  };
 
   const showToast = (msg: string) => {
     setSuccessToast(msg);
@@ -767,7 +776,13 @@ export default function ProjectDetailsScreen() {
           </View>
         )}
 
-        <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+        <ScrollView
+          style={styles.container}
+          contentContainerStyle={styles.contentContainer}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />
+          }
+        >
           {/* Top Back Link */}
           <TouchableOpacity
             style={styles.backLinkRow}

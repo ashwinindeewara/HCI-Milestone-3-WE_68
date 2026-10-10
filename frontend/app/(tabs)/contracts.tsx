@@ -13,7 +13,7 @@ import {
 import { useRouter } from 'expo-router';
 import Colors from '../../src/constants/colors';
 import Theme from '../../src/constants/theme';
-import { calculateMilestoneProgress, FreelancerApiService, getCurrentUser } from '../../src/services/api';
+import { calculateMilestoneProgress, FreelancerApiService, getCurrentUser, clearApiCache } from '../../src/services/api';
 
 interface ProjectDisplayItem {
   id: string;
@@ -99,6 +99,7 @@ export default function ContractsScreen() {
 
   const onRefresh = () => {
     setRefreshing(true);
+    clearApiCache();
     fetchProjects();
   };
 

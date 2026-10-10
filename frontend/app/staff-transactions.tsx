@@ -10,11 +10,12 @@ import {
   Alert,
   ActivityIndicator,
   Modal,
+  RefreshControl,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
-import apiClient from '../src/services/api';
+import apiClient, { clearApiCache } from '../src/services/api';
 import StaffBottomTabBar from '../src/components/StaffBottomTabBar';
 
 export interface StaffTxn {
@@ -43,6 +44,7 @@ export default function StaffTransactionsScreen() {
   const [searchQuery, setSearchQuery] = useState(initialSearchParam);
   const [transactions, setTransactions] = useState<StaffTxn[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [selectedTxn, setSelectedTxn] = useState<StaffTxn | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
 
@@ -118,7 +120,14 @@ export default function StaffTransactionsScreen() {
       ]);
     } finally {
       setIsLoading(false);
+      setRefreshing(false);
     }
+  };
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    clearApiCache();
+    fetchTransactions();
   };
 
   const filteredTxns = transactions.filter((t) => {
@@ -151,7 +160,13 @@ export default function StaffTransactionsScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.contentContainer}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />
+        }
+      >
         {/* Header Title & Refresh */}
         <View style={styles.topHeader}>
           <Text style={styles.headerTitle}>Transactions</Text>

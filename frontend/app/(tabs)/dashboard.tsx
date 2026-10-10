@@ -14,7 +14,7 @@ import {
 import { useRouter, useFocusEffect } from 'expo-router';
 import Colors from '../../src/constants/colors';
 import Theme from '../../src/constants/theme';
-import { calculateMilestoneProgress, FreelancerApiService, resolveMediaUrl, apiClient, getCurrentUser } from '../../src/services/api';
+import { calculateMilestoneProgress, FreelancerApiService, resolveMediaUrl, apiClient, getCurrentUser, clearApiCache } from '../../src/services/api';
 import { getUserSession } from '../../src/services/storage';
 import { clearAuthSession } from '../../src/services/authService';
 
@@ -323,6 +323,7 @@ Executed on:                    ${new Date().toLocaleDateString('en-US', { year:
 
   const onRefresh = () => {
     setRefreshing(true);
+    clearApiCache();
     loadDashboardData();
   };
 

@@ -1,11 +1,11 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, RefreshControl } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import SkeletonCard from '../src/components/SkeletonCard';
 import Colors from '../src/constants/colors';
 import AdminTabBar from '../src/components/AdminTabBar';
 import AdminToast, { ToastType } from '../src/components/AdminToast';
-import apiClient from '../src/services/api';
+import apiClient, { clearApiCache } from '../src/services/api';
 import { formatAdminDateTime } from '../src/services/dateFormat';
 import { formatAdminMoney } from '../src/services/moneyFormat';
 import {
@@ -59,8 +59,10 @@ export default function AdminTransactionsScreen() {
   const [refundReason, setRefundReason] = useState('Client requested milestone cancellation');
   const [refundNote, setRefundNote] = useState('');
 
+  const [refreshing, setRefreshing] = useState(false);
+
   // Fetch Transactions
-  const { data: txnData, isLoading } = useQuery({
+  const { data: txnData, isLoading, refetch } = useQuery({
     queryKey: ['adminTransactions'],
     queryFn: async () => {
       try {
@@ -90,6 +92,13 @@ export default function AdminTransactionsScreen() {
     retry: 2,
     retryDelay: 1000,
   });
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    clearApiCache();
+    await refetch();
+    setRefreshing(false);
+  };
 
   const platformEscrowValue = txnData?.platformEscrowValue || 0;
   const trend = txnData?.trend || '+100% settled';
@@ -256,7 +265,13 @@ export default function AdminTransactionsScreen() {
         onDismiss={() => setToast((prev) => ({ ...prev, visible: false }))}
       />
 
-      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.contentContainer}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />
+        }
+      >
         <View style={adminLayout.content}>
           <AdminScreenHeader
             title="Financial & Escrow Ledger"

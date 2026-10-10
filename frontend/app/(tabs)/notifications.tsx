@@ -13,7 +13,7 @@ import {
 import { useRouter, useFocusEffect } from 'expo-router';
 import Colors from '../../src/constants/colors';
 import Theme from '../../src/constants/theme';
-import { getCurrentUser, FreelancerApiService } from '../../src/services/api';
+import { getCurrentUser, FreelancerApiService, clearApiCache } from '../../src/services/api';
 
 interface NotificationCardItem {
   id: number | string;
@@ -166,6 +166,7 @@ export default function NotificationsScreen() {
 
   const onRefresh = () => {
     setRefreshing(true);
+    clearApiCache();
     fetchNotifications();
   };
 

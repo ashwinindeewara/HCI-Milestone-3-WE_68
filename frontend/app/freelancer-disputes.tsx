@@ -164,6 +164,7 @@ export default function FreelancerDisputesScreen() {
 
   const onRefresh = () => {
     setRefreshing(true);
+    clearApiCache();
     fetchDisputes();
   };
 

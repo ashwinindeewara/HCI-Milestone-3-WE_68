@@ -10,13 +10,14 @@ import {
   Text,
   TouchableOpacity,
   View,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
 import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
-import apiClient from '../src/services/api';
+import apiClient, { clearApiCache } from '../src/services/api';
 import { getSavedUserData, clearAuthSession } from '../src/services/authService';
 import ClientBottomTabBar from '../src/components/ClientBottomTabBar';
 
@@ -43,6 +44,8 @@ export default function ClientProfileScreen() {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  const [refreshing, setRefreshing] = useState(false);
+
   useEffect(() => {
       loadProfile();
   }, []);
@@ -55,13 +58,19 @@ export default function ClientProfileScreen() {
             return;
          }
          const response = await apiClient.get(`/clients/${currentUser.id}/profile`);
-         //console.log('CLIENT PROFILE:', response);
          setProfile(response.data);
       } catch (error: any) {
          console.error('Failed to load client profile:', error?.response?.data || error);
       } finally {
          setLoading(false);
+         setRefreshing(false);
       }
+  };
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    clearApiCache();
+    loadProfile();
   };
 
   const clientProfile: ClientProfileData = {
@@ -245,6 +254,9 @@ export default function ClientProfileScreen() {
           style={styles.container}
           contentContainerStyle={styles.contentContainer}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />
+          }
         >
 
           {/* ================= PROFILE CARD ================= */}

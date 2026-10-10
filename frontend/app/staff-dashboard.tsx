@@ -8,11 +8,12 @@ import {
   SafeAreaView,
   ActivityIndicator,
   Modal,
+  RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
-import apiClient from '../src/services/api';
+import apiClient, { clearApiCache } from '../src/services/api';
 import StaffBottomTabBar from '../src/components/StaffBottomTabBar';
 
 export interface ActivityItem {
@@ -39,6 +40,7 @@ export interface DashboardMetrics {
 export default function StaffDashboardScreen() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [selectedTxn, setSelectedTxn] = useState<ActivityItem | null>(null);
   const [showTxnModal, setShowTxnModal] = useState(false);
 
@@ -73,7 +75,14 @@ export default function StaffDashboardScreen() {
       console.error('Failed to fetch dashboard metrics:', err);
     } finally {
       setIsLoading(false);
+      setRefreshing(false);
     }
+  };
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    clearApiCache();
+    fetchDashboardMetrics();
   };
 
   const handleInspectActivityItem = (item: ActivityItem) => {
@@ -90,7 +99,13 @@ export default function StaffDashboardScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.contentContainer}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />
+        }
+      >
         {/* Header Title & Refresh */}
         <View style={styles.headerRow}>
           <View>
