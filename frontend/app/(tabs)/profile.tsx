@@ -18,7 +18,8 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import Colors from '../../src/constants/colors';
 import { VerifiedBadge, StarIcon, ExitLogoutIcon } from '../../src/components/Icons';
 import apiClient, { resolveMediaUrl, getCurrentUser, API_BASE_URL, FreelancerApiService, clearApiCache, pickDocument } from '../../src/services/api';
-import { clearAuthSession } from '../../src/services/authService';
+import { clearAuthSession, updateSavedUserData } from '../../src/services/authService';
+import { saveUserSession, getUserSession } from '../../src/services/storage';
 
 export interface ProjectItem {
   id: string;
@@ -215,6 +216,7 @@ export default function FreelancerProfileScreen() {
   // Fetch live profile from Spring Boot Backend on mount and focus
   useFocusEffect(
     React.useCallback(() => {
+      clearApiCache();
       fetchProfile();
     }, [])
   );
@@ -318,28 +320,12 @@ export default function FreelancerProfileScreen() {
     const updatedEducation = editEducation.trim();
     const updatedSkills = editSkills;
 
-    const newProfileState: FreelancerProfileData = {
-      ...profile,
-      name: updatedName,
-      title: updatedTitle,
-      completedProjects: updatedCompleted,
-      hourlyRate: updatedRate,
-      status: updatedStatus,
-      about: updatedAbout,
-      location: updatedLocation,
-      phone: updatedPhone,
-      education: updatedEducation,
-      skills: updatedSkills,
-    };
-
-    setProfile(newProfileState);
-    setIsEditing(false);
-
     try {
       setSaving(true);
       const currentUser = getCurrentUser();
       const targetEmail = profile.email || currentUser?.email || 'chathuniimalsha.com';
-      await apiClient.put(
+      
+      const res = await apiClient.put(
         '/freelancer/profile',
         {
           email: targetEmail,
@@ -358,15 +344,48 @@ export default function FreelancerProfileScreen() {
         },
         { params: { email: targetEmail } }
       );
+
+      // Invalidate API cache immediately
+      clearApiCache();
+
+      // Synchronize session state across application
+      updateSavedUserData({ fullName: updatedName, email: targetEmail });
+      const currentSession = getUserSession();
+      if (currentSession) {
+        saveUserSession({ ...currentSession, fullName: updatedName });
+      }
+
+      // Read fresh backend response if returned
+      const freshData = res?.data;
+      const newProfileState: FreelancerProfileData = {
+        ...profile,
+        name: freshData?.fullName || updatedName,
+        title: freshData?.title != null ? freshData.title : updatedTitle,
+        avatarUri: freshData?.avatarUrl || profile.avatarUri,
+        completedProjects: freshData?.completedProjects != null ? freshData.completedProjects : updatedCompleted,
+        hourlyRate: freshData?.hourlyRate != null ? freshData.hourlyRate : updatedRate,
+        status: (freshData?.status as any) || updatedStatus,
+        about: freshData?.about != null ? freshData.about : updatedAbout,
+        location: freshData?.location != null ? freshData.location : updatedLocation,
+        phone: freshData?.phone != null ? freshData.phone : updatedPhone,
+        education: freshData?.education != null ? freshData.education : updatedEducation,
+        skills: Array.isArray(freshData?.skills) ? freshData.skills : updatedSkills,
+      };
+
+      setProfile(newProfileState);
       if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
         localStorage.setItem('auth_name', updatedName);
         const k = `profile_cache_${currentUser?.email || currentUser?.fullName || 'default'}`;
         localStorage.setItem(k, JSON.stringify(newProfileState));
       }
+
+      setIsEditing(false);
       setSaveToast(true);
       setTimeout(() => setSaveToast(false), 3500);
-    } catch (err) {
+      Alert.alert('Profile Updated', 'Your profile details have been saved successfully.');
+    } catch (err: any) {
       console.warn('Backend profile update warning:', err);
+      Alert.alert('Update Failed', err.message || 'Could not save profile changes to server.');
     } finally {
       setSaving(false);
     }

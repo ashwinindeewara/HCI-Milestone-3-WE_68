@@ -15,7 +15,9 @@ import {
 import { useRouter } from 'expo-router';
 import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
-import { FreelancerApiService, API_BASE_URL, resolveMediaUrl, getCurrentUser, pickDocument } from '../src/services/api';
+import { FreelancerApiService, API_BASE_URL, resolveMediaUrl, getCurrentUser, pickDocument, clearApiCache } from '../src/services/api';
+import { updateSavedUserData } from '../src/services/authService';
+import { saveUserSession, getUserSession } from '../src/services/storage';
 import { VerifiedBadge, StarIcon } from '../src/components/Icons';
 
 interface FeaturedProjectItem {
@@ -280,10 +282,37 @@ export default function EditProfileScreen() {
         })),
       };
 
-      await FreelancerApiService.updateProfile(payload, targetEmail);
+      const res = await FreelancerApiService.updateProfile(payload, targetEmail);
+      const freshData = res?.data;
+
+      // Invalidate API cache across application
+      clearApiCache();
+
+      // Synchronize active session user data
+      updateSavedUserData({ fullName: profile.fullName, email: targetEmail });
+      const currentSession = getUserSession();
+      if (currentSession) {
+        saveUserSession({ ...currentSession, fullName: profile.fullName });
+      }
+
+      // Update local profile state with fresh response data if returned
+      if (freshData) {
+        setProfile((prev) => ({
+          ...prev,
+          fullName: freshData.fullName || profile.fullName,
+          title: freshData.title != null ? freshData.title : profile.title,
+          avatarUrl: freshData.avatarUrl || profile.avatarUrl,
+          about: freshData.about != null ? freshData.about : profile.about,
+          location: freshData.location != null ? freshData.location : profile.location,
+          phone: freshData.phone != null ? freshData.phone : profile.phone,
+          education: freshData.education != null ? freshData.education : profile.education,
+          skills: Array.isArray(freshData.skills) ? freshData.skills : profile.skills,
+        }));
+      }
+
       if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
         localStorage.setItem('auth_name', profile.fullName);
-        const k = `profile_cache_${currentUser?.email || currentUser?.fullName || 'default'}`;
+        const k = `profile_cache_${activeUser?.email || activeUser?.fullName || 'default'}`;
         localStorage.setItem(k, JSON.stringify({
           name: profile.fullName,
           email: profile.email,
@@ -302,11 +331,14 @@ export default function EditProfileScreen() {
           reviewCount: profile.reviewCount,
         }));
       }
+
       setShowSuccessToast(true);
+      Alert.alert('Profile Updated', 'Your profile changes have been saved successfully.');
+
       setTimeout(() => {
         setShowSuccessToast(false);
         safeGoBack();
-      }, 1800);
+      }, 1500);
     } catch (e: any) {
       Alert.alert('Save Failed', e.message || 'Could not save profile changes to database.');
     } finally {
