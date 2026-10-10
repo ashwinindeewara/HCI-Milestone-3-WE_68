@@ -519,7 +519,7 @@ export default function ClientDashboardScreen() {
 
           <TouchableOpacity
             style={styles.actionPillWhite}
-            onPress={() => router.push('/create-dispute')}
+            onPress={() => router.push('/client-disputes')}
             activeOpacity={0.8}
           >
             <Text style={styles.actionPillIcon}>+</Text>

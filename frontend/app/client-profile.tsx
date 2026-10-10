@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
+  ActivityIndicator,
   Image,
   SafeAreaView,
   ScrollView,
@@ -9,7 +10,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 
 import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
@@ -18,103 +19,162 @@ import { getSavedUserData, clearAuthSession } from '../src/services/authService'
 
 interface ClientProfileData {
   id?: number | string;
+  userId?: number | string;
   fullName?: string;
   email?: string;
   profileImageUrl?: string;
+  avatarUrl?: string;
   location?: string;
+  company?: string;
   companyName?: string;
   about?: string;
   status?: string;
-  skills?: string[];
+  verified?: boolean;
+  isVerified?: boolean;
+  skills?: string[] | string;
+  specialization?: string;
   projectsPosted?: number;
   memberSince?: string | number;
   createdAt?: string;
+  [key: string]: unknown;
 }
+
+const unwrapContracts = (payload: any): any[] => {
+  let candidate = payload;
+  for (let depth = 0; depth < 4; depth += 1) {
+    if (Array.isArray(candidate)) return candidate;
+    if (!candidate || typeof candidate !== 'object') return [];
+    candidate = candidate.contracts ?? candidate.items ?? candidate.content ?? candidate.data ?? candidate.result;
+  }
+  return Array.isArray(candidate) ? candidate : [];
+};
 
 export default function ClientProfileScreen() {
   const router = useRouter();
-  const [profile, setProfile] = useState<any>(null);
+  const [profile, setProfile] = useState<ClientProfileData | null>(null);
   const [loading, setLoading] = useState(true);
-  const currentUser: ClientProfileData | null = getSavedUserData();
+  const [loadError, setLoadError] = useState('');
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [fetchedProjectCount, setFetchedProjectCount] = useState<number | null>(null);
 
-  useEffect(() => {
-      loadProfile();
+  const loadProfile = useCallback(async () => {
+    setLoading(true);
+    setLoadError('');
+
+    const savedUser = getSavedUserData();
+    const userId = savedUser?.id ?? savedUser?.userId;
+
+    if (userId === null || userId === undefined || String(userId).trim() === '') {
+      setProfile(null);
+      setLoadError('Your user ID is missing from the saved login session. Please sign in again.');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const response = await apiClient.get(`/clients/${encodeURIComponent(String(userId))}/profile`, {
+        timeout: 15000,
+      });
+      const payload = response.data?.profile ?? response.data?.data ?? response.data;
+      if (!payload || typeof payload !== 'object') {
+        throw new Error('The profile API returned an empty or invalid response.');
+      }
+
+      setProfile(payload as ClientProfileData);
+
+      // Projects Posted is derived from the client's contract data when that endpoint is available.
+      // If the endpoint fails, keep any count the profile endpoint explicitly returned.
+      const clientName = String(
+        payload.fullName ?? payload.name ?? payload.companyName ?? payload.company ??
+        savedUser?.fullName ?? savedUser?.name ?? savedUser?.company ?? savedUser?.email ?? ''
+      ).trim();
+      if (clientName) {
+        try {
+          const contractsResponse = await apiClient.get(
+            `/contracts/client/${encodeURIComponent(clientName)}`,
+            { timeout: 10000 },
+          );
+          const contractsPayload = contractsResponse.data;
+          const contracts = unwrapContracts(contractsPayload);
+          const count = contracts.length || (
+            contractsPayload && typeof contractsPayload === 'object' &&
+            (contractsPayload.id || contractsPayload.contractId) ? 1 : 0
+          );
+          setFetchedProjectCount(count);
+        } catch (countError: any) {
+          console.info('[ClientProfile] Could not load project count:', countError?.response?.status ?? countError?.message);
+          setFetchedProjectCount(
+            typeof payload.projectsPosted === 'number' ? payload.projectsPosted : null,
+          );
+        }
+      } else {
+        setFetchedProjectCount(
+          typeof payload.projectsPosted === 'number' ? payload.projectsPosted : null,
+        );
+      }
+    } catch (error: any) {
+      console.error('[ClientProfile] Failed to load profile:', error?.response?.data ?? error);
+      setLoadError(
+        error?.response?.data?.message ?? error?.response?.data?.error ??
+        error?.message ?? 'Could not load your profile. Please try again.',
+      );
+      setProfile(null);
+      setFetchedProjectCount(null);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const loadProfile = async () => {
-      try {
-         const currentUser = getSavedUserData();
-         if (!currentUser?.id) {
-            console.error('User ID not found');
-            return;
-         }
-         const response = await apiClient.get(`/clients/${currentUser.id}/profile`);
-         //console.log('CLIENT PROFILE:', response);
-         setProfile(response.data);
-      } catch (error: any) {
-         console.error('Failed to load client profile:', error?.response?.data || error);
-      } finally {
-         setLoading(false);
-      }
-  };
+  // Refresh when returning from Edit Profile so saved changes appear immediately.
+  useFocusEffect(
+    useCallback(() => {
+      loadProfile();
+    }, [loadProfile]),
+  );
 
-  /*
-   * At the moment the login response may only contain User data.
-   * Later, when you call GET /clients/{userId}/profile,
-   * you can replace this with the API response.
-   */
-  const clientProfile: ClientProfileData = {
-    ...currentUser,
+  const savedUser: ClientProfileData | null = getSavedUserData();
 
-    // Temporary fallback values for fields not yet returned by login
-    location: profile?.location || 'Colombo',
-    companyName: profile?.companyName || 'Sysco Labs',
-    memberSince: profile?.memberSince || '2025',
-    about: profile?.about || 'Creative UI/UX Designer with a strong command of Figma, usability research, and modern design workflows. Dedicated to crafting accessible, user-tested interfaces that delight users and drive business goals',
-    status: profile?.status || 'Available',
-    projectsPosted: profile?.projectsPosted ?? 0,
-    skills: profile?.skills,
+  // Map the backend DTO's actual field names. Do not invent values when the API is empty.
+  const rawSkills = profile?.skills ?? savedUser?.skills;
+  const skills: string[] = Array.isArray(rawSkills)
+    ? rawSkills.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    : typeof rawSkills === 'string'
+      ? rawSkills.split(',').map((item) => item.trim()).filter(Boolean)
+      : [];
+
+  const clientProfile: Omit<ClientProfileData, 'projectsPosted'> & { projectsPosted: number | null } = {
+    ...savedUser,
+    ...profile,
+    id: profile?.id ?? profile?.userId ?? savedUser?.id ?? savedUser?.userId,
+    fullName: profile?.fullName ?? savedUser?.fullName ?? savedUser?.name,
+    email: profile?.email ?? savedUser?.email,
+    profileImageUrl: profile?.profileImageUrl ?? profile?.avatarUrl ?? savedUser?.profileImageUrl,
+    location: profile?.location ?? savedUser?.location,
+    companyName: profile?.companyName ?? profile?.company ?? savedUser?.companyName ?? savedUser?.company,
+    about: profile?.about ?? savedUser?.about,
+    status: profile?.status ?? savedUser?.status,
+    verified: profile?.verified === true || profile?.isVerified === true || savedUser?.verified === true,
+    skills,
+    memberSince: profile?.memberSince ?? savedUser?.memberSince,
+    createdAt: profile?.createdAt ?? savedUser?.createdAt,
+    projectsPosted: fetchedProjectCount ?? (typeof profile?.projectsPosted === 'number' ? profile.projectsPosted : null),
   };
 
   const getInitials = (name?: string) => {
-    if (!name) return 'U';
-
-    return name
-      .trim()
-      .split(/\s+/)
-      .slice(0, 2)
-      .map((word) => word.charAt(0).toUpperCase())
-      .join('');
+    if (!name?.trim()) return 'U';
+    return name.trim().split(/\s+/).slice(0, 2).map((word) => word.charAt(0).toUpperCase()).join('');
   };
 
   const getMemberSince = () => {
-    if (clientProfile.memberSince) {
-      const value = String(clientProfile.memberSince);
-      if (/^\d{4}$/.test(value)) {
-        return value;
-      }
-
-      const date = new Date(value);
-      if (!Number.isNaN(date.getTime())) {
-        return String(date.getFullYear());
-      }
-    }
-
-    if (clientProfile.createdAt) {
-      const date = new Date(clientProfile.createdAt);
-
-      if (!Number.isNaN(date.getTime())) {
-        return String(date.getFullYear());
-      }
-    }
-
-    return '2024';
+    const value = clientProfile.memberSince ?? clientProfile.createdAt;
+    if (value === undefined || value === null || String(value).trim() === '') return '—';
+    const text = String(value);
+    if (/^\d{4}$/.test(text)) return text;
+    const date = new Date(text);
+    return Number.isNaN(date.getTime()) ? '—' : String(date.getFullYear());
   };
 
-  const handleLogout = () => {
-      setShowLogoutModal(true);
-  };
+  const handleLogout = () => setShowLogoutModal(true);
 
   const confirmLogout = () => {
     clearAuthSession();
@@ -122,27 +182,7 @@ export default function ClientProfileScreen() {
     router.replace('/login');
   };
 
-  const handleEditProfile = () => {
-    // Change this route to the actual edit-profile screen
-    router.push('/client-edit-profile');
-  };
-
-  const handleHome = () => {
-    router.replace('/client-dashboard');
-  };
-
-  const handleProjects = () => {
-    router.push('/client-projects');
-  };
-
-  const handleFindTalent = () => {
-    router.push('/(tabs)/find-talent');
-  };
-
-  const handlePayments = () => {
-    router.push('/client-payments');
-  };
-
+  const handleEditProfile = () => router.push('/client-edit-profile');
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.screen}>
@@ -184,6 +224,23 @@ export default function ClientProfileScreen() {
           contentContainerStyle={styles.contentContainer}
           showsVerticalScrollIndicator={false}
         >
+          {loading && (
+            <View style={{ paddingVertical: 18, alignItems: 'center' }}>
+              <ActivityIndicator size="small" color={Colors.primary} />
+              <Text style={{ color: Colors.neutralMedium, fontSize: 12, marginTop: 8 }}>
+                Loading profile from server…
+              </Text>
+            </View>
+          )}
+
+          {!!loadError && !loading && (
+            <View style={{ backgroundColor: '#FEF2F2', borderColor: '#FECACA', borderWidth: 1, borderRadius: 10, padding: 12, marginBottom: 12 }}>
+              <Text style={{ color: '#B91C1C', fontSize: 12, marginBottom: 8 }}>{loadError}</Text>
+              <TouchableOpacity onPress={loadProfile} activeOpacity={0.8} style={{ alignSelf: 'flex-start', backgroundColor: Colors.primary, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 8 }}>
+                <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 12 }}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           {/* ================= PROFILE CARD ================= */}
           <View style={styles.profileCard}>
@@ -204,14 +261,11 @@ export default function ClientProfileScreen() {
                 </View>
               )}
 
-              {/* Verified Badge */}
-              <View style={styles.verifiedBadge}>
-                <Ionicons
-                  name="checkmark"
-                  size={11}
-                  color="#FFFFFF"
-                />
-              </View>
+              {clientProfile.verified === true && (
+                <View style={styles.verifiedBadge}>
+                  <Ionicons name="checkmark" size={11} color="#FFFFFF" />
+                </View>
+              )}
             </View>
 
             <View style={styles.nameRow}>
@@ -219,20 +273,22 @@ export default function ClientProfileScreen() {
                 {clientProfile.fullName || 'User'}
               </Text>
 
-              <Ionicons
-                name="checkmark-circle"
-                size={15}
-                color={Colors.primary}
-                style={styles.verifiedIcon}
-              />
+              {clientProfile.verified === true && (
+                <Ionicons
+                  name="checkmark-circle"
+                  size={15}
+                  color={Colors.primary}
+                  style={styles.verifiedIcon}
+                />
+              )}
             </View>
 
             <Text style={styles.userLocation}>
-              {clientProfile.location}
+              {clientProfile.location?.trim() || 'Location not provided'}
             </Text>
 
             <Text style={styles.companyName}>
-              {clientProfile.companyName}
+              {clientProfile.companyName?.trim() || 'Company not provided'}
             </Text>
           </View>
 
@@ -261,7 +317,7 @@ export default function ClientProfileScreen() {
               </Text>
 
               <Text style={styles.statValue}>
-                {clientProfile.projectsPosted ?? 0} Projects
+                {clientProfile.projectsPosted === null ? '—' : `${clientProfile.projectsPosted} Projects`}
               </Text>
             </View>
 
@@ -280,7 +336,7 @@ export default function ClientProfileScreen() {
                 <View style={styles.statusDot} />
 
                 <Text style={styles.statusValue}>
-                  {clientProfile.status}
+                  {clientProfile.status?.trim() || 'Not provided'}
                 </Text>
               </View>
             </View>
@@ -293,7 +349,7 @@ export default function ClientProfileScreen() {
             </Text>
 
             <Text style={styles.aboutText}>
-              {clientProfile.about}
+              {clientProfile.about?.trim() || 'No about information added yet.'}
             </Text>
           </View>
 
@@ -303,20 +359,17 @@ export default function ClientProfileScreen() {
               Skills
             </Text>
 
-            <View style={styles.skillsContainer}>
-              {clientProfile.skills?.map(
-                (skill, index) => (
-                  <View
-                    key={`${skill}-${index}`}
-                    style={styles.skillChip}
-                  >
-                    <Text style={styles.skillText}>
-                      {formatSkillName(skill)}
-                    </Text>
+            {skills.length > 0 ? (
+              <View style={styles.skillsContainer}>
+                {skills.map((skill, index) => (
+                  <View key={`${skill}-${index}`} style={styles.skillChip}>
+                    <Text style={styles.skillText}>{formatSkillName(skill)}</Text>
                   </View>
-                )
-              )}
-            </View>
+                ))}
+              </View>
+            ) : (
+              <Text style={styles.aboutText}>No skills added yet.</Text>
+            )}
           </View>
 
           {/* ================= EDIT PROFILE ================= */}
