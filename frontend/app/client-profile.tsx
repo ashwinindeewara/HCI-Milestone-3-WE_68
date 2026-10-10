@@ -13,11 +13,11 @@ import {
   RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 
 import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
-import apiClient, { clearApiCache } from '../src/services/api';
+import apiClient, { clearApiCache, getCurrentUser } from '../src/services/api';
 import { getSavedUserData, clearAuthSession } from '../src/services/authService';
 import ClientBottomTabBar from '../src/components/ClientBottomTabBar';
 
@@ -40,31 +40,54 @@ export default function ClientProfileScreen() {
   const router = useRouter();
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const currentUser: ClientProfileData | null = getSavedUserData();
+  const currentUser: ClientProfileData | null = getCurrentUser() || getSavedUserData();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
   const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
+  useFocusEffect(
+    React.useCallback(() => {
+      clearApiCache();
       loadProfile();
-  }, []);
+    }, [])
+  );
 
   const loadProfile = async () => {
-      try {
-         const currentUser = getSavedUserData();
-         if (!currentUser?.id) {
-            console.error('User ID not found');
-            return;
-         }
-         const response = await apiClient.get(`/clients/${currentUser.id}/profile`);
-         setProfile(response.data);
-      } catch (error: any) {
-         console.error('Failed to load client profile:', error?.response?.data || error);
-      } finally {
-         setLoading(false);
-         setRefreshing(false);
-      }
+    try {
+       const activeUser = getCurrentUser() || getSavedUserData();
+       const userId = activeUser?.id || activeUser?.userId;
+       const email = activeUser?.email;
+
+       let fetchedData = null;
+
+       if (userId) {
+          try {
+             const response = await apiClient.get(`/clients/${userId}/profile`);
+             fetchedData = response.data;
+          } catch (e) {
+             console.warn('Failed to load client profile by ID:', e);
+          }
+       }
+
+       if (!fetchedData && email) {
+          try {
+             const response = await apiClient.get(`/profile/email/${encodeURIComponent(email)}`);
+             fetchedData = response.data;
+          } catch (e) {
+             console.warn('Failed to load client profile by email:', e);
+          }
+       }
+
+       if (fetchedData) {
+          setProfile(fetchedData);
+       }
+    } catch (error: any) {
+       console.error('Failed to load client profile:', error?.response?.data || error);
+    } finally {
+       setLoading(false);
+       setRefreshing(false);
+    }
   };
 
   const onRefresh = () => {
@@ -73,16 +96,19 @@ export default function ClientProfileScreen() {
     loadProfile();
   };
 
+  const activeUser = getCurrentUser() || currentUser;
   const clientProfile: ClientProfileData = {
-    ...currentUser,
+    ...activeUser,
     ...profile,
-    profileImageUrl: profile?.profileImageUrl || currentUser?.profileImageUrl,
-    location: profile?.location || currentUser?.location || '',
-    companyName: profile?.company || profile?.companyName || currentUser?.company || '',
-    memberSince: profile?.memberSince || profile?.createdAt || currentUser?.createdAt,
-    about: profile?.about || currentUser?.about || '',
-    status: profile?.status || currentUser?.status || 'Active',
-    projectsPosted: profile?.projectsPosted ?? 0,
+    fullName: profile?.fullName || activeUser?.fullName || activeUser?.name || 'User',
+    email: profile?.email || activeUser?.email || '',
+    profileImageUrl: profile?.profileImageUrl || profile?.avatarUrl || activeUser?.profileImageUrl,
+    location: profile?.location || activeUser?.location || '',
+    companyName: profile?.company || profile?.companyName || activeUser?.company || activeUser?.companyName || '',
+    memberSince: profile?.memberSince || profile?.createdAt || activeUser?.createdAt || '2024',
+    about: profile?.about || activeUser?.about || '',
+    status: profile?.status || activeUser?.status || 'Active',
+    projectsPosted: profile?.projectsPosted ?? activeUser?.projectsPosted ?? 0,
   };
 
   const getInitials = (name?: string) => {

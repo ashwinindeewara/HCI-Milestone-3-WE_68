@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   Alert,
   Image,
@@ -7,17 +7,57 @@ import {
   Text,
   TouchableOpacity,
   View,
+  ActivityIndicator,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import Colors from '../../src/constants/colors';
 import Theme from '../../src/constants/theme';
 import { TALENT_PROFILES } from '../../src/constants/talentProfiles';
+import apiClient, { clearApiCache } from '../../src/services/api';
 
 export default function TalentProfileScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id?: string }>();
-  const profile = TALENT_PROFILES.find((talent) => talent.id === id) || TALENT_PROFILES[0];
+  const initialTalent = TALENT_PROFILES.find((talent) => talent.id === id) || TALENT_PROFILES[0];
+  const [profile, setProfile] = useState<any>(initialTalent);
+  const [loading, setLoading] = useState(false);
   const [avatarUnavailable, setAvatarUnavailable] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      clearApiCache();
+      if (id) {
+        fetchDynamicTalent();
+      }
+    }, [id])
+  );
+
+  const fetchDynamicTalent = async () => {
+    try {
+      setLoading(true);
+      const res = await apiClient.get('/freelancer/profile', { params: { id } });
+      if (res.data) {
+        const d = res.data;
+        setProfile({
+          ...initialTalent,
+          id: String(d.id || id),
+          name: d.fullName || d.name || initialTalent.name,
+          role: d.title || d.role || initialTalent.role,
+          avatarUrl: d.avatarUrl || d.profileImageUrl || initialTalent.avatarUrl,
+          rating: d.rating != null ? d.rating : initialTalent.rating,
+          jobsCount: d.completedProjects != null ? `${d.completedProjects}` : initialTalent.jobsCount,
+          hourlyRate: d.hourlyRate != null ? `$${d.hourlyRate}/hr` : initialTalent.hourlyRate,
+          availability: d.status || initialTalent.availability,
+          bio: d.about || d.bio || initialTalent.bio,
+          skills: Array.isArray(d.skills) && d.skills.length > 0 ? d.skills : initialTalent.skills,
+        });
+      }
+    } catch (err) {
+      console.warn('Dynamic talent fetch warning:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const openInvite = () => {
     router.push({
@@ -46,7 +86,7 @@ export default function TalentProfileScreen() {
           {avatarUnavailable ? (
             <View style={styles.avatarFallback}>
               <Text style={styles.avatarInitials}>
-                {profile.name.split(' ').map((part) => part[0]).join('').slice(0, 2)}
+                {profile.name.split(' ').map((part: string) => part[0]).join('').slice(0, 2)}
               </Text>
             </View>
           ) : (
@@ -96,7 +136,7 @@ export default function TalentProfileScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Core skills</Text>
           <View style={styles.skillsGrid}>
-            {profile.skills.map((skill) => (
+            {profile.skills.map((skill: string) => (
               <View key={skill} style={styles.skillChip}>
                 <Text style={styles.skillText}>{skill}</Text>
               </View>
@@ -107,7 +147,7 @@ export default function TalentProfileScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Selected work</Text>
           <View style={styles.portfolioRow}>
-            {profile.portfolio.map((work) => (
+            {profile.portfolio.map((work: any) => (
               <View key={work.title} style={styles.portfolioItem}>
                 <Image source={{ uri: work.imageUrl }} style={styles.portfolioImage} />
                 <Text numberOfLines={1} style={styles.portfolioTitle}>{work.title}</Text>

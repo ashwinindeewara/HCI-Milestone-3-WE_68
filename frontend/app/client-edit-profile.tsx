@@ -12,11 +12,11 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 
 import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
-import apiClient, { getCurrentUser } from '../src/services/api';
+import apiClient, { getCurrentUser, clearApiCache } from '../src/services/api';
 import { getSavedUserData, updateSavedUserData } from '../src/services/authService';
 import ClientBottomTabBar from '../src/components/ClientBottomTabBar';
 
@@ -51,9 +51,12 @@ export default function ClientEditProfileScreen() {
   const [companyName, setCompanyName] = useState('');
   const [about, setAbout] = useState('');
 
-  useEffect(() => {
-    loadProfile();
-  }, []);
+  useFocusEffect(
+    React.useCallback(() => {
+      clearApiCache();
+      loadProfile();
+    }, [])
+  );
 
   const loadProfile = async () => {
     try {
@@ -61,15 +64,12 @@ export default function ClientEditProfileScreen() {
       const apiUser = getCurrentUser();
       const currentUser = savedUser || apiUser || {};
       const userId = currentUser.id || currentUser.userId;
-
-      if (!userId) {
-        throw new Error('Your account ID is unavailable. Please sign in again.');
-      }
+      const email = currentUser.email;
 
       const initialProfile: ClientProfileData = {
-        userId,
+        userId: userId,
         fullName: currentUser.fullName || currentUser.name || '',
-        email: currentUser.email || '',
+        email: email || '',
         location: currentUser.location || '',
         companyName: currentUser.company || currentUser.companyName || '',
         about: currentUser.about || '',
@@ -80,27 +80,45 @@ export default function ClientEditProfileScreen() {
       setCompanyName(initialProfile.companyName || '');
       setAbout(initialProfile.about || '');
 
-      const response = await apiClient.get(`/clients/${userId}/profile`);
-      const data: ClientProfileData = {
-        ...initialProfile,
-        ...response.data,
-        userId,
-        fullName: response.data?.fullName || initialProfile.fullName,
-        email: response.data?.email || initialProfile.email,
-        companyName: response.data?.company || response.data?.companyName || initialProfile.companyName,
-      };
+      let responseData = null;
+      if (userId) {
+        try {
+          const res = await apiClient.get(`/clients/${userId}/profile`);
+          responseData = res.data;
+        } catch (e) {
+          console.warn('Failed client profile fetch by ID:', e);
+        }
+      }
 
-      setProfile(data);
-      setFullName(data.fullName || '');
-      setLocation(data.location || '');
-      setCompanyName(data.companyName || '');
-      setAbout(data.about || '');
+      if (!responseData && email) {
+        try {
+          const res = await apiClient.get(`/profile/email/${encodeURIComponent(email)}`);
+          responseData = res.data;
+        } catch (e) {
+          console.warn('Failed profile fetch by email:', e);
+        }
+      }
+
+      if (responseData) {
+        const data: ClientProfileData = {
+          ...initialProfile,
+          ...responseData,
+          userId: userId || responseData.id,
+          fullName: responseData?.fullName || initialProfile.fullName,
+          email: responseData?.email || initialProfile.email,
+          companyName: responseData?.company || responseData?.companyName || initialProfile.companyName,
+          location: responseData?.location || initialProfile.location,
+          about: responseData?.about || initialProfile.about,
+        };
+
+        setProfile(data);
+        setFullName(data.fullName || '');
+        setLocation(data.location || '');
+        setCompanyName(data.companyName || '');
+        setAbout(data.about || '');
+      }
     } catch (error: any) {
       console.error('Failed to load client profile:', error?.response?.data || error);
-      Alert.alert(
-        'Unable to load profile',
-        error?.response?.data?.message || error?.message || 'Please try again.'
-      );
     } finally {
       setLoading(false);
     }
@@ -112,11 +130,6 @@ export default function ClientEditProfileScreen() {
       const apiUser = getCurrentUser();
       const currentUser = savedUser || apiUser || {};
       const userId = profile?.userId || currentUser.id || currentUser.userId;
-
-      if (!userId) {
-        Alert.alert('Unable to save profile', 'Your account ID is unavailable. Please sign in again.');
-        return;
-      }
 
       if (!fullName.trim()) {
         Alert.alert('Name required', 'Please enter your name.');
@@ -145,12 +158,32 @@ export default function ClientEditProfileScreen() {
         about: about.trim(),
       };
 
-      const response = await apiClient.put(`/clients/${userId}/profile`, requestBody);
+      let responseData = null;
+      if (userId) {
+        try {
+          const response = await apiClient.put(`/clients/${userId}/profile`, requestBody);
+          responseData = response.data;
+        } catch (e) {
+          try {
+            const response = await apiClient.put(`/profile/${userId}`, requestBody);
+            responseData = response.data;
+          } catch (err) {
+            console.warn('Client profile PUT fallback failed:', err);
+          }
+        }
+      }
+
+      clearApiCache();
+
       const updatedProfile: ClientProfileData = {
         ...profile,
-        ...response.data,
-        companyName: response.data?.company || requestBody.company,
+        ...(responseData || {}),
+        fullName: responseData?.fullName || requestBody.fullName,
+        location: responseData?.location || requestBody.location,
+        companyName: responseData?.company || responseData?.companyName || requestBody.company,
+        about: responseData?.about || requestBody.about,
       };
+
       setProfile(updatedProfile);
       setFullName(updatedProfile.fullName || requestBody.fullName);
       setLocation(updatedProfile.location || requestBody.location);

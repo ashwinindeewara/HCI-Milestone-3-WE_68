@@ -9,10 +9,10 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
-import apiClient from '../src/services/api';
+import apiClient, { clearApiCache } from '../src/services/api';
 
 interface PortfolioItem {
   title: string;
@@ -247,9 +247,12 @@ export default function TalentProfileScreen() {
     }
   }, [id]);
 
-  useEffect(() => {
-    loadProfile();
-  }, [loadProfile]);
+  useFocusEffect(
+    useCallback(() => {
+      clearApiCache();
+      loadProfile();
+    }, [loadProfile])
+  );
 
   const initials = useMemo(
     () => getInitials(profile.name || 'Freelancer'),

@@ -236,8 +236,8 @@ export default function FreelancerProfileScreen() {
           (data.email && data.email.toLowerCase().includes('chathuni'));
         const fallback = isChathuni ? DEFAULT_PROFILE : getInitialProfile();
         const updatedProfile: FreelancerProfileData = {
-          name: data.fullName || fallback.name,
-          email: data.email || fallback.email,
+          name: data.fullName || currentUser?.fullName || fallback.name,
+          email: data.email || currentUser?.email || fallback.email,
           title: data.title != null ? data.title : fallback.title,
           avatarUri: data.avatarUrl || '',
           rating: data.rating != null ? data.rating : fallback.rating,

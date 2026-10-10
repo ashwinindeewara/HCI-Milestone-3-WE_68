@@ -13,10 +13,10 @@ import {
   ActivityIndicator,
   Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
-import apiClient from '../src/services/api';
+import apiClient, { getCurrentUser, clearApiCache } from '../src/services/api';
 import { performLogout, getSavedUserData, updateSavedUserData } from '../src/services/authService';
 import StaffBottomTabBar from '../src/components/StaffBottomTabBar';
 
@@ -40,11 +40,11 @@ export default function StaffProfileScreen() {
 
   // General user profile details state
   const [profile, setProfile] = useState<ProfileState>(() => {
-    const saved = getSavedUserData();
+    const saved = getCurrentUser() || getSavedUserData();
     return {
       id: saved?.userId || saved?.id || 1,
-      fullName: saved?.fullName || 'Dasun Geeneth',
-      email: saved?.email || 'chathuniimalsha.com',
+      fullName: saved?.fullName || saved?.name || 'Staff User',
+      email: saved?.email || '',
       location: saved?.location || 'Colombo, Sri Lanka',
       company: saved?.company || 'FreelanceFlow Systems',
       experience: saved?.experience || '4+ Years',
@@ -55,34 +55,63 @@ export default function StaffProfileScreen() {
   // Edit form state
   const [editForm, setEditForm] = useState<ProfileState>({ ...profile });
 
-  // Fetch latest general user profile from Spring Boot & Neon PostgreSQL backend
-  useEffect(() => {
-    fetchProfileData();
-  }, []);
+  // Fetch latest general user profile from Spring Boot backend on mount and focus
+  useFocusEffect(
+    React.useCallback(() => {
+      clearApiCache();
+      fetchProfileData();
+    }, [])
+  );
 
   const fetchProfileData = async () => {
     setIsLoading(true);
     try {
-      const savedUser = getSavedUserData();
-      const targetId = savedUser?.userId || savedUser?.id || profile.id;
-      const response = targetId 
-        ? await apiClient.get(`/profile/${targetId}`)
-        : (savedUser?.email ? await apiClient.get(`/profile/email/${savedUser.email}`) : await apiClient.get('/profile/1'));
+      const activeUser = getCurrentUser() || getSavedUserData();
+      const targetId = activeUser?.id || activeUser?.userId;
+      const targetEmail = activeUser?.email;
 
-      if (response.data) {
+      let response = null;
+      if (targetId) {
+        try {
+          response = await apiClient.get(`/profile/${targetId}`);
+        } catch (e) {
+          console.warn('Fetch profile by ID failed:', e);
+        }
+      }
+
+      if (!response && targetEmail) {
+        try {
+          response = await apiClient.get(`/profile/email/${encodeURIComponent(targetEmail)}`);
+        } catch (e) {
+          console.warn('Fetch profile by email failed:', e);
+        }
+      }
+
+      if (response && response.data) {
         setProfile((prev) => ({
           ...prev,
           ...response.data,
-          fullName: response.data.fullName || prev.fullName,
-          location: response.data.location || prev.location,
-          company: response.data.company || prev.company,
-          experience: response.data.experience || prev.experience,
-          about: response.data.about || prev.about,
+          fullName: response.data.fullName || activeUser?.fullName || prev.fullName,
+          email: response.data.email || targetEmail || prev.email,
+          location: response.data.location || activeUser?.location || prev.location,
+          company: response.data.company || activeUser?.company || prev.company,
+          experience: response.data.experience || activeUser?.experience || prev.experience,
+          about: response.data.about || activeUser?.about || prev.about,
         }));
         updateSavedUserData(response.data);
+      } else if (activeUser) {
+        setProfile((prev) => ({
+          ...prev,
+          fullName: activeUser.fullName || activeUser.name || prev.fullName,
+          email: activeUser.email || prev.email,
+          location: activeUser.location || prev.location,
+          company: activeUser.company || prev.company,
+          experience: activeUser.experience || prev.experience,
+          about: activeUser.about || prev.about,
+        }));
       }
     } catch {
-      // Fallback to local default profile state if API is offline
+      // Fallback
     } finally {
       setIsLoading(false);
     }

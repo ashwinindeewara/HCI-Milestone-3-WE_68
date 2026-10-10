@@ -12,7 +12,7 @@ import {
   Alert,
   Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
 import { FreelancerApiService, API_BASE_URL, resolveMediaUrl, getCurrentUser, pickDocument, clearApiCache } from '../src/services/api';
@@ -112,9 +112,12 @@ export default function EditProfileScreen() {
       : []
   );
 
-  useEffect(() => {
-    fetchProfile();
-  }, []);
+  useFocusEffect(
+    React.useCallback(() => {
+      clearApiCache();
+      fetchProfile();
+    }, [])
+  );
 
   const fetchProfile = async () => {
     try {
