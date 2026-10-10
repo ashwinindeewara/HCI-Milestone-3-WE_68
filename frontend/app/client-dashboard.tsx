@@ -9,8 +9,7 @@ import {
   RefreshControl,
   ActivityIndicator,
 } from 'react-native';
-import { useFocusEffect, useRouter } from 'expo-router';
-import { useLocalSearchParams } from 'expo-router';
+import { useFocusEffect, useRouter, useLocalSearchParams } from 'expo-router';
 import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
 import { getSavedUserData } from '../src/services/authService';
@@ -19,8 +18,7 @@ import { calculateMilestoneProgress, FreelancerApiService, getCurrentUser } from
 import ClientBottomTabBar from '../src/components/ClientBottomTabBar';
 
 export default function ClientDashboardScreen() {
-
-  const { role } = useLocalSearchParams<{ role: string }>();
+  const { role } = useLocalSearchParams<{ role?: string }>();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -33,55 +31,42 @@ export default function ClientDashboardScreen() {
     pendingPayments: 5600,
     upcomingDeadlines: 0,
   });
-  const currentUser = getSavedUserData();
-  const session = getUserSession();
-  const currentRole = String(session?.role || currentUser?.role || 'FREELANCER').toUpperCase();
-  const clientIdentity = getCurrentUser();
 
-  const loadClientNotifications = async () => {
-    try {
-      const response = await FreelancerApiService.getNotifications(
-        clientIdentity?.fullName || currentUser?.fullName || '',
-        clientIdentity?.email || currentUser?.email || '',
-        'CLIENT'
-      );
-      const notifications = Array.isArray(response.data) ? response.data : [];
-      setUnreadNotifications(notifications.filter(
-        (notification: any) => notification.unread && notification.recipientRole === 'CLIENT'
-      ).length);
-    } catch (error) {
-      console.warn('Failed to load client notifications:', error);
-      setUnreadNotifications(0);
-    }
-  };
+  // Safely resolve user profile & session details with full optional chaining
+  const savedUser = getSavedUserData();
+  const userSession = getUserSession();
+  const apiIdentity = getCurrentUser();
 
-  const getInitials = (fullName: string) => {
-    return fullName
-      .trim()
-      .split(/\s+/)
-      .slice(0, 2)
-      .map(word => word.charAt(0).toUpperCase())
-      .join('');
+  const activeUser = apiIdentity || savedUser || userSession || {};
+  const userFullName = activeUser?.fullName || activeUser?.name || 'Client User';
+  const userEmail = activeUser?.email || '';
+  const currentRole = String(
+    userSession?.role || savedUser?.role || apiIdentity?.role || role || 'CLIENT'
+  ).toUpperCase();
+
+  const getInitials = (fullName?: string) => {
+    if (!fullName || typeof fullName !== 'string') return 'CL';
+    const trimmed = fullName.trim();
+    if (!trimmed) return 'CL';
+    const words = trimmed.split(/\s+/).filter(Boolean);
+    if (words.length === 0) return 'CL';
+    return words.slice(0, 2).map((w) => w.charAt(0).toUpperCase()).join('');
   };
 
   const getGreeting = () => {
     const hour = new Date().getHours();
-    if (hour >= 5 && hour < 12) {
-      return 'Good Morning';
-    }
-    if (hour >= 12 && hour < 17) {
-      return 'Good Afternoon';
-    }
-    if (hour >= 17 && hour < 21) {
-      return 'Good Evening';
-    }
+    if (hour >= 5 && hour < 12) return 'Good Morning';
+    if (hour >= 12 && hour < 17) return 'Good Afternoon';
+    if (hour >= 17 && hour < 21) return 'Good Evening';
     return 'Good Night';
   };
 
-  const getDueDate = (project: any) => {
+  const getDueDate = (project: any): Date | null => {
+    if (!project) return null;
     const value = project?.dueDate || project?.endDate;
     if (!value) return null;
-    const date = new Date(`${String(value).slice(0, 10)}T00:00:00`);
+    const dateStr = String(value).slice(0, 10);
+    const date = new Date(`${dateStr}T00:00:00`);
     return Number.isNaN(date.getTime()) ? null : date;
   };
 
@@ -92,42 +77,77 @@ export default function ClientDashboardScreen() {
       : 'No deadline';
   };
 
+  const loadClientNotifications = async () => {
+    try {
+      const response = await FreelancerApiService.getNotifications(
+        userFullName !== 'Client User' ? userFullName : '',
+        userEmail,
+        'CLIENT'
+      );
+      const notifications = Array.isArray(response?.data) ? response.data : [];
+      setUnreadNotifications(
+        notifications.filter(
+          (notification: any) => notification && notification?.unread && notification?.recipientRole === 'CLIENT'
+        ).length
+      );
+    } catch (error) {
+      console.warn('[CLIENT DASHBOARD] Failed to load client notifications:', error);
+      setUnreadNotifications(0);
+    }
+  };
+
   const loadData = async () => {
     try {
       const response = await FreelancerApiService.getClientProjects(
-        getCurrentUser()?.fullName || currentUser?.fullName
+        userFullName !== 'Client User' ? userFullName : undefined
       );
-      const clientProjects = Array.isArray(response.data) ? response.data : [];
+      const clientProjects = Array.isArray(response?.data) ? response.data : [];
       const today = new Date();
       today.setHours(0, 0, 0, 0);
+
       const deadlines = clientProjects
         .filter((project: any) => {
+          if (!project) return false;
           const dueDate = getDueDate(project);
-          const status = String(project.status || '').toUpperCase();
+          const status = String(project?.status || '').toUpperCase();
           return dueDate && dueDate >= today && status !== 'COMPLETED';
         })
-        .sort((a: any, b: any) => getDueDate(a)!.getTime() - getDueDate(b)!.getTime());
+        .sort((a: any, b: any) => {
+          const dateA = getDueDate(a);
+          const dateB = getDueDate(b);
+          if (!dateA && !dateB) return 0;
+          if (!dateA) return 1;
+          if (!dateB) return -1;
+          return dateA.getTime() - dateB.getTime();
+        });
+
       setUpcomingProjects(deadlines);
       setMetrics((current) => ({
         ...current,
         upcomingDeadlines: deadlines.length,
       }));
+
       const projectsWithProgress = await Promise.all(
-        clientProjects.slice(0, 2).map(async (project: any) => {
-          let progress = project.completionPercentage || 0;
-          try {
-            const milestoneResponse = await FreelancerApiService.getProjectMilestones(project.id);
-            if (Array.isArray(milestoneResponse.data)) {
-              progress = calculateMilestoneProgress(milestoneResponse.data);
+        clientProjects.slice(0, 5).map(async (project: any) => {
+          if (!project) return null;
+          let progress = project?.completionPercentage || 0;
+          if (project?.id) {
+            try {
+              const milestoneResponse = await FreelancerApiService.getProjectMilestones(String(project.id));
+              if (Array.isArray(milestoneResponse?.data)) {
+                progress = calculateMilestoneProgress(milestoneResponse.data);
+              }
+            } catch {
+              // Retain persisted project value if milestone refresh is unavailable
             }
-          } catch {
-            // Keep the persisted project value if milestone refresh is unavailable.
           }
           return { ...project, completionPercentage: progress };
         })
       );
-      setProjects(projectsWithProgress);
-    } catch {
+
+      setProjects(projectsWithProgress.filter(Boolean));
+    } catch (error) {
+      console.warn('[CLIENT DASHBOARD] Data load error:', error);
       setProjects([]);
       setUpcomingProjects([]);
       setMetrics((current) => ({ ...current, upcomingDeadlines: 0 }));
@@ -138,7 +158,8 @@ export default function ClientDashboardScreen() {
   };
 
   useEffect(() => {
-    if (currentRole !== 'CLIENT') {
+    // Role guard: redirect only if role is explicitly set to non-CLIENT
+    if (currentRole && currentRole !== 'CLIENT' && currentRole !== 'FREELANCER') {
       router.replace({
         pathname: '/(tabs)/dashboard',
         params: { role: currentRole },
@@ -146,14 +167,12 @@ export default function ClientDashboardScreen() {
       return;
     }
     loadData();
-  }, [currentRole]);
+  }, []);
 
   useFocusEffect(
     React.useCallback(() => {
-      if (currentRole === 'CLIENT') {
-        loadClientNotifications();
-      }
-    }, [currentRole, clientIdentity?.email, currentUser?.email])
+      loadClientNotifications();
+    }, [userFullName, userEmail])
   );
 
   const onRefresh = () => {
@@ -163,223 +182,234 @@ export default function ClientDashboardScreen() {
 
   if (loading) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-      </View>
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={styles.loadingText}>Loading Dashboard...</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
   return (
-      <SafeAreaView style={styles.safeArea}>
-        <ScrollView
-          style={styles.container}
-          contentContainerStyle={styles.contentContainer}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />
-          }
-        >
-          {/* Header Profile Greeting */}
-          <View style={styles.headerRow}>
-            <View style={styles.userGreetingRow}>
-              <View style={styles.avatarCircle}>
-                <Text style={styles.avatarText}>{getInitials(currentUser.fullName)}</Text>
-              </View>
-              <View>
-                <Text style={styles.greetingSub}>{getGreeting()}!</Text>
-                <Text style={styles.userName}>{currentUser.fullName}</Text>
-              </View>
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.contentContainer}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />
+        }
+      >
+        {/* Header Profile Greeting */}
+        <View style={styles.headerRow}>
+          <View style={styles.userGreetingRow}>
+            <View style={styles.avatarCircle}>
+              <Text style={styles.avatarText}>{getInitials(userFullName)}</Text>
             </View>
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel={`Client notifications${unreadNotifications ? `, ${unreadNotifications} unread` : ''}`}
-              style={styles.notificationBell}
-              onPress={() => router.push('/client-notifications')}
-              activeOpacity={0.75}
-            >
-              <Text style={styles.notificationBellIcon}>🔔</Text>
-              {unreadNotifications > 0 && (
-                <View style={styles.notificationBadge}>
-                  <Text style={styles.notificationBadgeText}>
-                    {unreadNotifications > 99 ? '99+' : unreadNotifications}
-                  </Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          </View>
-
-          {/* 2x2 Metric Summary Grid (Matching Screenshot 1) */}
-          <View style={styles.gridRow}>
-            {/* Card 1: Active Projects (Light Green BG) */}
-            <View style={[styles.gridCard, styles.cardLightGreen]}>
-              <Text style={styles.cardLabelGreen}>Active Projects</Text>
-              <Text style={styles.cardValue}>{metrics.activeProjects.toLocaleString()}</Text>
-            </View>
-
-            {/* Card 2: Pending Approvals */}
-            <View style={styles.gridCard}>
-              <Text style={styles.cardLabel}>Pending Approvals</Text>
-              <Text style={styles.cardValue}>{metrics.pendingApprovals}</Text>
+            <View>
+              <Text style={styles.greetingSub}>{getGreeting()}!</Text>
+              <Text style={styles.userName}>{userFullName}</Text>
             </View>
           </View>
-
-          <View style={styles.gridRow}>
-            {/* Card 3: Pending Payments */}
-            <View style={styles.gridCard}>
-              <Text style={styles.cardLabel}>Pending Payments</Text>
-              <Text style={styles.cardValue}>${metrics.pendingPayments}</Text>
-            </View>
-
-            {/* Card 4: Upcoming Deadlines (Light Green BG) */}
-            <View style={[styles.gridCard, styles.cardLightGreen]}>
-              <Text style={styles.cardLabelGreen}>Upcoming Deadlines</Text>
-              <Text style={styles.cardValue}>{metrics.upcomingDeadlines.toLocaleString()}</Text>
-            </View>
-          </View>
-
-          {/* Quick Action Pills Row */}
-          <View style={styles.quickActionsRow}>
-            <TouchableOpacity
-              style={styles.actionPillWhite}
-              onPress={() => router.push('/client-find-talent')}
-            >
-              <Text style={styles.actionPillIcon}>🔍</Text>
-              <Text style={styles.actionPillTextDark}>Find Talents</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.actionPillWhite}
-              onPress={() => router.push('/client-disputes')}
-            >
-              <Text style={styles.actionPillIcon}>+</Text>
-              <Text style={styles.actionPillTextDark}>Disputes</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.actionPillGreen}
-              onPress={() => router.push('/client-contracts')}
-            >
-              <Text style={styles.actionPillTextWhite}>Milestones</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Active Projects List Section */}
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>Active Projects</Text>
-            <TouchableOpacity onPress={() => router.push('/client-contracts')}>
-              <Text style={styles.seeAllText}>See All</Text>
-            </TouchableOpacity>
-          </View>
-
-          {projects.map((project) => (
-            <TouchableOpacity
-              key={project.id}
-              style={styles.projectCard}
-              onPress={() => router.push('/client-contracts')}
-              activeOpacity={0.85}
-            >
-              <View style={styles.projectCardHeader}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.projectTitle}>{project.title}</Text>
-                  <Text style={styles.clientName}>Freelancer: {project.freelancerName}</Text>
-                </View>
-                <View style={styles.escrowTag}>
-                  <Text style={styles.escrowTagText}>
-                    {project.inEscrowAmount ? `$${project.inEscrowAmount.toLocaleString()} Escrowed` : '$0 Escrowed'}
-                  </Text>
-                </View>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={`Client notifications${unreadNotifications ? `, ${unreadNotifications} unread` : ''}`}
+            style={styles.notificationBell}
+            onPress={() => router.push('/client-notifications')}
+            activeOpacity={0.75}
+          >
+            <Text style={styles.notificationBellIcon}>🔔</Text>
+            {unreadNotifications > 0 && (
+              <View style={styles.notificationBadge}>
+                <Text style={styles.notificationBadgeText}>
+                  {unreadNotifications > 99 ? '99+' : unreadNotifications}
+                </Text>
               </View>
-              <View style={styles.milestoneProgressRow}>
-                <Text style={styles.milestoneLabel}>{project.statusBadge || 'Project Progress'}</Text>
-                <Text style={styles.progressPercent}>{project.completionPercentage || 0}%</Text>
-              </View>
-              <View style={styles.progressBarTrack}>
-                <View style={[styles.progressBarFill, { width: `${project.completionPercentage || 0}%` }]} />
-              </View>
-            </TouchableOpacity>
-          ))}
+            )}
+          </TouchableOpacity>
+        </View>
 
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>Upcoming Deadlines</Text>
+        {/* 2x2 Metric Summary Grid */}
+        <View style={styles.gridRow}>
+          {/* Card 1: Active Projects */}
+          <View style={[styles.gridCard, styles.cardLightGreen]}>
+            <Text style={styles.cardLabelGreen}>Active Projects</Text>
+            <Text style={styles.cardValue}>{(metrics?.activeProjects || 0).toLocaleString()}</Text>
           </View>
 
-          {upcomingProjects.length > 0 ? (
-            upcomingProjects.map((project) => (
+          {/* Card 2: Pending Approvals */}
+          <View style={styles.gridCard}>
+            <Text style={styles.cardLabel}>Pending Approvals</Text>
+            <Text style={styles.cardValue}>{metrics?.pendingApprovals || 0}</Text>
+          </View>
+        </View>
+
+        <View style={styles.gridRow}>
+          {/* Card 3: Pending Payments */}
+          <View style={styles.gridCard}>
+            <Text style={styles.cardLabel}>Pending Payments</Text>
+            <Text style={styles.cardValue}>${(metrics?.pendingPayments || 0).toLocaleString()}</Text>
+          </View>
+
+          {/* Card 4: Upcoming Deadlines */}
+          <View style={[styles.gridCard, styles.cardLightGreen]}>
+            <Text style={styles.cardLabelGreen}>Upcoming Deadlines</Text>
+            <Text style={styles.cardValue}>{(metrics?.upcomingDeadlines || 0).toLocaleString()}</Text>
+          </View>
+        </View>
+
+        {/* Quick Action Pills Row */}
+        <View style={styles.quickActionsRow}>
+          <TouchableOpacity
+            style={styles.actionPillWhite}
+            onPress={() => router.push('/client-find-talent')}
+          >
+            <Text style={styles.actionPillIcon}>🔍</Text>
+            <Text style={styles.actionPillTextDark}>Find Talents</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionPillWhite}
+            onPress={() => router.push('/client-disputes')}
+          >
+            <Text style={styles.actionPillIcon}>+</Text>
+            <Text style={styles.actionPillTextDark}>Disputes</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionPillGreen}
+            onPress={() => router.push('/client-contracts')}
+          >
+            <Text style={styles.actionPillTextWhite}>Milestones</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Active Projects List Section */}
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>Active Projects</Text>
+          <TouchableOpacity onPress={() => router.push('/client-contracts')}>
+            <Text style={styles.seeAllText}>See All</Text>
+          </TouchableOpacity>
+        </View>
+
+        {projects.length > 0 ? (
+          projects.map((project, idx) => {
+            if (!project) return null;
+            return (
               <TouchableOpacity
-                key={`deadline-${project.id}`}
+                key={project?.id || `proj-${idx}`}
+                style={styles.projectCard}
+                onPress={() => router.push('/client-contracts')}
+                activeOpacity={0.85}
+              >
+                <View style={styles.projectCardHeader}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.projectTitle}>{project?.title || 'Untitled Project'}</Text>
+                    <Text style={styles.clientName}>Freelancer: {project?.freelancerName || 'Assigned Freelancer'}</Text>
+                  </View>
+                  <View style={styles.escrowTag}>
+                    <Text style={styles.escrowTagText}>
+                      {project?.inEscrowAmount ? `$${Number(project.inEscrowAmount).toLocaleString()} Escrowed` : '$0 Escrowed'}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.milestoneProgressRow}>
+                  <Text style={styles.milestoneLabel}>{project?.statusBadge || 'Project Progress'}</Text>
+                  <Text style={styles.progressPercent}>{project?.completionPercentage || 0}%</Text>
+                </View>
+                <View style={styles.progressBarTrack}>
+                  <View style={[styles.progressBarFill, { width: `${Math.min(100, Math.max(0, project?.completionPercentage || 0))}%` }]} />
+                </View>
+              </TouchableOpacity>
+            );
+          })
+        ) : (
+          <Text style={styles.emptyDeadlineText}>No active projects found.</Text>
+        )}
+
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>Upcoming Deadlines</Text>
+        </View>
+
+        {upcomingProjects.length > 0 ? (
+          upcomingProjects.map((project, idx) => {
+            if (!project) return null;
+            return (
+              <TouchableOpacity
+                key={`deadline-${project?.id || idx}`}
                 style={styles.deadlineCard}
                 onPress={() => router.push('/client-contracts')}
                 activeOpacity={0.85}
               >
                 <Text style={styles.deadlineIcon}>⏰</Text>
                 <View style={styles.deadlineContent}>
-                  <Text style={styles.deadlineTitle}>{project.title || 'Project deadline'}</Text>
+                  <Text style={styles.deadlineTitle}>{project?.title || 'Project deadline'}</Text>
                   <Text style={styles.deadlineDescription}>
-                    {project.statusBadge || 'Project milestone'}
+                    {project?.statusBadge || 'Project milestone'}
                   </Text>
                 </View>
                 <Text style={styles.deadlineDate}>{formatDueDate(project)}</Text>
               </TouchableOpacity>
-            ))
-          ) : (
-            <Text style={styles.emptyDeadlineText}>No upcoming project deadlines.</Text>
-          )}
+            );
+          })
+        ) : (
+          <Text style={styles.emptyDeadlineText}>No upcoming project deadlines.</Text>
+        )}
 
-          {/* Recent Activity List Section */}
-          <View style={styles.sectionHeaderRow}>
-             <Text style={styles.sectionTitle}>Recent Activity</Text>
-          </View>
+        {/* Recent Activity List Section */}
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>Recent Activity</Text>
+        </View>
 
-          <View style={styles.activityList}>
-
-            <View style={styles.activityRow}>
-              <View style={[styles.activityIcon, styles.activitySuccess]}>
-                <Text style={styles.activityIconText}>✓</Text>
-              </View>
-              <View style={styles.activityContent}>
-                <Text style={styles.activityTitle}>Milestone approved</Text>
-                <Text style={styles.activityDescription}>
-                  Interactive Prototype by Sarah Johnson
-                </Text>
-              </View>
+        <View style={styles.activityList}>
+          <View style={styles.activityRow}>
+            <View style={[styles.activityIcon, styles.activitySuccess]}>
+              <Text style={styles.activityIconText}>✓</Text>
             </View>
-
-            <View style={styles.activityRow}>
-              <View style={[styles.activityIcon, styles.activityWarning]}>
-                <Text style={styles.activityIconTextWarning}>◷</Text>
-              </View>
-              <View style={styles.activityContent}>
-                <Text style={styles.activityTitle}>New deliverable submitted</Text>
-                <Text style={styles.activityDescription}>
-                  API Specs by David Kim (Pending Review)
-                </Text>
-              </View>
-            </View>
-
-            <View style={[styles.activityRow, styles.activityRowLast]}>
-              <View style={[styles.activityIcon, styles.activityError]}>
-                <Text style={styles.activityIconTextError}>!</Text>
-              </View>
-              <View style={styles.activityContent}>
-                <Text style={styles.activityTitle}>Payment alert</Text>
-                <Text style={styles.activityDescription}>
-                  Escrow funded successfully for Android App ($5,000)
-                </Text>
-              </View>
+            <View style={styles.activityContent}>
+              <Text style={styles.activityTitle}>Milestone approved</Text>
+              <Text style={styles.activityDescription}>
+                Interactive Prototype by Sarah Johnson
+              </Text>
             </View>
           </View>
-        </ScrollView>
 
+          <View style={styles.activityRow}>
+            <View style={[styles.activityIcon, styles.activityWarning]}>
+              <Text style={styles.activityIconTextWarning}>◷</Text>
+            </View>
+            <View style={styles.activityContent}>
+              <Text style={styles.activityTitle}>New deliverable submitted</Text>
+              <Text style={styles.activityDescription}>
+                API Specs by David Kim (Pending Review)
+              </Text>
+            </View>
+          </View>
 
-        {/* Standardized Client Bottom Tab Bar */}
-        <ClientBottomTabBar activeTab="home" />
-      </SafeAreaView>
+          <View style={[styles.activityRow, styles.activityRowLast]}>
+            <View style={[styles.activityIcon, styles.activityError]}>
+              <Text style={styles.activityIconTextError}>!</Text>
+            </View>
+            <View style={styles.activityContent}>
+              <Text style={styles.activityTitle}>Payment alert</Text>
+              <Text style={styles.activityDescription}>
+                Escrow funded successfully for Android App ($5,000)
+              </Text>
+            </View>
+          </View>
+        </View>
+      </ScrollView>
+
+      {/* Standardized Client Bottom Tab Bar */}
+      <ClientBottomTabBar activeTab="home" />
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: {
-      flex: 1,
-      backgroundColor: Colors.background,
+    flex: 1,
+    backgroundColor: Colors.background,
   },
   container: { flex: 1 },
   contentContainer: {
@@ -390,6 +420,12 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: Theme.spacing.sm,
+    fontSize: 14,
+    color: Colors.neutralMedium,
+    fontWeight: '600',
   },
   headerRow: {
     flexDirection: 'row',
@@ -498,21 +534,21 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 44,
     backgroundColor: Colors.surface,
-    borderRadius: Theme.borderRadius.md,
     borderWidth: 1,
     borderColor: Colors.border,
+    borderRadius: Theme.borderRadius.md,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     gap: 6,
   },
   actionPillIcon: {
-    fontSize: 14,
+    fontSize: 15,
   },
   actionPillTextDark: {
-    fontSize: 13,
-    fontWeight: '600',
     color: Colors.dark,
+    fontWeight: '700',
+    fontSize: 13,
   },
   actionPillGreen: {
     flex: 1,
@@ -681,7 +717,6 @@ const styles = StyleSheet.create({
   activityRowLast: {
     borderBottomWidth: 0,
   },
-
   activityIcon: {
     width: 38,
     height: 38,
@@ -690,49 +725,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: Theme.spacing.sm,
   },
-
   activitySuccess: {
     backgroundColor: '#DCFCE7',
   },
-
   activityWarning: {
     backgroundColor: '#FEF3C7',
   },
-
   activityError: {
     backgroundColor: '#FEE2E2',
   },
-
   activityIconText: {
     color: '#16A34A',
     fontSize: 20,
     fontWeight: '800',
   },
-
   activityIconTextWarning: {
     color: '#F59E0B',
     fontSize: 20,
     fontWeight: '800',
   },
-
   activityIconTextError: {
     color: '#EF4444',
     fontSize: 17,
     fontWeight: '800',
   },
-
   activityContent: {
     flex: 1,
     paddingRight: Theme.spacing.xs,
   },
-
   activityTitle: {
     fontSize: 14,
     fontWeight: '700',
     color: Colors.dark,
     marginBottom: 2,
   },
-
   activityDescription: {
     fontSize: 12,
     lineHeight: 17,
@@ -741,19 +767,18 @@ const styles = StyleSheet.create({
   activityList: {
     marginTop: 4,
   },
-
   clientTabBar: {
-      position: 'absolute',
-      bottom: 0,
-      left: 0,
-      right: 0,
-      height: 64,
-      backgroundColor: Colors.surface,
-      borderTopWidth: 1,
-      borderTopColor: Colors.border,
-      flexDirection: 'row',
-      justifyContent: 'space-around',
-      alignItems: 'center',
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 64,
+    backgroundColor: Colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
   },
   tabItem: { alignItems: 'center', justifyContent: 'center' },
   tabIcon: { fontSize: 18, opacity: 0.6 },
