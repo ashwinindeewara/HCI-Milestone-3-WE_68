@@ -16,7 +16,8 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.ashwin_indeewara.frontend"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -25,6 +26,12 @@
       "expo-router",
       "expo-status-bar",
       "expo-sharing"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "40e65b52-1fcf-4353-98f4-b1eb8212c4b3"
+      }
+    }
   }
 }

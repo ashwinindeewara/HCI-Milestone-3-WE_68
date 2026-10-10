@@ -9,10 +9,17 @@ import { Platform } from 'react-native';
 const GET_BASE_URL = () => {
   const envUrl = process.env.EXPO_PUBLIC_API_URL;
   if (envUrl) {
-    if (Platform.OS === 'android' && envUrl.includes('localhost')) {
-      return envUrl.replace('localhost', '10.0.2.2');
+    let url = envUrl.trim();
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      url = `https://${url}`;
     }
-    return envUrl;
+    if (!url.endsWith('/api') && !url.endsWith('/api/')) {
+      url = `${url.replace(/\/$/, '')}/api`;
+    }
+    if (Platform.OS === 'android' && url.includes('localhost')) {
+      return url.replace('localhost', '10.0.2.2');
+    }
+    return url;
   }
   if (Platform.OS === 'android') {
     return 'http://10.0.2.2:8080/api';
