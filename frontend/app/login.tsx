@@ -13,9 +13,9 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
-import apiClient from '../src/services/api';
-import { saveUserSession } from '../src/services/storage';
-import { saveAuthSession } from '../src/services/authService';
+import apiClient, { clearApiCache } from '../src/services/api';
+import { saveUserSession, clearUserSession } from '../src/services/storage';
+import { saveAuthSession, clearAuthSession } from '../src/services/authService';
 
 import ContactSupportModal from '../src/components/ContactSupportModal';
 import ForgotPasswordModal from '../src/components/ForgotPasswordModal';
@@ -95,6 +95,19 @@ export default function LoginScreen() {
       return;
     }
 
+    // Strictly purge all previous session cache & tokens before starting login
+    clearAuthSession();
+    clearUserSession();
+    clearApiCache();
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        localStorage.removeItem('auth_user');
+        localStorage.removeItem('auth_email');
+        localStorage.removeItem('auth_name');
+        localStorage.removeItem('auth_role');
+      } catch {}
+    }
+
     setIsSubmitting(true);
     setGeneralError('');
     try {
@@ -103,21 +116,41 @@ export default function LoginScreen() {
         password: password,
       });
 
+      const responseData = response.data || {};
+      const userRole = String(responseData.role || 'FREELANCER').toUpperCase();
+      const userFullName = responseData.fullName || (trimmedEmail.includes('admin') ? 'System Admin' : 'User Account');
+      const userEmail = responseData.email || trimmedEmail;
+
       // Save auth session (JWT token & profile details)
-      if (response.data?.token) {
-        saveAuthSession(response.data.token, response.data);
+      if (responseData.token) {
+        saveAuthSession(responseData.token, responseData);
       }
 
-      const userRole = String(response.data?.role || 'FREELANCER').toUpperCase();
-
-      // Save user session credentials for profile modal
+      // Save user session credentials for profile modal and active session
       saveUserSession({
-        id: response.data?.id,
-        fullName: response.data?.fullName || (email.includes('admin') ? 'System Admin' : 'User Account'),
-        email: response.data?.email || email.trim(),
+        id: responseData.id,
+        fullName: userFullName,
+        email: userEmail,
         role: userRole,
-        token: response.data?.token,
+        token: responseData.token,
       });
+
+      if (typeof window !== 'undefined' && window.localStorage) {
+        try {
+          localStorage.setItem('auth_email', userEmail);
+          localStorage.setItem('auth_name', userFullName);
+          localStorage.setItem('auth_role', userRole);
+          localStorage.setItem('auth_user', JSON.stringify({
+            id: responseData.id,
+            fullName: userFullName,
+            email: userEmail,
+            role: userRole,
+          }));
+        } catch {}
+      }
+
+      // Invalidate all stale API response caches from previous user sessions
+      clearApiCache();
 
       // Role-based dynamic routing from returned AuthResponse
       if (userRole === 'ADMIN') {
