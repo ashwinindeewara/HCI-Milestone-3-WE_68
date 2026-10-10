@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,12 +9,13 @@ import {
   RefreshControl,
   ActivityIndicator,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
 import { getSavedUserData } from '../src/services/authService';
 import apiClient from '../src/services/api';
 import { getUserSession } from '../src/services/storage';
+import { countUnreadNotifications, getClientNotificationReadKey, markNotificationsRead } from '../src/services/notificationReadState';
 
 interface ProjectCardData {
   id: string;
@@ -36,6 +37,7 @@ interface ActivityItemData {
   projectTitle: string;
   performedBy: string;
 }
+
 
 const unwrapActivityList = (value: any): any[] => {
   let candidate = value;
@@ -116,7 +118,7 @@ async function fetchRecentClientActivities(contractItems: any[]): Promise<Activi
         const rawType = activity?.type ?? activity?.eventType ?? 'PROJECT_UPDATE';
         const rawDescription = activity?.description ?? activity?.message ?? activity?.details ?? '';
         return {
-          id: `${projectId}-${String(activity?.id ?? `${rawType}-${index}`)}`,
+          id: `${projectId}-${String(activity?.id ?? activity?.activityId ?? `${rawType}-${activity?.createdAt ?? activity?.timestamp ?? index}-${String(rawDescription).slice(0, 80)}`)}`,
           title: toActivityTitle(rawType, rawDescription),
           description: String(rawDescription || 'A project activity was recorded.'),
           type: toActivityTone(rawType, rawDescription),
@@ -141,8 +143,7 @@ async function fetchRecentClientActivities(contractItems: any[]): Promise<Activi
       const dateA = Date.parse(a.createdAt);
       const dateB = Date.parse(b.createdAt);
       return (Number.isFinite(dateB) ? dateB : 0) - (Number.isFinite(dateA) ? dateA : 0);
-    })
-    .slice(0, 5);
+    });
 }
 
 export default function ClientDashboardScreen() {
@@ -161,6 +162,9 @@ export default function ClientDashboardScreen() {
   const [projectsError, setProjectsError] = useState('');
 
   const [activities, setActivities] = useState<ActivityItemData[]>([]);
+  const [allActivities, setAllActivities] = useState<ActivityItemData[]>([]);
+  const [notificationCount, setNotificationCount] = useState(0);
+  const loadInFlight = useRef(false);
 
   const currentUser = getSavedUserData();
   const session = getUserSession();
@@ -187,6 +191,8 @@ export default function ClientDashboardScreen() {
   const clientName = String(
     currentUser?.company || currentUser?.fullName || currentUser?.name || currentUser?.email || ''
   ).trim();
+  const notificationOwner = String(currentUser?.email || currentUser?.id || clientName).trim().toLowerCase();
+  const notificationReadStateKey = getClientNotificationReadKey(notificationOwner);
 
   const loadData = useCallback(async () => {
     setProjectsError('');
@@ -195,6 +201,8 @@ export default function ClientDashboardScreen() {
       if (!clientName) {
         setProjects([]);
         setActivities([]);
+        setAllActivities([]);
+        setNotificationCount(0);
         setMetrics({
           activeProjects: 0,
           pendingApprovals: 0,
@@ -333,13 +341,21 @@ export default function ClientDashboardScreen() {
 
       // Load only events belonging to this client's contracts. This replaces the
       // previous global/dashboard-metrics feed, which could return demo or unrelated data.
-      setActivities([]);
-      void fetchRecentClientActivities(rawContracts)
-        .then(setActivities)
-        .catch((activityError: any) => {
-          console.info('[ClientDashboard] Could not load client activity:', activityError);
-          setActivities([]);
-        });
+      // Await activity retrieval so scheduled refreshes do not overlap with unfinished
+      // activity requests. Every distinct unread activity related to these contracts
+      // contributes one to the bell badge.
+      const loadedActivities = await fetchRecentClientActivities(rawContracts);
+      if (loadedActivities.length > 0 || rawContracts.length === 0) {
+        setAllActivities(loadedActivities);
+        setNotificationCount(
+          countUnreadNotifications(notificationReadStateKey, loadedActivities.map((item) => item.id)),
+        );
+        setActivities(loadedActivities.slice(0, 5));
+      } else {
+        // Preserve the current badge if an activity endpoint temporarily fails/returns
+        // no rows while we already have activity in state.
+        console.info('[ClientDashboard] No activities returned; keeping the previous notification state.');
+      }
     } catch (error: any) {
       console.error('[ClientDashboard] Error loading client projects:', error);
       console.error('Request URL:', error?.config?.url);
@@ -347,7 +363,6 @@ export default function ClientDashboardScreen() {
       console.error('HTTP status:', error?.response?.status);
       console.error('Response data:', error?.response?.data);
       setProjects([]);
-      setActivities([]);
       setProjectsError(
         error?.response?.data?.message ??
         error?.response?.data?.error ??
@@ -364,23 +379,49 @@ export default function ClientDashboardScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [clientName]);
+  }, [clientName, notificationReadStateKey]);
 
-  useEffect(() => {
+  const runLoadData = useCallback(async () => {
+    if (loadInFlight.current) return;
+    loadInFlight.current = true;
+    try {
+      await loadData();
+    } finally {
+      loadInFlight.current = false;
+    }
+  }, [loadData]);
+
+  // Reload whenever the client returns to Home and poll while Home is visible.
+  // This allows activities created by the freelancer or backend to appear in the
+  // badge without requiring a manual app reload.
+  useFocusEffect(useCallback(() => {
     if (currentRole !== 'CLIENT') {
       router.replace({
         pathname: '/(tabs)/dashboard',
         params: { role: currentRole },
       });
-      return;
+      return undefined;
     }
-    loadData();
-  }, [loadData]);
 
+    void runLoadData();
+    const intervalId = setInterval(() => {
+      void runLoadData();
+    }, 15000);
+
+    return () => clearInterval(intervalId);
+  }, [currentRole, router, runLoadData]));
 
   const onRefresh = () => {
     setRefreshing(true);
-    loadData();
+    void runLoadData();
+  };
+
+  const openNotifications = () => {
+    // Clear only the notifications currently known to the dashboard. Anything created
+    // afterward has a new activity ID and becomes unread during the next poll/focus.
+    markNotificationsRead(notificationReadStateKey, allActivities.map((item) => item.id));
+    setNotificationCount(0);
+    router.push('/client-notifications' as any);
   };
 
   const displayName = currentUser?.fullName || currentUser?.name || currentUser?.company || 'Client';
@@ -421,14 +462,18 @@ export default function ClientDashboardScreen() {
           {/* Bell Notification Badge */}
           <TouchableOpacity
             style={styles.bellBtn}
-            onPress={() => router.push('/client-contracts')}
+            onPress={openNotifications}
             accessibilityRole="button"
-            accessibilityLabel="Notifications"
+            accessibilityLabel={`Notifications${notificationCount ? `, ${notificationCount} project updates` : ''}`}
           >
             <Text style={{ fontSize: 18 }}>🔔</Text>
-            <View style={styles.badgeDot}>
-              <Text style={styles.badgeText}>2</Text>
-            </View>
+            {notificationCount > 0 && (
+              <View style={styles.badgeDot}>
+                <Text style={styles.badgeText}>
+                  {notificationCount > 9 ? '9+' : notificationCount}
+                </Text>
+              </View>
+            )}
           </TouchableOpacity>
         </View>
 
