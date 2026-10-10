@@ -81,18 +81,21 @@ const DEFAULT_PROFILE: FreelancerProfileData = {
 
 const getInitialProfile = (): FreelancerProfileData => {
   const currentUser = getCurrentUser();
+  const activeEmail = currentUser?.email ? currentUser.email.toLowerCase().trim() : '';
   const isChathuni =
-    currentUser?.email === 'chathuniimalsha.com' ||
-    (currentUser?.fullName && currentUser.fullName.toLowerCase().includes('chathuni')) ||
-    (currentUser?.email && currentUser.email.toLowerCase().includes('chathuni'));
+    activeEmail === 'chathuniimalsha.com' ||
+    activeEmail === 'chathuni@design.com' ||
+    (currentUser?.fullName && currentUser.fullName.toLowerCase().includes('chathuni'));
 
-  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+  if (activeEmail && Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
     try {
-      const k = `profile_cache_${currentUser?.email || currentUser?.fullName || 'default'}`;
+      const k = `profile_cache_${activeEmail}`;
       const s = localStorage.getItem(k);
       if (s) {
         const p = JSON.parse(s);
-        if (p && p.name) return p;
+        if (p && p.name && p.email && p.email.toLowerCase().trim() === activeEmail) {
+          return p;
+        }
       }
     } catch (e) {}
   }
@@ -239,9 +242,9 @@ export default function FreelancerProfileScreen() {
           featuredProjects: Array.isArray(data.featuredProjects) ? data.featuredProjects : fallback.featuredProjects,
         };
         setProfile(updatedProfile);
-        if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+        if (currentUser?.email && Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
           try {
-            const k = `profile_cache_${currentUser?.email || currentUser?.fullName || 'default'}`;
+            const k = `profile_cache_${currentUser.email.toLowerCase().trim()}`;
             localStorage.setItem(k, JSON.stringify(updatedProfile));
           } catch (e) {}
         }

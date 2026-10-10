@@ -27,7 +27,6 @@ export const saveUserSession = (session: UserSession) => {
 };
 
 export const getUserSession = (): UserSession | null => {
-  if (inMemorySession) return inMemorySession;
   try {
     if (typeof window !== 'undefined' && window.localStorage) {
       const data = window.localStorage.getItem(STORAGE_KEY);
@@ -36,11 +35,13 @@ export const getUserSession = (): UserSession | null => {
         inMemorySession = parsed;
         return parsed;
       }
+      inMemorySession = null;
+      return null;
     }
   } catch (e) {
     console.warn('LocalStorage read error:', e);
   }
-  return null;
+  return inMemorySession;
 };
 
 export const clearUserSession = () => {
