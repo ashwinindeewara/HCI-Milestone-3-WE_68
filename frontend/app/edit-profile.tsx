@@ -15,7 +15,7 @@ import {
 import { useRouter } from 'expo-router';
 import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
-import { FreelancerApiService, API_BASE_URL, resolveMediaUrl, getCurrentUser } from '../src/services/api';
+import { FreelancerApiService, API_BASE_URL, resolveMediaUrl, getCurrentUser, pickDocument } from '../src/services/api';
 import { VerifiedBadge, StarIcon } from '../src/components/Icons';
 
 interface FeaturedProjectItem {
@@ -172,88 +172,60 @@ export default function EditProfileScreen() {
     }));
   };
 
-  const handlePickAvatar = () => {
-    if (Platform.OS === 'web' && typeof document !== 'undefined') {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = 'image/*';
-      input.onchange = async (e: any) => {
-        const file = e.target?.files?.[0];
-        if (file) {
-          const reader = new FileReader();
-          reader.onload = (uploadEvent) => {
-            const result = uploadEvent.target?.result as string;
-            setProfile((prev) => ({ ...prev, avatarUrl: result }));
-          };
-          reader.readAsDataURL(file);
+  const handlePickAvatar = async () => {
+    try {
+      const pickedDocs = await pickDocument({ type: 'image/*' });
+      if (pickedDocs.length === 0) return;
+      const file = pickedDocs[0];
+      setProfile((prev) => ({ ...prev, avatarUrl: file.uri }));
 
-          try {
-            const activeUser = getCurrentUser();
-            const targetEmail = profile.email || activeUser?.email || '';
-            const updatedData = await FreelancerApiService.uploadProfileImage(file, targetEmail);
-            if (updatedData && updatedData.avatarUrl) {
-              setProfile((prev) => ({ ...prev, avatarUrl: updatedData.avatarUrl }));
-            }
-          } catch (err) {
-            console.warn('Backend avatar upload error, retaining local preview', err);
-          }
+      try {
+        const activeUser = getCurrentUser();
+        const targetEmail = profile.email || activeUser?.email || '';
+        const updatedData = await FreelancerApiService.uploadProfileImage(file, targetEmail);
+        if (updatedData && updatedData.avatarUrl) {
+          setProfile((prev) => ({ ...prev, avatarUrl: updatedData.avatarUrl }));
         }
-      };
-      input.click();
-    } else {
-      Alert.alert('Upload Avatar', 'Choose an image file on web.');
+      } catch (err) {
+        console.warn('Backend avatar upload error, retaining local preview', err);
+      }
+    } catch (err: any) {
+      Alert.alert('Avatar Error', err.message || 'Could not select image.');
     }
   };
 
-  const handleUploadProjectImage = (index: number) => {
-    if (Platform.OS === 'web' && typeof document !== 'undefined') {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = 'image/*';
-      input.onchange = async (e: any) => {
-        const file = e.target?.files?.[0];
-        if (file) {
-          // Immediately set local data URL preview
-          const reader = new FileReader();
-          reader.onload = (uploadEvent) => {
-            const result = uploadEvent.target?.result as string;
-            setFeaturedProjects((prev) => {
-              const updated = [...prev];
-              updated[index] = { ...updated[index], imageUri: result };
-              return updated;
-            });
-          };
-          reader.readAsDataURL(file);
+  const handleUploadProjectImage = async (index: number) => {
+    try {
+      const pickedDocs = await pickDocument({ type: 'image/*' });
+      if (pickedDocs.length === 0) return;
+      const file = pickedDocs[0];
 
-          try {
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('relatedEntityType', 'PROJECT');
-            formData.append('relatedEntityId', featuredProjects[index]?.id || 'GENERAL');
+      setFeaturedProjects((prev) => {
+        const updated = [...prev];
+        updated[index] = { ...updated[index], imageUri: file.uri };
+        return updated;
+      });
 
-            const uploadRes = await fetch(`${API_BASE_URL}/files/upload`, {
-              method: 'POST',
-              body: formData,
-            });
-
-            if (uploadRes.ok) {
-              const fileData = await uploadRes.json();
-              if (fileData && fileData.fileUrl) {
-                setFeaturedProjects((prev) => {
-                  const updated = [...prev];
-                  updated[index] = { ...updated[index], imageUri: fileData.fileUrl };
-                  return updated;
-                });
-              }
-            }
-          } catch (err) {
-            console.warn('Project image upload error, retaining local preview', err);
-          }
+      try {
+        const activeUser = getCurrentUser();
+        const fileData = await FreelancerApiService.uploadFile(
+          file,
+          'PROJECT',
+          featuredProjects[index]?.id || 'GENERAL',
+          activeUser?.fullName || 'Freelancer'
+        );
+        if (fileData && fileData.fileUrl) {
+          setFeaturedProjects((prev) => {
+            const updated = [...prev];
+            updated[index] = { ...updated[index], imageUri: fileData.fileUrl };
+            return updated;
+          });
         }
-      };
-      input.click();
-    } else {
-      Alert.alert('Upload Image', 'Choose an image file on web.');
+      } catch (err) {
+        console.warn('Project image upload error, retaining local preview', err);
+      }
+    } catch (err: any) {
+      Alert.alert('Upload Error', err.message || 'Could not select image.');
     }
   };
 

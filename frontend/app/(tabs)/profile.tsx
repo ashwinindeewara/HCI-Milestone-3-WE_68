@@ -17,7 +17,7 @@ import {
 import { useRouter, useFocusEffect } from 'expo-router';
 import Colors from '../../src/constants/colors';
 import { VerifiedBadge, StarIcon, ExitLogoutIcon } from '../../src/components/Icons';
-import apiClient, { resolveMediaUrl, getCurrentUser, API_BASE_URL, FreelancerApiService, clearApiCache } from '../../src/services/api';
+import apiClient, { resolveMediaUrl, getCurrentUser, API_BASE_URL, FreelancerApiService, clearApiCache, pickDocument } from '../../src/services/api';
 import { clearAuthSession } from '../../src/services/authService';
 
 export interface ProjectItem {
@@ -281,36 +281,27 @@ export default function FreelancerProfileScreen() {
   };
 
   // Upload avatar image
-  const handlePickAvatar = () => {
-    if (Platform.OS === 'web' && typeof document !== 'undefined') {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = 'image/*';
-      input.onchange = async (e: any) => {
-        const file = e.target?.files?.[0];
-        if (file) {
-          const reader = new FileReader();
-          reader.onload = (uploadEvent) => {
-            const result = uploadEvent.target?.result as string;
-            setProfile((prev) => ({ ...prev, avatarUri: result }));
-          };
-          reader.readAsDataURL(file);
+  const handlePickAvatar = async () => {
+    try {
+      const pickedDocs = await pickDocument({ type: 'image/*' });
+      if (pickedDocs.length === 0) return;
+      const file = pickedDocs[0];
+      setProfile((prev) => ({ ...prev, avatarUri: file.uri }));
 
-          try {
-            const currentUser = getCurrentUser();
-            const targetEmail = profile.email || currentUser?.email || '';
-            const res = await FreelancerApiService.uploadProfileImage(file, targetEmail);
-            if (res && res.avatarUrl) {
-              setProfile((prev) => ({ ...prev, avatarUri: res.avatarUrl }));
-              setSaveToast(true);
-              setTimeout(() => setSaveToast(false), 3000);
-            }
-          } catch (err) {
-            console.warn('Profile image upload error', err);
-          }
+      try {
+        const currentUser = getCurrentUser();
+        const targetEmail = profile.email || currentUser?.email || '';
+        const res = await FreelancerApiService.uploadProfileImage(file, targetEmail);
+        if (res && res.avatarUrl) {
+          setProfile((prev) => ({ ...prev, avatarUri: res.avatarUrl }));
+          setSaveToast(true);
+          setTimeout(() => setSaveToast(false), 3000);
         }
-      };
-      input.click();
+      } catch (err) {
+        console.warn('Profile image upload error', err);
+      }
+    } catch (err: any) {
+      Alert.alert('Avatar Selection Error', err.message || 'Could not select image.');
     }
   };
 

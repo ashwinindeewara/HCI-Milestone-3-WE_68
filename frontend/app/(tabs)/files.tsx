@@ -12,7 +12,7 @@ import {
 import { useRouter } from 'expo-router';
 import Colors from '../../src/constants/colors';
 import Theme from '../../src/constants/theme';
-import { apiClient, FreelancerApiService, resolveMediaUrl, getCurrentUser } from '../../src/services/api';
+import { apiClient, FreelancerApiService, resolveMediaUrl, getCurrentUser, pickDocument } from '../../src/services/api';
 
 interface FileItem {
   id: string;
@@ -161,34 +161,38 @@ export default function ProjectFilesScreen() {
     fetchFiles();
   }, []);
 
-  const handleUploadClick = () => {
-    if (Platform.OS === 'web' && typeof document !== 'undefined') {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = '*/*';
-      input.onchange = async (e: any) => {
-        const file = e.target?.files?.[0];
-        if (file) {
-          try {
-            setUploading(true);
-            const currentUser = getCurrentUser();
-            const uploader = currentUser?.fullName || 'Freelancer';
-            const cat = activeFilter === 'Contracts' ? 'CONTRACT' : 'PROJECT';
-            const res = await FreelancerApiService.uploadFile(file, cat, 'PROJECT_FILES', uploader);
-            if (res && res.id) {
-              showToast(`✓ "${file.name}" uploaded and saved to database!`);
-              fetchFiles();
-            }
-          } catch (err: any) {
-            Alert.alert('Upload Failed', err.message || 'Could not upload file.');
-          } finally {
-            setUploading(false);
+  const handleUploadClick = async () => {
+    try {
+      const pickedDocs = await pickDocument({ multiple: true });
+      if (pickedDocs.length === 0) return;
+
+      setUploading(true);
+      const currentUser = getCurrentUser();
+      const uploader = currentUser?.fullName || 'Freelancer';
+      const cat = activeFilter === 'Contracts' ? 'CONTRACT' : 'PROJECT';
+      let successCount = 0;
+
+      for (const doc of pickedDocs) {
+        try {
+          const res = await FreelancerApiService.uploadFile(doc, cat, 'PROJECT_FILES', uploader);
+          if (res && res.id) {
+            successCount++;
           }
+        } catch (err: any) {
+          console.warn('Single file upload error:', err);
         }
-      };
-      input.click();
-    } else {
-      Alert.alert('Upload Deliverable', 'Select a file (.fig, .pdf, .zip) to upload for milestone review.');
+      }
+
+      if (successCount > 0) {
+        showToast(`✓ ${successCount} file(s) uploaded and saved to database!`);
+        fetchFiles();
+      } else {
+        Alert.alert('Upload Failed', 'Could not upload selected file(s). Please try again.');
+      }
+    } catch (err: any) {
+      Alert.alert('Upload Error', err.message || 'An error occurred during file selection.');
+    } finally {
+      setUploading(false);
     }
   };
 

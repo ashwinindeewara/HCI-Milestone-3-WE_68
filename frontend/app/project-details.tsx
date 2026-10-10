@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import Colors from '../src/constants/colors';
-import { FreelancerApiService, API_BASE_URL, apiClient, getCurrentUser, clearApiCache } from '../src/services/api';
+import { FreelancerApiService, API_BASE_URL, apiClient, getCurrentUser, clearApiCache, pickDocument } from '../src/services/api';
 
 interface MilestoneItem {
   id: string;
@@ -437,57 +437,41 @@ export default function ProjectDetailsScreen() {
   };
 
   // Open file picker for deliverable or project file upload
-  const openFilePicker = (forDeliverable = false) => {
-    if (Platform.OS === 'web' && typeof document !== 'undefined') {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.multiple = true;
-      input.accept = '*/*';
-      input.onchange = async (e: any) => {
-        const pickedFiles = Array.from(e.target.files || []) as File[];
-        if (pickedFiles.length > 0) {
-          if (forDeliverable) {
-            const names = pickedFiles.map((f) => f.name);
-            setSelectedFiles((prev) => Array.from(new Set([...prev, ...names])));
-          } else {
-            // Directly upload file to project files
-            for (const f of pickedFiles) {
-              const localFile: FileItem = {
-                id: 'f-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
-                originalFileName: f.name,
-                fileSizeFormatted: `${(f.size / (1024 * 1024)).toFixed(1)} MB`,
-                uploadedBy: activeFreelancer,
-                fileUrl: Platform.OS === 'web' ? (window as any).URL.createObjectURL(f) : '',
-                createdAt: 'Just now',
-              };
-              setFiles((prev) => [localFile, ...prev]);
-              showToast(`✓ Uploaded ${f.name}`);
+  const openFilePicker = async (forDeliverable = false) => {
+    try {
+      const pickedDocs = await pickDocument({ multiple: true });
+      if (pickedDocs.length === 0) return;
 
-              try {
-                const formData = new FormData();
-                formData.append('file', f);
-                formData.append('relatedEntityType', 'PROJECT');
-                formData.append('relatedEntityId', projectId);
-                formData.append('uploadedBy', activeFreelancer);
-                if (currentUser?.email) formData.append('uploadedByEmail', currentUser.email);
+      if (forDeliverable) {
+        const names = pickedDocs.map((f) => f.name);
+        setSelectedFiles((prev) => Array.from(new Set([...prev, ...names])));
+      } else {
+        // Directly upload files to project files
+        for (const doc of pickedDocs) {
+          const localFile: FileItem = {
+            id: 'f-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+            originalFileName: doc.name,
+            fileSizeFormatted: doc.size ? `${(doc.size / (1024 * 1024)).toFixed(1)} MB` : '1 MB',
+            uploadedBy: activeFreelancer,
+            fileUrl: doc.uri,
+            createdAt: 'Just now',
+          };
+          setFiles((prev) => [localFile, ...prev]);
+          showToast(`✓ Uploading ${doc.name}...`);
 
-                fetch(`${API_BASE_URL}/files/upload`, {
-                  method: 'POST',
-                  body: formData,
-                }).then(async (res) => {
-                  if (res.ok) {
-                    const saved = await res.json();
-                    setFiles((current) => current.map((item) => (item.id === localFile.id ? saved : item)));
-                  }
-                }).catch(() => { });
-              } catch (err) { }
+          try {
+            const saved = await FreelancerApiService.uploadFile(doc, 'PROJECT', projectId, activeFreelancer);
+            if (saved && saved.id) {
+              setFiles((current) => current.map((item) => (item.id === localFile.id ? saved : item)));
+              showToast(`✓ Saved ${doc.name}`);
             }
+          } catch (err: any) {
+            console.warn('Failed to upload project file:', err);
           }
         }
-      };
-      input.click();
-    } else {
-      Alert.alert('File Upload', 'Select documents, archives or design files.');
+      }
+    } catch (err: any) {
+      Alert.alert('File Selection Error', err.message || 'Could not select files.');
     }
   };
 

@@ -15,7 +15,7 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
-import { apiClient, getCurrentUser, API_BASE_URL, FreelancerApiService } from '../src/services/api';
+import { apiClient, getCurrentUser, API_BASE_URL, FreelancerApiService, pickDocument } from '../src/services/api';
 import {
   HomeIcon,
   ProjectsIcon,
@@ -67,58 +67,47 @@ export default function CreateDisputeScreen() {
   const [issueModalVisible, setIssueModalVisible] = useState(false);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
 
-  // Trigger Windows File Explorer Dialog for Individual Files
-  const openLaptopFilePicker = () => {
-    if (Platform.OS === 'web' && typeof document !== 'undefined') {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.multiple = true;
-      input.accept = '*/*';
-      input.onchange = async (e: any) => {
-        const files = Array.from(e.target.files || []) as File[];
-        if (files.length > 0) {
-          const currentUser = getCurrentUser();
-          const uploader = currentUser?.fullName || 'Freelancer';
-          for (const file of files) {
-            try {
-              const res = await FreelancerApiService.uploadFile(file, 'DISPUTE', 'NEW', uploader);
-              const ref = res?.fileUrl || res?.originalFileName || file.name;
-              setUploadedFiles((prev) => Array.from(new Set([...prev, ref])));
-            } catch (err) {
-              setUploadedFiles((prev) => Array.from(new Set([...prev, file.name])));
-            }
-          }
+  // Trigger document picker for individual or multiple files
+  const openLaptopFilePicker = async () => {
+    try {
+      const pickedDocs = await pickDocument({ multiple: true });
+      if (pickedDocs.length === 0) return;
+      const currentUser = getCurrentUser();
+      const uploader = currentUser?.fullName || 'Freelancer';
+
+      for (const doc of pickedDocs) {
+        try {
+          const res = await FreelancerApiService.uploadFile(doc, 'DISPUTE', 'NEW', uploader);
+          const ref = res?.fileUrl || res?.originalFileName || doc.name;
+          setUploadedFiles((prev) => Array.from(new Set([...prev, ref])));
+        } catch (err) {
+          setUploadedFiles((prev) => Array.from(new Set([...prev, doc.name])));
         }
-      };
-      input.click();
+      }
+    } catch (err: any) {
+      Alert.alert('File Selection Error', err.message || 'Failed to select files.');
     }
   };
 
-  // Trigger Windows File Explorer Dialog for Entire Folders (Directory Upload)
-  const openLaptopFolderPicker = () => {
-    if (Platform.OS === 'web' && typeof document !== 'undefined') {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.setAttribute('webkitdirectory', 'true');
-      input.setAttribute('directory', 'true');
-      input.multiple = true;
-      input.onchange = async (e: any) => {
-        const files = Array.from(e.target.files || []) as File[];
-        if (files.length > 0) {
-          const currentUser = getCurrentUser();
-          const uploader = currentUser?.fullName || 'Freelancer';
-          for (const file of files) {
-            try {
-              const res = await FreelancerApiService.uploadFile(file, 'DISPUTE', 'FOLDER', uploader);
-              const ref = res?.fileUrl || res?.originalFileName || file.name;
-              setUploadedFiles((prev) => Array.from(new Set([...prev, ref])));
-            } catch (err) {
-              setUploadedFiles((prev) => Array.from(new Set([...prev, file.name])));
-            }
-          }
+  // Trigger document picker for directory/batch files
+  const openLaptopFolderPicker = async () => {
+    try {
+      const pickedDocs = await pickDocument({ multiple: true });
+      if (pickedDocs.length === 0) return;
+      const currentUser = getCurrentUser();
+      const uploader = currentUser?.fullName || 'Freelancer';
+
+      for (const doc of pickedDocs) {
+        try {
+          const res = await FreelancerApiService.uploadFile(doc, 'DISPUTE', 'FOLDER', uploader);
+          const ref = res?.fileUrl || res?.originalFileName || doc.name;
+          setUploadedFiles((prev) => Array.from(new Set([...prev, ref])));
+        } catch (err) {
+          setUploadedFiles((prev) => Array.from(new Set([...prev, doc.name])));
         }
-      };
-      input.click();
+      }
+    } catch (err: any) {
+      Alert.alert('File Selection Error', err.message || 'Failed to select files.');
     }
   };
 

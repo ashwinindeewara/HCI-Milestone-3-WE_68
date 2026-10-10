@@ -1,7 +1,73 @@
 import axios from 'axios';
 import { Platform } from 'react-native';
+import * as DocumentPicker from 'expo-document-picker';
 import { getUserSession } from './storage';
 import { getSavedUserData, getAuthToken } from './authService';
+
+export interface PickedDocument {
+  uri: string;
+  name: string;
+  type: string;
+  size?: number;
+  file?: File;
+}
+
+/**
+ * Pick single or multiple documents/files securely from native device storage or web browser.
+ */
+export const pickDocument = async (options?: {
+  multiple?: boolean;
+  type?: string | string[];
+}): Promise<PickedDocument[]> => {
+  try {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: options?.type || '*/*',
+      copyToCacheDirectory: true,
+      multiple: options?.multiple ?? false,
+    });
+
+    if (result.canceled || !result.assets || result.assets.length === 0) {
+      return [];
+    }
+
+    return result.assets.map((asset) => ({
+      uri: asset.uri,
+      name: asset.name || 'document',
+      type: asset.mimeType || (asset as any).type || 'application/octet-stream',
+      size: asset.size,
+      file: asset.file,
+    }));
+  } catch (error) {
+    console.warn('Error picking document:', error);
+    return [];
+  }
+};
+
+/**
+ * Safely append file to FormData for Spring Boot multipart endpoints across Web and Native React Native.
+ */
+export const appendFileToFormData = (formData: FormData, fieldName: string, file: any) => {
+  if (Platform.OS === 'web' && file instanceof File) {
+    formData.append(fieldName, file);
+  } else if (Platform.OS === 'web' && file?.file instanceof File) {
+    formData.append(fieldName, file.file);
+  } else if (typeof file === 'object' && file?.uri) {
+    formData.append(fieldName, {
+      uri: file.uri,
+      name: file.name || file.fileName || 'upload',
+      type: file.type || file.mimeType || 'application/octet-stream',
+    } as any);
+  } else if (typeof file === 'string' && (file.startsWith('file://') || file.startsWith('content://') || file.startsWith('ph://'))) {
+    formData.append(fieldName, {
+      uri: file,
+      name: file.split('/').pop() || 'upload',
+      type: 'application/octet-stream',
+    } as any);
+  } else {
+    formData.append(fieldName, file);
+  }
+};
+
 
 /**
  * Spring Boot Backend API Base URL Configuration:
@@ -438,18 +504,15 @@ export const FreelancerApiService = {
     const user = getCurrentUser();
     const targetEmail = email || user?.email || '';
     const formData = new FormData();
-    formData.append('file', file);
+    appendFileToFormData(formData, 'file', file);
     if (targetEmail) {
       formData.append('email', targetEmail);
     }
-    const res = await fetch(`${API_BASE_URL}/freelancer/profile/image${targetEmail ? `?email=${encodeURIComponent(targetEmail)}` : ''}`, {
-      method: 'POST',
-      body: formData,
+    const res = await apiClient.post('/freelancer/profile/image', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      params: targetEmail ? { email: targetEmail } : undefined,
     });
-    if (!res.ok) {
-      throw new Error(`Profile image upload failed: ${res.statusText}`);
-    }
-    return res.json();
+    return res.data;
   },
   deleteProfile: (idOrEmail?: string | number) => {
     if (typeof idOrEmail === 'number' || (typeof idOrEmail === 'string' && /^\d+$/.test(idOrEmail))) {
@@ -468,19 +531,26 @@ export const FreelancerApiService = {
   uploadFile: async (file: any, relatedEntityType = 'PROJECT', relatedEntityId = 'GENERAL', uploadedBy?: string) => {
     const user = getCurrentUser();
     const formData = new FormData();
-    formData.append('file', file);
+    appendFileToFormData(formData, 'file', file);
     formData.append('relatedEntityType', relatedEntityType);
     formData.append('relatedEntityId', relatedEntityId);
     formData.append('uploadedBy', uploadedBy || user?.fullName || 'Freelancer');
     if (user?.email) formData.append('uploadedByEmail', user.email);
-    const res = await fetch(`${API_BASE_URL}/files/upload`, {
-      method: 'POST',
-      body: formData,
+    const res = await apiClient.post('/files/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
     });
-    if (!res.ok) {
-      throw new Error(`File upload failed: ${res.statusText}`);
-    }
-    return res.json();
+    return res.data;
+  },
+  uploadProjectFile: async (projectId: string, file: any, uploadedBy?: string) => {
+    const user = getCurrentUser();
+    const formData = new FormData();
+    appendFileToFormData(formData, 'file', file);
+    formData.append('uploadedBy', uploadedBy || user?.fullName || 'Freelancer');
+    if (user?.email) formData.append('uploadedByEmail', user.email);
+    const res = await apiClient.post(`/projects/${projectId}/files`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return res.data;
   },
   getFiles: (entityType?: string, entityId?: string) => {
     if (entityType && entityId) {

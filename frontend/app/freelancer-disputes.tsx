@@ -16,7 +16,7 @@ import {
 import { useRouter, useFocusEffect } from 'expo-router';
 import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
-import { apiClient, clearApiCache, getCurrentUser, FreelancerApiService } from '../src/services/api';
+import { apiClient, clearApiCache, getCurrentUser, FreelancerApiService, pickDocument } from '../src/services/api';
 import {
   HomeIcon,
   ProjectsIcon,
@@ -182,28 +182,23 @@ export default function FreelancerDisputesScreen() {
     });
   };
 
-  const openEditFilePicker = (folder = false) => {
-    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.multiple = true;
-    if (folder) {
-      input.setAttribute('webkitdirectory', 'true');
-      input.setAttribute('directory', 'true');
-    }
-    input.onchange = async (event: any) => {
-      const files = Array.from(event.target.files || []) as File[];
-      for (const file of files) {
+  const openEditFilePicker = async (folder = false) => {
+    try {
+      const pickedDocs = await pickDocument({ multiple: true });
+      if (pickedDocs.length === 0) return;
+
+      for (const doc of pickedDocs) {
         try {
-          const response = await FreelancerApiService.uploadFile(file, 'DISPUTE', editingDispute?.id || 'EDIT', currentUser?.fullName || 'Freelancer');
-          const fileRef = response?.fileUrl || response?.originalFileName || file.name;
+          const response = await FreelancerApiService.uploadFile(doc, 'DISPUTE', editingDispute?.id || 'EDIT', currentUser?.fullName || 'Freelancer');
+          const fileRef = response?.fileUrl || response?.originalFileName || doc.name;
           setEditEvidenceFiles((previous) => Array.from(new Set([...previous, fileRef])));
         } catch {
-          setEditEvidenceFiles((previous) => Array.from(new Set([...previous, file.name])));
+          setEditEvidenceFiles((previous) => Array.from(new Set([...previous, doc.name])));
         }
       }
-    };
-    input.click();
+    } catch (err: any) {
+      Alert.alert('File Selection Error', err.message || 'Could not select files.');
+    }
   };
 
   const saveEditedDispute = async () => {
