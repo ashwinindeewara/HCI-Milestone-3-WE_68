@@ -1352,8 +1352,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   contentContainer: {
-    padding: 18,
-    paddingBottom: 40,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 110,
   },
   topHeaderBar: {
     flexDirection: 'row',

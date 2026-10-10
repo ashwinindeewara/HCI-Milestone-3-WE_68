@@ -183,7 +183,7 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     padding: Theme.spacing.md,
-    paddingBottom: 80,
+    paddingBottom: 110,
   },
   headerTitle: {
     fontSize: 26,

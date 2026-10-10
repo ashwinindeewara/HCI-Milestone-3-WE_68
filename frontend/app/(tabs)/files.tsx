@@ -276,8 +276,8 @@ export default function ProjectFilesScreen() {
               <Text style={{ fontSize: 20 }}>📄</Text>
             </View>
 
-            <View style={{ flex: 1 }}>
-              <Text style={styles.fileName}>{item.name}</Text>
+            <View style={{ flex: 1, marginRight: 8 }}>
+              <Text style={styles.fileName} numberOfLines={1} ellipsizeMode="middle">{item.name}</Text>
               <Text style={styles.fileMeta}>
                 {item.type} • {item.size}
               </Text>
@@ -306,8 +306,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   contentContainer: {
-    padding: 20,
-    paddingBottom: 40,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 110,
     maxWidth: 600,
     width: '100%',
     alignSelf: 'center',

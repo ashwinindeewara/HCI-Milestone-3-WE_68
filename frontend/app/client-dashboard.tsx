@@ -415,7 +415,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   contentContainer: {
     padding: Theme.spacing.md,
-    paddingBottom: 80,
+    paddingBottom: 110,
   },
   centerContainer: {
     flex: 1,
@@ -465,9 +465,11 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   userGreetingRow: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Theme.spacing.sm,
+    marginRight: Theme.spacing.sm,
   },
   avatarCircle: {
     width: 44,
@@ -533,7 +535,8 @@ const styles = StyleSheet.create({
   },
   actionPillWhite: {
     flex: 1,
-    height: 44,
+    minHeight: 44,
+    paddingHorizontal: 8,
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
@@ -553,7 +556,8 @@ const styles = StyleSheet.create({
   },
   actionPillGreen: {
     flex: 1,
-    height: 44,
+    minHeight: 44,
+    paddingHorizontal: 8,
     backgroundColor: Colors.primary,
     borderRadius: Theme.borderRadius.md,
     flexDirection: 'row',

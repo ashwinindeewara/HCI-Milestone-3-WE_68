@@ -622,8 +622,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   contentContainer: {
-    padding: Theme.spacing.lg,
-    paddingBottom: 40,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 110,
   },
   centerContainer: {
     flex: 1,
@@ -639,8 +640,10 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   userGreetingRow: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    marginRight: 8,
   },
   avatarImg: {
     width: 48,
