@@ -35,6 +35,9 @@ public class Notification {
     @Column(name = "recipient_email")
     private String recipientEmail;
 
+    @Column(name = "recipient_role")
+    private String recipientRole;
+
     @Column(name = "sender_name")
     private String senderName;
 
@@ -204,6 +207,14 @@ public class Notification {
 
     public void setRecipientEmail(String recipientEmail) {
         this.recipientEmail = recipientEmail;
+    }
+
+    public String getRecipientRole() {
+        return recipientRole;
+    }
+
+    public void setRecipientRole(String recipientRole) {
+        this.recipientRole = recipientRole;
     }
 
     public String getSenderName() {

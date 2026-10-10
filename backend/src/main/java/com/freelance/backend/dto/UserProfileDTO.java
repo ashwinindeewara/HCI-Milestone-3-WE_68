@@ -2,6 +2,7 @@ package com.freelance.backend.dto;
 
 import com.freelance.backend.entity.User;
 import com.freelance.backend.entity.UserRole;
+import java.time.LocalDateTime;
 
 public class UserProfileDTO {
     private Long id;
@@ -13,6 +14,8 @@ public class UserProfileDTO {
     private String about;
     private String company;
     private String experience;
+    private String profileImageUrl;
+    private LocalDateTime createdAt;
 
     public UserProfileDTO() {}
 
@@ -26,6 +29,8 @@ public class UserProfileDTO {
         this.about = user.getAbout();
         this.company = user.getCompany();
         this.experience = user.getExperience();
+        this.profileImageUrl = user.getProfileImageUrl();
+        this.createdAt = user.getCreatedAt();
     }
 
     public UserProfileDTO(User user, Object fallback) {
@@ -102,5 +107,21 @@ public class UserProfileDTO {
 
     public void setExperience(String experience) {
         this.experience = experience;
+    }
+
+    public String getProfileImageUrl() {
+        return profileImageUrl;
+    }
+
+    public void setProfileImageUrl(String profileImageUrl) {
+        this.profileImageUrl = profileImageUrl;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
     }
 }

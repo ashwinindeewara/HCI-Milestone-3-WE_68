@@ -1,6 +1,7 @@
 package com.freelance.backend.controller;
 
 import com.freelance.backend.dto.FreelancerProfileDTO;
+import com.freelance.backend.dto.FreelancerListingDTO;
 import com.freelance.backend.entity.FreelancerProfile;
 import com.freelance.backend.service.FreelancerProfileService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,8 +34,8 @@ public class FreelancerProfileController {
     }
 
     @GetMapping("/all")
-    public ResponseEntity<List<FreelancerProfile>> getAllProfiles() {
-        List<FreelancerProfile> profiles = profileService.getAllFreelancerProfiles();
+    public ResponseEntity<List<FreelancerListingDTO>> getAllProfiles() {
+        List<FreelancerListingDTO> profiles = profileService.getAllFreelancerProfiles();
         return ResponseEntity.ok(profiles);
     }
 

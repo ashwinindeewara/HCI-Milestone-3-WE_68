@@ -9,9 +9,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
-import java.util.Random;
+import java.util.Optional;
 
 @Service
 public class MilestoneService {
@@ -35,9 +34,6 @@ public class MilestoneService {
 
     @Autowired
     private UserRepository userRepository;
-
-    @Autowired
-    private TransactionRepository transactionRepository;
 
     @Autowired
     private ProjectService projectService;
@@ -102,7 +98,8 @@ public class MilestoneService {
                 );
                 notif.setRecipientName(contract.getClientName());
                 notif.setSenderName(contract.getFreelancerName());
-                findUserEmail(contract.getClientName()).ifPresent(notif::setRecipientEmail);
+                notif.setRecipientRole("CLIENT");
+                setClientRecipientEmail(notif, contract);
                 notificationRepository.save(notif);
 
                 projectService.logActivity(
@@ -173,6 +170,7 @@ public class MilestoneService {
         long completedCount = milestones.stream()
                 .filter(m -> "COMPLETED".equalsIgnoreCase(m.getStatus())
                         || "RELEASED".equalsIgnoreCase(m.getStatus())
+                        || (includeSubmitted && "APPROVED".equalsIgnoreCase(m.getStatus()))
                         || (includeSubmitted && "SUBMITTED".equalsIgnoreCase(m.getStatus())))
                 .count();
         if (milestones.isEmpty()) return 0;
@@ -202,79 +200,20 @@ public class MilestoneService {
                 .orElse(null);
 
         if (milestone != null) {
-            milestone.setStatus("COMPLETED");
+            milestone.setStatus("APPROVED");
             milestoneRepository.save(milestone);
 
             String contractId = milestone.getContractId();
             if (contractId != null) {
-                // Update project & contract progress
-                List<Milestone> allMilestones = milestoneRepository.findByContractId(contractId);
-                int progress = calculateProgress(allMilestones, true);
-
+                recalculateProjectProgress(contractId);
                 contractRepository.findById(contractId).ifPresent(c -> {
-                    c.setCompletionPercentage(progress);
-                    if (progress >= 100) {
-                        c.setStatus("COMPLETED");
-                        c.setActiveStatusBadge("Completed & Paid");
-                    }
-                    contractRepository.save(c);
-
-                    // Create transaction for payout / fund release
-                    String txnId = "TXN-" + (2850 + new Random().nextInt(500));
-                    String refNo = "FTX-" + (90190 + new Random().nextInt(500));
-                    DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy-MM-dd hh:mm a");
-                    String now = LocalDateTime.now().format(dtf);
-
-                    Transaction txn = new Transaction(
-                            txnId,
-                            refNo,
-                            contractId,
-                            milestone.getId(),
-                            milestone.getTitle(),
-                            milestone.getAmount() != null ? milestone.getAmount() : 2000.0,
-                            "RELEASE",
-                            "COMPLETED",
-                            now
-                    );
-                    transactionRepository.save(txn);
-
-                    // Notify Freelancer
-                    Notification notif = new Notification(
-                            "Milestone Approved & Payment Released!",
-                            "Client approved deliverables for " + milestone.getTitle() + ". $" + String.format("%,.0f", milestone.getAmount()) + " has been released to your balance.",
-                            "Approved",
-                            "approved",
-                            milestone.getAmount() != null ? "$" + String.format("%,.0f", milestone.getAmount()) : "$2,000",
-                            "Payments",
-                            "/(tabs)/escrow",
-                            "View Payment Details",
-                            true,
-                            "Just now",
-                            "DELIVERABLE_APPROVED",
-                            milestone.getId(),
-                            "Congratulations! Client approved your deliverable for milestone '" + milestone.getTitle() + "'. Funds of $" + String.format("%,.0f", milestone.getAmount()) + " have been credited to your payout balance."
-                    );
-                    notif.setRecipientName(c.getFreelancerName());
-                    notif.setSenderName(c.getClientName());
-                    findUserEmail(c.getFreelancerName()).ifPresent(notif::setRecipientEmail);
-                    notificationRepository.save(notif);
-
                     projectService.logActivity(
                             "PRJ-" + contractId,
                             contractId,
                             "DELIVERABLE_APPROVED",
-                            "Deliverable approved and funds released for " + milestone.getTitle(),
+                            "Deliverable approved for " + milestone.getTitle() + "; payment is pending.",
                             c.getClientName()
                     );
-                });
-
-                projectRepository.findByContractId(contractId).ifPresent(p -> {
-                    p.setCompletionPercentage(progress);
-                    if (progress >= 100) {
-                        p.setStatus("COMPLETED");
-                        p.setStatusBadge("Completed & Paid");
-                    }
-                    projectRepository.save(p);
                 });
             }
         }
@@ -320,11 +259,8 @@ public class MilestoneService {
                 );
                 notif.setRecipientName(c.getFreelancerName());
                 notif.setSenderName(c.getClientName());
-                if (c.getFreelancerEmail() != null && !c.getFreelancerEmail().isBlank()) {
-                    notif.setRecipientEmail(c.getFreelancerEmail().trim());
-                } else {
-                    findUserEmail(c.getFreelancerName()).ifPresent(notif::setRecipientEmail);
-                }
+                notif.setRecipientRole("FREELANCER");
+                setFreelancerRecipientEmail(notif, c);
                 notificationRepository.save(notif);
 
                 projectService.logActivity(
@@ -357,17 +293,39 @@ public class MilestoneService {
         return saved;
     }
 
-    private java.util.Optional<String> findUserEmail(String fullName) {
-        if (fullName == null || fullName.isBlank()) {
-            return java.util.Optional.empty();
+    private void setClientRecipientEmail(Notification notification, Contract contract) {
+        if (contract.getClientEmail() != null && !contract.getClientEmail().isBlank()) {
+            notification.setRecipientEmail(contract.getClientEmail().trim().toLowerCase());
+            return;
         }
-        var found = userRepository.findByFullNameIgnoreCase(fullName.trim());
-        if (found.isPresent()) {
-            return found.map(User::getEmail);
+        resolveUserEmail(contract.getClientName(), UserRole.CLIENT)
+                .ifPresent(notification::setRecipientEmail);
+    }
+
+    private void setFreelancerRecipientEmail(Notification notification, Contract contract) {
+        if (contract.getFreelancerEmail() != null && !contract.getFreelancerEmail().isBlank()) {
+            notification.setRecipientEmail(contract.getFreelancerEmail().trim().toLowerCase());
+            return;
         }
-        return userRepository.findAll().stream()
-                .filter(u -> u.getFullName() != null && u.getFullName().toLowerCase().contains(fullName.trim().toLowerCase()))
-                .map(User::getEmail)
-                .findFirst();
+        resolveUserEmail(contract.getFreelancerName(), UserRole.FREELANCER)
+                .ifPresent(notification::setRecipientEmail);
+    }
+
+    private Optional<String> resolveUserEmail(String identity, UserRole role) {
+        if (identity == null || identity.isBlank()) {
+            return Optional.empty();
+        }
+        String value = identity.trim();
+        if (value.contains("@")) {
+            return userRepository.findByEmailIgnoreCase(value)
+                    .filter(user -> user.getRole() == role)
+                    .map(User::getEmail);
+        }
+        List<User> matches = userRepository.findAll().stream()
+                .filter(user -> user.getRole() == role)
+                .filter(user -> value.equalsIgnoreCase(user.getFullName())
+                        || (role == UserRole.CLIENT && value.equalsIgnoreCase(user.getCompany())))
+                .toList();
+        return matches.size() == 1 ? Optional.of(matches.get(0).getEmail()) : Optional.empty();
     }
 }

@@ -12,6 +12,7 @@ public class CreateDisputeRequest {
     private String freelancerEmail;
     private String clientEmail;
     private String contractId;
+    private String reporterRole;
     private String priority = "Medium";
 
     public CreateDisputeRequest() {}
@@ -102,6 +103,14 @@ public class CreateDisputeRequest {
 
     public void setContractId(String contractId) {
         this.contractId = contractId;
+    }
+
+    public String getReporterRole() {
+        return reporterRole;
+    }
+
+    public void setReporterRole(String reporterRole) {
+        this.reporterRole = reporterRole;
     }
 
     public String getPriority() {

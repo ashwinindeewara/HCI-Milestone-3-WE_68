@@ -409,9 +409,16 @@ public class DataInitializer implements CommandLineRunner {
         }
     }
 
+    private void saveSeededFreelancerNotification(Notification notification) {
+        notification.setRecipientRole("FREELANCER");
+        notification.setRecipientName("Chathuni Imalsha");
+        notification.setRecipientEmail("chathuniimalsha.com");
+        notificationRepository.save(notification);
+    }
+
     private void seedNotifications() {
         if (notificationRepository.count() == 0) {
-            notificationRepository.save(new Notification(
+            saveSeededFreelancerNotification(new Notification(
                     "Brand Identity & Marketing Assets",
                     "Milestone 1 Funded • Due Oct 05, 2024",
                     "In Escrow",
@@ -427,7 +434,7 @@ public class DataInitializer implements CommandLineRunner {
                     "Escrow funds of $1,800 for Milestone 1: Brand Strategy & Moodboards have been deposited by Acme Corp. Work can commence safely."
             ));
 
-            notificationRepository.save(new Notification(
+            saveSeededFreelancerNotification(new Notification(
                     "Logo & Brand Identity",
                     "Milestone Discrepancy • Filed Sep 15, 2024",
                     "Resolved",
@@ -443,7 +450,7 @@ public class DataInitializer implements CommandLineRunner {
                     "Dispute DSP-401 has been marked as Resolved following agreement on final vector asset deliverables."
             ));
 
-            notificationRepository.save(new Notification(
+            saveSeededFreelancerNotification(new Notification(
                     "Mobile App Contract",
                     "Scope Disagreement • Filed Oct 12, 2024",
                     "Open",
@@ -459,7 +466,7 @@ public class DataInitializer implements CommandLineRunner {
                     "New comment on dispute DSP-408 regarding additional screen variations requested outside original statement of work."
             ));
 
-            notificationRepository.save(new Notification(
+            saveSeededFreelancerNotification(new Notification(
                     "E-Commerce Redesign",
                     "Payment Delay • Filed Oct 10, 2024",
                     "Under Review",
@@ -476,7 +483,7 @@ public class DataInitializer implements CommandLineRunner {
             ));
 
             // First / Topmost Notification: New Contract Offer
-            notificationRepository.save(new Notification(
+            saveSeededFreelancerNotification(new Notification(
                     "E-Commerce Mobile App Redesign",
                     "New contract offer from TechVentures Inc. • Signature Required",
                     "New Contract",

@@ -18,6 +18,9 @@ public class Contract {
     @Column(nullable = false)
     private String clientName;
 
+    @Column(name = "client_email")
+    private String clientEmail;
+
     @Column(nullable = false)
     private String freelancerName;
 
@@ -92,6 +95,14 @@ public class Contract {
 
     public void setClientName(String clientName) {
         this.clientName = clientName;
+    }
+
+    public String getClientEmail() {
+        return clientEmail;
+    }
+
+    public void setClientEmail(String clientEmail) {
+        this.clientEmail = clientEmail;
     }
 
     public String getFreelancerName() {

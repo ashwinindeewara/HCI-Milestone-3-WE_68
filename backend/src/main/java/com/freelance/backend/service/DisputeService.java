@@ -9,6 +9,7 @@ import com.freelance.backend.entity.Notification;
 import com.freelance.backend.exception.ResourceNotFoundException;
 import com.freelance.backend.repository.DisputeMessageRepository;
 import com.freelance.backend.repository.DisputeRepository;
+import com.freelance.backend.repository.ContractRepository;
 import com.freelance.backend.repository.FreelancerProfileRepository;
 import com.freelance.backend.repository.NotificationRepository;
 import com.freelance.backend.repository.UserRepository;
@@ -41,6 +42,9 @@ public class DisputeService {
 
     @Autowired(required = false)
     private FreelancerProfileRepository profileRepository;
+
+    @Autowired(required = false)
+    private ContractRepository contractRepository;
 
     public List<Dispute> getAllDisputes() {
         return disputeRepository.findAll();
@@ -156,6 +160,20 @@ public class DisputeService {
                 ? request.getFreelancerName() : "Freelancer";
         String client = (request.getClientName() != null && !request.getClientName().isBlank())
                 ? request.getClientName() : "TechVentures Inc.";
+        String freelancerEmail = request.getFreelancerEmail();
+        String clientEmail = request.getClientEmail();
+        String project = request.getProject() != null ? request.getProject() : "E-Commerce Redesign";
+        String reporterRole = "CLIENT".equalsIgnoreCase(request.getReporterRole()) ? "CLIENT" : "FREELANCER";
+        if (contractRepository != null && request.getContractId() != null && !request.getContractId().isBlank()) {
+            var projectContract = contractRepository.findById(request.getContractId()).orElse(null);
+            if (projectContract != null) {
+                project = projectContract.getTitle();
+                client = projectContract.getClientName();
+                clientEmail = projectContract.getClientEmail();
+                freelancer = projectContract.getFreelancerName();
+                freelancerEmail = projectContract.getFreelancerEmail();
+            }
+        }
         String parties = request.getParties() != null ? request.getParties() : (client + " vs. " + freelancer);
 
         DateTimeFormatter dtf = DateTimeFormatter.ofPattern("MMM dd, yyyy");
@@ -164,13 +182,13 @@ public class DisputeService {
 
         String evidence = request.getEvidenceFile();
         if (evidence == null || evidence.isBlank()) {
-            evidence = "contract-agreement.pdf,approved-screens-specs.png";
+            evidence = "";
         }
 
         Dispute dispute = new Dispute(
                 id,
                 id,
-                request.getProject() != null ? request.getProject() : "E-Commerce Redesign",
+                project,
                 parties,
                 request.getIssueType() != null ? request.getIssueType() : "Payment Delay",
                 request.getDescription(),
@@ -184,8 +202,8 @@ public class DisputeService {
 
         dispute.setClientName(client);
         dispute.setFreelancerName(freelancer);
-        dispute.setFreelancerEmail(request.getFreelancerEmail());
-        dispute.setClientEmail(request.getClientEmail());
+        dispute.setFreelancerEmail(freelancerEmail);
+        dispute.setClientEmail(clientEmail);
         dispute.setContractId(request.getContractId());
         dispute.setPriority(request.getPriority() != null ? request.getPriority() : "Medium");
         dispute.setLastUpdatedDate(todayFormatted);
@@ -198,17 +216,18 @@ public class DisputeService {
 
         DisputeMessage initialMsg = new DisputeMessage(
                 saved.getId(),
-                freelancer,
-                "FREELANCER",
+                "CLIENT".equals(reporterRole) ? client : freelancer,
+                reporterRole,
                 request.getDescription(),
                 currentTime
         );
         messageRepository.save(initialMsg);
 
-        // Automatically create a notification for the client
-        Notification notifClient = new Notification(
+        String recipientRole = "CLIENT".equals(reporterRole) ? "FREELANCER" : "CLIENT";
+        String reporterName = "CLIENT".equals(reporterRole) ? client : freelancer;
+        Notification disputeNotification = new Notification(
                 "New Dispute Filed: " + saved.getProject(),
-                "Freelancer " + freelancer + " filed dispute " + saved.getId() + " (" + saved.getIssueType() + ")",
+                reporterName + " filed dispute " + saved.getId() + " (" + saved.getIssueType() + ")",
                 "Open Dispute",
                 "open",
                 "$" + String.format("%,.0f", amount),
@@ -219,9 +238,12 @@ public class DisputeService {
                 "Just now",
                 "DISPUTE_CREATED",
                 saved.getId(),
-                "Freelancer " + freelancer + " filed dispute " + saved.getId() + " for project '" + saved.getProject() + "'. Issue: " + saved.getIssueType() + ". Description: " + request.getDescription()
+                reporterName + " filed dispute " + saved.getId() + " for project '" + saved.getProject()
+                        + "'. Issue: " + saved.getIssueType() + ". Description: " + request.getDescription()
         );
-        notificationRepository.save(notifClient);
+        setDisputeRecipient(disputeNotification, saved, recipientRole);
+        disputeNotification.setSenderName(reporterName);
+        notificationRepository.save(disputeNotification);
 
         enrichDispute(saved);
         return saved;
@@ -308,6 +330,8 @@ public class DisputeService {
                 dispute.getId(),
                 senderName + " posted a new message in dispute " + dispute.getId() + ": \"" + request.getMessage() + "\""
         );
+        String recipientRole = isFromFreelancer ? "CLIENT" : "FREELANCER";
+        setDisputeRecipient(notif, dispute, recipientRole);
         notificationRepository.save(notif);
 
         return savedMsg;
@@ -344,24 +368,52 @@ public class DisputeService {
 
         Dispute saved = disputeRepository.save(dispute);
 
-        Notification notif = new Notification(
-                "Dispute " + saved.getId() + " Status: " + saved.getStatus(),
-                "Dispute regarding " + saved.getProject() + " has been updated to " + saved.getStatus() + ".",
-                saved.getStatus(),
-                "Resolved".equalsIgnoreCase(saved.getStatus()) ? "resolved" : "review",
-                saved.getAmount() != null ? "$" + String.format("%,.0f", saved.getAmount()) : "$2,400",
+        notificationRepository.saveAll(List.of(
+                createDisputeStatusNotification(saved, "CLIENT"),
+                createDisputeStatusNotification(saved, "FREELANCER")
+        ));
+
+        enrichDispute(saved);
+        return saved;
+    }
+
+    private Notification createDisputeStatusNotification(Dispute dispute, String recipientRole) {
+        Notification notification = new Notification(
+                "Dispute " + dispute.getId() + " Status: " + dispute.getStatus(),
+                "Dispute regarding " + dispute.getProject() + " has been updated to " + dispute.getStatus() + ".",
+                dispute.getStatus(),
+                "Resolved".equalsIgnoreCase(dispute.getStatus()) ? "resolved" : "review",
+                dispute.getAmount() != null ? "$" + String.format("%,.0f", dispute.getAmount()) : "$2,400",
                 "Disputes",
-                "/dispute-details?id=" + saved.getId(),
+                "/dispute-details?id=" + dispute.getId(),
                 "View Resolution Details",
                 true,
                 "Just now",
                 "DISPUTE_STATUS_CHANGED",
-                saved.getId(),
-                "Dispute " + saved.getId() + " for project '" + saved.getProject() + "' status changed to " + saved.getStatus() + ". Resolution summary: " + (saved.getResolutionNote() != null ? saved.getResolutionNote() : "Concluded by mediator.")
+                dispute.getId(),
+                "Dispute " + dispute.getId() + " for project '" + dispute.getProject() + "' status changed to " + dispute.getStatus() + ". Resolution summary: " + (dispute.getResolutionNote() != null ? dispute.getResolutionNote() : "Concluded by mediator.")
         );
-        notificationRepository.save(notif);
+        setDisputeRecipient(notification, dispute, recipientRole);
+        return notification;
+    }
 
-        enrichDispute(saved);
-        return saved;
+    private void setDisputeRecipient(Notification notification, Dispute dispute, String recipientRole) {
+        boolean isClient = "CLIENT".equals(recipientRole);
+        String recipientName = isClient ? dispute.getClientName() : dispute.getFreelancerName();
+        String recipientEmail = isClient ? dispute.getClientEmail() : dispute.getFreelancerEmail();
+
+        notification.setRecipientRole(recipientRole);
+        notification.setRecipientName(recipientName);
+        if (recipientEmail != null && !recipientEmail.isBlank()) {
+            notification.setRecipientEmail(recipientEmail.trim());
+        } else if (userRepository != null && recipientName != null && !recipientName.isBlank()) {
+            com.freelance.backend.entity.UserRole role = isClient
+                    ? com.freelance.backend.entity.UserRole.CLIENT
+                    : com.freelance.backend.entity.UserRole.FREELANCER;
+            userRepository.findAllByFullNameIgnoreCase(recipientName.trim()).stream()
+                    .filter(user -> user.getRole() == role)
+                    .findFirst()
+                    .ifPresent(user -> notification.setRecipientEmail(user.getEmail()));
+        }
     }
 }

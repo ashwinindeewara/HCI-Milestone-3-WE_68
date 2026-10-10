@@ -7,10 +7,13 @@ import com.freelance.backend.repository.ContractRepository;
 import com.freelance.backend.repository.NotificationRepository;
 import com.freelance.backend.repository.FreelancerProfileRepository;
 import com.freelance.backend.repository.UserRepository;
+import com.freelance.backend.entity.User;
+import com.freelance.backend.entity.UserRole;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class ContractService {
@@ -50,14 +53,15 @@ public class ContractService {
         }
         if (contract.getFreelancerEmail() != null && !contract.getFreelancerEmail().isBlank()) {
             contract.setFreelancerEmail(contract.getFreelancerEmail().trim().toLowerCase());
-        } else if (contract.getFreelancerName() != null && userRepository != null) {
-            List<com.freelance.backend.entity.User> matches = userRepository.findAllByFullNameIgnoreCase(contract.getFreelancerName().trim())
-                    .stream()
-                    .filter(user -> user.getRole() == com.freelance.backend.entity.UserRole.FREELANCER)
-                    .toList();
-            if (matches.size() == 1) {
-                contract.setFreelancerEmail(matches.get(0).getEmail().trim().toLowerCase());
-            }
+        } else {
+            resolveUserEmail(contract.getFreelancerName(), UserRole.FREELANCER)
+                    .ifPresent(contract::setFreelancerEmail);
+        }
+        if (contract.getClientEmail() != null && !contract.getClientEmail().isBlank()) {
+            contract.setClientEmail(contract.getClientEmail().trim().toLowerCase());
+        } else {
+            resolveUserEmail(contract.getClientName(), UserRole.CLIENT)
+                    .ifPresent(contract::setClientEmail);
         }
         Contract saved = contractRepository.save(contract);
 
@@ -88,10 +92,14 @@ public class ContractService {
                 saved.getId(),
                 "Client " + client + " has selected you and sent a contract offer for '" + saved.getTitle() + "' with total budget of " + amountFormatted + ". Review milestones and sign to start work."
         );
-            if (userRepository != null) {
-                userRepository.findByFullNameIgnoreCase(freelancer).ifPresent(user -> notif.setRecipientEmail(user.getEmail()));
+            notif.setRecipientName(freelancer);
+            notif.setSenderName(client);
+            Optional.ofNullable(saved.getFreelancerEmail()).ifPresent(notif::setRecipientEmail);
+            if (notif.getRecipientEmail() == null) {
+                resolveUserEmail(freelancer, UserRole.FREELANCER).ifPresent(notif::setRecipientEmail);
             }
-        notificationRepository.save(notif);
+            notif.setRecipientRole("FREELANCER");
+            notificationRepository.save(notif);
 
         return saved;
     }
@@ -118,9 +126,10 @@ public class ContractService {
                     contract.getId(),
                     "Contract " + contract.getId() + " is now active. Escrow funds have been secured and project workspace initialized."
             );
-                    if (userRepository != null) {
-                        userRepository.findByFullNameIgnoreCase(contract.getFreelancerName()).ifPresent(user -> notif.setRecipientEmail(user.getEmail()));
-                    }
+            notif.setRecipientName(contract.getFreelancerName());
+            notif.setSenderName(contract.getClientName());
+            setFreelancerRecipientEmail(notif, contract);
+            notif.setRecipientRole("FREELANCER");
             notificationRepository.save(notif);
         }
 
@@ -182,6 +191,10 @@ public class ContractService {
                 contract.getId(),
                 "You have accepted and signed the contract for '" + contract.getTitle() + "'. Project PRJ-" + contract.getId() + " is now active."
         );
+        notifFreelancer.setRecipientRole("FREELANCER");
+        notifFreelancer.setRecipientName(contract.getFreelancerName());
+        notifFreelancer.setSenderName(contract.getClientName());
+        setFreelancerRecipientEmail(notifFreelancer, contract);
         notificationRepository.save(notifFreelancer);
 
         // Client notification
@@ -202,6 +215,10 @@ public class ContractService {
                 contract.getId(),
                 "Freelancer " + contract.getFreelancerName() + " has officially signed the contract for " + contract.getTitle() + "."
         );
+        notifClient.setRecipientRole("CLIENT");
+        notifClient.setRecipientName(contract.getClientName());
+        notifClient.setSenderName(contract.getFreelancerName());
+        setClientRecipientEmail(notifClient, contract);
         notificationRepository.save(notifClient);
 
         return savedContract;
@@ -232,6 +249,10 @@ public class ContractService {
                 contract.getId(),
                 "Freelancer " + contract.getFreelancerName() + " declined contract " + contract.getId() + ". Reason: " + rejectionReason
         );
+        notifClient.setRecipientRole("CLIENT");
+        notifClient.setRecipientName(contract.getClientName());
+        notifClient.setSenderName(contract.getFreelancerName());
+        setClientRecipientEmail(notifClient, contract);
         notificationRepository.save(notifClient);
 
         return saved;
@@ -239,5 +260,44 @@ public class ContractService {
 
     public void deleteContract(String id) {
         contractRepository.deleteById(id);
+    }
+
+    private void setClientRecipientEmail(Notification notification, Contract contract) {
+        if (contract.getClientEmail() != null && !contract.getClientEmail().isBlank()) {
+            notification.setRecipientEmail(contract.getClientEmail().trim().toLowerCase());
+        } else {
+            resolveUserEmail(contract.getClientName(), UserRole.CLIENT)
+                    .ifPresent(notification::setRecipientEmail);
+        }
+    }
+
+    private void setFreelancerRecipientEmail(Notification notification, Contract contract) {
+        if (contract.getFreelancerEmail() != null && !contract.getFreelancerEmail().isBlank()) {
+            notification.setRecipientEmail(contract.getFreelancerEmail().trim().toLowerCase());
+        } else {
+            resolveUserEmail(contract.getFreelancerName(), UserRole.FREELANCER)
+                    .ifPresent(notification::setRecipientEmail);
+        }
+    }
+
+    private Optional<String> resolveUserEmail(String identity, UserRole role) {
+        if (userRepository == null || identity == null || identity.isBlank()) {
+            return Optional.empty();
+        }
+        String value = identity.trim();
+        if (value.contains("@")) {
+            return userRepository.findByEmailIgnoreCase(value)
+                    .filter(user -> user.getRole() == role)
+                    .map(User::getEmail);
+        }
+
+        List<User> matches = userRepository.findAll().stream()
+                .filter(user -> user.getRole() == role)
+                .filter(user -> value.equalsIgnoreCase(user.getFullName())
+                        || (role == UserRole.CLIENT && value.equalsIgnoreCase(user.getCompany())))
+                .toList();
+        return matches.size() == 1
+                ? Optional.of(matches.get(0).getEmail())
+                : Optional.empty();
     }
 }

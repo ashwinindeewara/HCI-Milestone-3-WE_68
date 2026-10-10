@@ -1,6 +1,7 @@
 package com.freelance.backend.service;
 
 import com.freelance.backend.dto.FreelancerProfileDTO;
+import com.freelance.backend.dto.FreelancerListingDTO;
 import com.freelance.backend.entity.FeaturedProject;
 import com.freelance.backend.entity.FreelancerProfile;
 import com.freelance.backend.exception.ResourceNotFoundException;
@@ -12,6 +13,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,8 +33,24 @@ public class FreelancerProfileService {
     @Autowired
     private FileStorageService fileStorageService;
 
-    public List<FreelancerProfile> getAllFreelancerProfiles() {
-        return profileRepository.findAll();
+    public List<FreelancerListingDTO> getAllFreelancerProfiles() {
+        Map<Long, FreelancerListingDTO> profiles = new LinkedHashMap<>();
+        for (FreelancerProfileRepository.FreelancerProfileListingRow row : profileRepository.findAllForListing()) {
+            FreelancerListingDTO profile = profiles.computeIfAbsent(
+                    row.getId(),
+                    id -> new FreelancerListingDTO(
+                            id,
+                            row.getFullName(),
+                            row.getTitle(),
+                            row.getRating(),
+                            row.getCompletedProjects(),
+                            row.getHourlyRate(),
+                            row.getStatus()
+                    )
+            );
+            profile.addSkill(row.getSkill());
+        }
+        return List.copyOf(profiles.values());
     }
 
     public FreelancerProfile getProfileById(Long id) {

@@ -15,9 +15,15 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     List<Notification> findByRecipientNameIgnoreCaseOrderByIdDesc(String recipientName);
 
     @Query("SELECT n FROM Notification n WHERE " +
-            "((:email IS NOT NULL AND TRIM(:email) <> '' AND n.recipientEmail IS NOT NULL AND LOWER(TRIM(n.recipientEmail)) = LOWER(TRIM(:email))) OR " +
-            "(:name IS NOT NULL AND TRIM(:name) <> '' AND n.recipientName IS NOT NULL AND LOWER(TRIM(n.recipientName)) = LOWER(TRIM(:name))) OR " +
-            "(:isChathuni = true AND n.recipientEmail IS NULL AND (n.recipientName IS NULL OR LOWER(n.recipientName) LIKE '%chathuni%'))) " +
+            "(UPPER(n.recipientRole) = UPPER(:role) AND (" +
+            "(:email IS NOT NULL AND TRIM(:email) <> '' AND n.recipientEmail IS NOT NULL AND LOWER(TRIM(n.recipientEmail)) = LOWER(TRIM(:email))) OR " +
+            "(:name IS NOT NULL AND TRIM(:name) <> '' AND n.recipientName IS NOT NULL AND LOWER(TRIM(n.recipientName)) = LOWER(TRIM(:name)) AND (n.recipientEmail IS NULL OR LOWER(TRIM(n.recipientEmail)) = LOWER(TRIM(:email)))) OR " +
+            "(:isChathuni = true AND n.recipientEmail IS NULL AND (n.recipientName IS NULL OR LOWER(n.recipientName) LIKE '%chathuni%')))) " +
            "ORDER BY n.id DESC")
-    List<Notification> findForUser(@Param("name") String name, @Param("email") String email, @Param("isChathuni") boolean isChathuni);
+    List<Notification> findForUser(
+            @Param("name") String name,
+            @Param("email") String email,
+            @Param("isChathuni") boolean isChathuni,
+            @Param("role") String role
+    );
 }
