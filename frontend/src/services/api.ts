@@ -1,5 +1,7 @@
 import axios from 'axios';
 import { Platform } from 'react-native';
+import { getUserSession } from './storage';
+import { getSavedUserData, getAuthToken } from './authService';
 
 /**
  * Spring Boot Backend API Base URL Configuration:
@@ -71,33 +73,77 @@ export const apiClient = axios.create({
 const apiCache = new Map<string, { data: any; timestamp: number }>();
 const CACHE_TTL_MS = 60000; // 60 seconds background revalidate freshness
 
-const getCurrentUserScope = (): string => {
-  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+export const getCurrentUser = () => {
+  const saved = getSavedUserData();
+  if (saved && (saved.email || saved.fullName)) {
+    return {
+      ...saved,
+      fullName: saved.fullName || saved.name || '',
+      email: saved.email || '',
+      role: String(saved.role || 'FREELANCER').toUpperCase(),
+    };
+  }
+  const session = getUserSession();
+  if (session && (session.email || session.fullName)) {
+    return {
+      ...session,
+      fullName: session.fullName || '',
+      email: session.email || '',
+      role: String(session.role || 'FREELANCER').toUpperCase(),
+    };
+  }
+  if (typeof window !== 'undefined' && window.localStorage) {
     try {
+      const stored = localStorage.getItem('auth_user');
+      if (stored) {
+        const u = JSON.parse(stored);
+        return {
+          ...u,
+          fullName: u.fullName || localStorage.getItem('auth_name') || '',
+          email: u.email || localStorage.getItem('auth_email') || '',
+          role: String(u.role || localStorage.getItem('auth_role') || 'FREELANCER').toUpperCase(),
+        };
+      }
+      const rawSession = localStorage.getItem('freelance_app_user_session') || localStorage.getItem('freelanceflow_user_data');
+      if (rawSession) {
+        const u = JSON.parse(rawSession);
+        return {
+          ...u,
+          fullName: u.fullName || '',
+          email: u.email || '',
+          role: String(u.role || 'FREELANCER').toUpperCase(),
+        };
+      }
       const email = localStorage.getItem('auth_email');
-      if (email) return email.toLowerCase().trim();
-      const user = localStorage.getItem('auth_user');
-      if (user) {
-        const parsed = JSON.parse(user);
-        if (parsed?.email) return parsed.email.toLowerCase().trim();
+      const fullName = localStorage.getItem('auth_name');
+      if (email || fullName) {
+        return {
+          email: email || '',
+          fullName: fullName || '',
+          role: String(localStorage.getItem('auth_role') || 'FREELANCER').toUpperCase(),
+        };
       }
-      const sess = localStorage.getItem('freelance_app_user_session');
-      if (sess) {
-        const parsed = JSON.parse(sess);
-        if (parsed?.email) return parsed.email.toLowerCase().trim();
-      }
-    } catch {}
+    } catch (e) {}
+  }
+  return null;
+};
+
+const getCurrentUserScope = (): string => {
+  const user = getCurrentUser();
+  if (user?.email) {
+    return user.email.toLowerCase().trim();
   }
   return 'anonymous';
 };
 
 export const getCachedApiData = <T = any>(url: string, params?: any): T | null => {
-  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-    try {
-      const cacheKey = `${getCurrentUserScope()}:${url}?${JSON.stringify(params || {})}`;
-      const memory = apiCache.get(cacheKey);
-      if (memory) return memory.data as T;
+  const scope = getCurrentUserScope();
+  const cacheKey = `${scope}:${url}?${JSON.stringify(params || {})}`;
+  const memory = apiCache.get(cacheKey);
+  if (memory) return memory.data as T;
 
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
       const stored = localStorage.getItem(`api_cache_${cacheKey}`);
       if (stored) {
         const parsed = JSON.parse(stored);
@@ -113,7 +159,7 @@ export const getCachedApiData = <T = any>(url: string, params?: any): T | null =
 
 export const clearApiCache = (urlPrefix?: string) => {
   apiCache.clear();
-  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+  if (typeof window !== 'undefined' && window.localStorage) {
     try {
       const keysToRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
@@ -131,6 +177,16 @@ export const clearApiCache = (urlPrefix?: string) => {
 
 apiClient.interceptors.request.use(
   (config) => {
+    // Dynamically attach active Authorization Bearer Token on every request across platforms
+    let token: string | null | undefined = getAuthToken() || getUserSession()?.token;
+    if (!token && typeof window !== 'undefined' && window.localStorage) {
+      token = localStorage.getItem('freelanceflow_auth_token') || localStorage.getItem('auth_token') || undefined;
+    }
+
+    if (token) {
+      config.headers['Authorization'] = `Bearer ${token}`;
+    }
+
     const method = config.method?.toUpperCase();
     if (method && ['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
       // Invalidate cache immediately on mutations
@@ -160,7 +216,7 @@ apiClient.get = ((url: string, config?: any) => {
   let cached = apiCache.get(cacheKey);
 
   // 2. Check localStorage cache
-  if (!cached && Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+  if (!cached && typeof window !== 'undefined' && window.localStorage) {
     try {
       const stored = localStorage.getItem(`api_cache_${cacheKey}`);
       if (stored) {
@@ -190,7 +246,7 @@ apiClient.get = ((url: string, config?: any) => {
       .then((response) => {
         const entry = { data: response.data, timestamp: Date.now() };
         apiCache.set(cacheKey, entry);
-        if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+        if (typeof window !== 'undefined' && window.localStorage) {
           try {
             localStorage.setItem(`api_cache_${cacheKey}`, JSON.stringify(entry));
           } catch {}
@@ -211,7 +267,7 @@ apiClient.get = ((url: string, config?: any) => {
   return originalGet(url, config).then((response) => {
     const entry = { data: response.data, timestamp: Date.now() };
     apiCache.set(cacheKey, entry);
-    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+    if (typeof window !== 'undefined' && window.localStorage) {
       try {
         localStorage.setItem(`api_cache_${cacheKey}`, JSON.stringify(entry));
       } catch {}
@@ -219,37 +275,6 @@ apiClient.get = ((url: string, config?: any) => {
     return response;
   });
 }) as any;
-
-export const getCurrentUser = () => {
-  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-    try {
-      const stored = localStorage.getItem('auth_user');
-      if (stored) {
-        const u = JSON.parse(stored);
-        return {
-          ...u,
-          fullName: u.fullName || localStorage.getItem('auth_name') || '',
-          email: u.email || localStorage.getItem('auth_email') || '',
-        };
-      }
-      const session = localStorage.getItem('freelance_app_user_session') || localStorage.getItem('freelanceflow_user_data');
-      if (session) {
-        const u = JSON.parse(session);
-        return { ...u, fullName: u.fullName || '', email: u.email || '' };
-      }
-      const email = localStorage.getItem('auth_email');
-      const fullName = localStorage.getItem('auth_name');
-      if (email || fullName) {
-        return {
-          email: email || '',
-          fullName: fullName || '',
-          role: localStorage.getItem('auth_role') || 'FREELANCER',
-        };
-      }
-    } catch (e) {}
-  }
-  return null;
-};
 
 export const FreelancerApiService = {
   // Contracts
