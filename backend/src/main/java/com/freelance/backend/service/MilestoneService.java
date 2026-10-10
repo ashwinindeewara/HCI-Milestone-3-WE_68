@@ -129,7 +129,43 @@ public class MilestoneService {
         milestoneRepository.save(milestone);
         recalculateProjectProgress(milestone.getContractId());
 
-        return deliverableRepository.save(deliverable);
+        Deliverable savedDeliverable = deliverableRepository.save(deliverable);
+
+        // Notify client and log activity on re-submission
+        if (milestone.getContractId() != null) {
+            contractRepository.findById(milestone.getContractId()).ifPresent(contract -> {
+                Notification notif = new Notification(
+                        "Deliverable Re-submitted for " + milestone.getTitle(),
+                        contract.getFreelancerName() + " has re-submitted updated work for " + milestone.getTitle() + ". Please review deliverables.",
+                        "Submitted",
+                        "review",
+                        milestone.getAmount() != null ? "$" + String.format("%,.0f", milestone.getAmount()) : "$2,000",
+                        "Deliverables",
+                        "/client-milestone-review?contractId=" + contract.getId() + "&milestoneId=" + milestone.getId(),
+                        "Review Deliverable",
+                        true,
+                        "Just now",
+                        "DELIVERABLE_SUBMITTED",
+                        milestone.getId(),
+                        "Freelancer " + contract.getFreelancerName() + " re-uploaded '" + savedDeliverable.getFileName() + "' for milestone '" + milestone.getTitle() + "'. Awaiting client approval."
+                );
+                notif.setRecipientName(contract.getClientName());
+                notif.setSenderName(contract.getFreelancerName());
+                notif.setRecipientRole("CLIENT");
+                setClientRecipientEmail(notif, contract);
+                notificationRepository.save(notif);
+
+                projectService.logActivity(
+                        "PRJ-" + contract.getId(),
+                        contract.getId(),
+                        "MILESTONE_DELIVERED",
+                        "Re-submitted deliverable '" + savedDeliverable.getFileName() + "' for " + milestone.getTitle(),
+                        contract.getFreelancerName()
+                );
+            });
+        }
+
+        return savedDeliverable;
     }
 
     public List<Deliverable> getDeliverablesForMilestone(String milestoneId) {

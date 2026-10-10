@@ -198,16 +198,17 @@ public class ContractService {
         notificationRepository.save(notifFreelancer);
 
         // Client notification
+        String formattedProjId = contract.getId().startsWith("PRJ-") ? contract.getId() : "PRJ-" + contract.getId();
         Notification notifClient = new Notification(
                 contract.getClientName(),
                 contract.getFreelancerName(),
-                "Contract Signed by " + contract.getFreelancerName(),
-                contract.getFreelancerName() + " has signed the contract for " + contract.getTitle() + ". Project is now active.",
+                "Freelancer has accepted the contract",
+                contract.getFreelancerName() + " has accepted the contract for " + contract.getTitle() + ". Project " + formattedProjId + " is now active.",
                 "Contract Signed",
                 "contract",
                 contract.getTotalBudget() != null ? "$" + String.format("%,.0f", contract.getTotalBudget()) : "$8,000",
                 "Contracts",
-                "/project-details?id=" + contract.getId(),
+                "/project-details?id=" + formattedProjId,
                 "View Project Details",
                 true,
                 "Just now",

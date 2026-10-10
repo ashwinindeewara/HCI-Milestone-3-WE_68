@@ -115,8 +115,10 @@ export default function ClientNotificationsScreen() {
       } else if (item.actionUrl) {
         router.push(item.actionUrl as any);
       }
-    } else if (item.type === 'CONTRACT_SIGNED') {
-      router.push('/client-contracts');
+    } else if (item.type === 'CONTRACT_SIGNED' || item.type === 'CONTRACT_ACCEPTED') {
+      const targetId = item.relatedEntityId || item.id;
+      const projId = String(targetId).startsWith('PRJ-') ? String(targetId) : `PRJ-${targetId}`;
+      router.push(`/project-details?id=${encodeURIComponent(projId)}` as any);
     } else if (item.actionUrl) {
       router.push(item.actionUrl as any);
     }
