@@ -24,7 +24,7 @@ public class FreelancerProfileController {
             @RequestParam(value = "email", required = false) String email
     ) {
         if (id != null) {
-            return ResponseEntity.ok(profileService.getProfileById(id) );
+            return ResponseEntity.ok(profileService.getProfileById(id));
         }
         if (email != null && !email.isBlank()) {
             return ResponseEntity.ok(profileService.getProfileByEmail(email));
@@ -33,7 +33,7 @@ public class FreelancerProfileController {
     }
 
     @GetMapping("/all")
-    public ResponseEntity<?> getAllProfiles() {
+    public ResponseEntity<List<FreelancerProfile>> getAllProfiles() {
         List<FreelancerProfile> profiles = profileService.getAllFreelancerProfiles();
         return ResponseEntity.ok(profiles);
     }
@@ -50,27 +50,36 @@ public class FreelancerProfileController {
     ) {
         String email = (emailParam != null && !emailParam.isBlank())
                 ? emailParam
-                : ((dto.getEmail() != null && !dto.getEmail().isBlank()) ? dto.getEmail() : "chathuniimalsha.com");
-        return ResponseEntity.ok(profileService.updateProfile(email, dto));
+                : dto.getEmail();
+        if (email == null || email.isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
+        return ResponseEntity.ok(profileService.updateProfile(email.trim().toLowerCase(), dto));
     }
 
     @PutMapping("/{email}")
     public ResponseEntity<FreelancerProfile> updateProfileByEmail(@PathVariable String email, @RequestBody FreelancerProfileDTO dto) {
-        return ResponseEntity.ok(profileService.updateProfile(email, dto));
+        return ResponseEntity.ok(profileService.updateProfile(email.trim().toLowerCase(), dto));
     }
 
     @PostMapping("/skills")
     public ResponseEntity<FreelancerProfile> addSkill(@RequestBody Map<String, String> payload) {
-        String email = payload.getOrDefault("email", "chathuniimalsha.com");
+        String email = payload.get("email");
+        if (email == null || email.isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
         String skill = payload.get("skill");
-        return ResponseEntity.ok(profileService.addSkill(email, skill));
+        return ResponseEntity.ok(profileService.addSkill(email.trim().toLowerCase(), skill));
     }
 
     @DeleteMapping("/skills")
     public ResponseEntity<FreelancerProfile> removeSkill(@RequestBody Map<String, String> payload) {
-        String email = payload.getOrDefault("email", "chathuniimalsha.com");
+        String email = payload.get("email");
+        if (email == null || email.isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
         String skill = payload.get("skill");
-        return ResponseEntity.ok(profileService.removeSkill(email, skill));
+        return ResponseEntity.ok(profileService.removeSkill(email.trim().toLowerCase(), skill));
     }
 
     @PostMapping("/image")
@@ -84,8 +93,29 @@ public class FreelancerProfileController {
             email = request.getParameter("email");
         }
         if (email == null || email.isBlank()) {
-            email = "chathuniimalsha.com";
+            return ResponseEntity.badRequest().build();
         }
         return ResponseEntity.ok(profileService.uploadProfileImage(email.trim().toLowerCase(), file));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteProfileById(@PathVariable Long id) {
+        profileService.deleteProfileById(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping
+    public ResponseEntity<Void> deleteProfile(
+            @RequestParam(value = "id", required = false) Long id,
+            @RequestParam(value = "email", required = false) String email
+    ) {
+        if (id != null) {
+            profileService.deleteProfileById(id);
+        } else if (email != null && !email.isBlank()) {
+            profileService.deleteProfileByEmail(email);
+        } else {
+            return ResponseEntity.badRequest().build();
+        }
+        return ResponseEntity.noContent().build();
     }
 }

@@ -1,303 +1,695 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TextInput,
-  TouchableOpacity,
-  SafeAreaView,
-  Alert,
-} from 'react-native';
-import { useRouter } from 'expo-router';
+import React, { useState, useMemo } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView } from 'react-native';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import SkeletonCard from '../src/components/SkeletonCard';
 import Colors from '../src/constants/colors';
-import Theme from '../src/constants/theme';
+import AdminTabBar from '../src/components/AdminTabBar';
+import AdminToast, { ToastType } from '../src/components/AdminToast';
+import apiClient from '../src/services/api';
+import { formatAdminDateTime } from '../src/services/dateFormat';
+import { formatAdminMoney } from '../src/services/moneyFormat';
+import {
+  AdminIcon,
+  AdminCard,
+  AdminScreenHeader,
+  AdminSearchBar,
+  AdminButton,
+  AdminEmptyState,
+  StatusPill,
+} from '../src/components/AdminUI';
+import AdminModal, {
+  AdminField,
+  AdminNotice,
+  AdminDetailList,
+  AdminActionList,
+  AdminActionRow,
+  AdminSectionTitle,
+  AdminTag,
+} from '../src/components/AdminModal';
+import {
+  Tone,
+  adminLayout,
+  adminRadius,
+  adminSpace,
+  adminType,
+  MUTED_TEXT,
+} from '../src/constants/adminTheme';
+
+const ITEMS_PER_PAGE = 10;
 
 export default function AdminTransactionsScreen() {
-  const router = useRouter();
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeFilter, setActiveFilter] = useState('All');
+  const [sortField, setSortField] = useState<'date' | 'amount'>('date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [visibleLimit, setVisibleLimit] = useState(4);
 
-  const transactions = [
-    {
-      id: 'TXN-2847',
-      date: 'Oct 12, 2024',
-      project: 'E-Commerce Redesign',
-      client: 'Ruwan Sadeepa',
-      freelancer: 'Chathuni Imalsha',
-      amount: '$1,200',
-      status: 'Escrow Locked',
-      risk: 'Risk: Low',
-      riskLevel: 'low',
-    },
-    {
-      id: 'TXN-2846',
-      date: 'Oct 10, 2024',
-      project: 'Mobile App Contract',
-      client: 'Akila Deshan Corp',
-      freelancer: 'Amaya Perera',
-      amount: '$2,400',
-      status: 'Released',
-      risk: 'Risk: Low',
-      riskLevel: 'low',
-    },
-    {
-      id: 'TXN-2845',
-      date: 'Oct 08, 2024',
-      project: 'WordPress Theme Dev',
-      client: 'Ruwan Sadeepa',
-      freelancer: 'Vihaga Edirisinghe',
-      amount: '$750',
-      status: 'In Dispute',
-      risk: 'Risk: High',
-      riskLevel: 'high',
-    },
-    {
-      id: 'TXN-2844',
-      date: 'Oct 05, 2024',
-      project: 'Brand Identity Guide',
-      client: 'Akila Deshan',
-      freelancer: 'Amaya Perera',
-      amount: '$3,100',
-      status: 'Released',
-      risk: 'Risk: Medium',
-      riskLevel: 'medium',
-    },
-  ];
+  // Toast state
+  const [toast, setToast] = useState({ visible: false, message: '', type: 'success' as ToastType });
+  const showToast = (message: string, type: ToastType = 'success') => setToast({ visible: true, message, type });
 
-  const filteredTxns = transactions.filter(
-    (t) =>
-      t.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      t.project.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      t.client.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Modal States
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [isRefundModalOpen, setIsRefundModalOpen] = useState(false);
+  const [selectedTxn, setSelectedTxn] = useState<any>(null);
 
-  const handleInspectTxn = (txnId: string) => {
-    Alert.alert('Transaction Audit', `Opening detailed escrow ledger for transaction #${txnId}`);
+  // Refund Form Fields
+  const [refundReason, setRefundReason] = useState('Client requested milestone cancellation');
+  const [refundNote, setRefundNote] = useState('');
+
+  // Fetch Transactions
+  const { data: txnData, isLoading } = useQuery({
+    queryKey: ['adminTransactions'],
+    queryFn: async () => {
+      try {
+        const response = await apiClient.get('/admin/transactions');
+        return {
+          platformEscrowValue: response.data.platformEscrowValue || 0,
+          trend: response.data.trend || '+100% settled',
+          transactions: (response.data.transactions || []).map((t: any) => ({
+            ...t,
+            id: t.id?.toString(),
+            date: t.date || 'Today',
+            project: t.project || t.milestoneTitle || 'Milestone Payment',
+            client: t.client || 'Client Account',
+            freelancer: t.freelancer || 'Freelancer Account',
+            amount: typeof t.amount === 'number' ? `$${t.amount.toFixed(2)}` : (t.amount || '$0.00'),
+            rawAmount: typeof t.amount === 'number' ? t.amount : parseFloat(String(t.amount).replace(/[^0-9.]/g, '')) || 0,
+            status: t.status || 'COMPLETED',
+            risk: t.risk || 'Risk: Low',
+            riskLevel: t.riskLevel || 'low',
+          }))
+        };
+      } catch (error) {
+        console.warn('[AdminTransactions] Transactions endpoint connection error:', error);
+        throw error;
+      }
+    },
+    retry: 2,
+    retryDelay: 1000,
+  });
+
+  const platformEscrowValue = txnData?.platformEscrowValue || 0;
+  const trend = txnData?.trend || '+100% settled';
+  const rawTransactions = txnData?.transactions || [];
+
+  // Flag Transaction Mutation
+  const flagMutation = useMutation({
+    mutationFn: async (payload: { id: string; newStatus: string; project?: string; amount?: number; client?: string }) => {
+      await apiClient.put(`/admin/transactions/${payload.id}/flag`, {
+        status: payload.newStatus,
+        project: payload.project,
+        amount: payload.amount,
+        client: payload.client,
+      });
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['adminTransactions'] });
+      queryClient.invalidateQueries({ queryKey: ['adminKpis'] });
+      queryClient.invalidateQueries({ queryKey: ['adminRecentActivity'] });
+      queryClient.invalidateQueries({ queryKey: ['adminDisputes'] });
+      setIsDetailModalOpen(false);
+      const actionText = variables.newStatus === 'DISPUTED' ? 'flagged for audit' : 'cleared from audit';
+      showToast(`Transaction #${variables.id} ${actionText} successfully.`, 'success');
+    },
+    onError: () => {
+      showToast('Failed to update transaction audit flag.', 'error');
+    }
+  });
+
+  // Refund Mutation
+  const refundMutation = useMutation({
+    mutationFn: async (payload: { id: string; reason: string; amount?: number; project?: string; client?: string; freelancer?: string }) => {
+      const res = await apiClient.post(`/admin/transactions/${payload.id}/refund`, payload);
+      return res.data;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['adminTransactions'] });
+      queryClient.invalidateQueries({ queryKey: ['adminKpis'] });
+      queryClient.invalidateQueries({ queryKey: ['adminRecentActivity'] });
+      queryClient.invalidateQueries({ queryKey: ['adminDisputes'] });
+
+      setIsRefundModalOpen(false);
+      setIsDetailModalOpen(false);
+      setSelectedTxn(null);
+      setRefundNote('');
+      setRefundReason('Client requested milestone cancellation');
+      showToast(`Escrow transaction #${variables.id} successfully refunded to client.`, 'success');
+    },
+    onError: (error: any) => {
+      const msg = error.response?.data?.message || 'Failed to process escrow refund.';
+      showToast(msg, 'error');
+    }
+  });
+
+  const handleOpenDetail = (txn: any) => {
+    setSelectedTxn(txn);
+    setIsDetailModalOpen(true);
+  };
+
+  const handleOpenRefund = () => {
+    if (!selectedTxn) return;
+    if (selectedTxn.status === 'REFUNDED') {
+      showToast('This escrow transaction has already been refunded.', 'info');
+      return;
+    }
+    setIsDetailModalOpen(false);
+    setIsRefundModalOpen(true);
+  };
+
+  const handleRefundSubmit = () => {
+    if (!selectedTxn) return;
+    const finalReason = refundNote.trim() ? `${refundReason}. Note: ${refundNote.trim()}` : refundReason;
+    refundMutation.mutate({
+      id: selectedTxn.id,
+      reason: finalReason,
+      amount: selectedTxn.rawAmount,
+      project: selectedTxn.project,
+      client: selectedTxn.client,
+      freelancer: selectedTxn.freelancer,
+    });
+  };
+
+  const filteredTransactions = useMemo(() => {
+    let result = rawTransactions.filter((t: any) => {
+      const matchesSearch =
+        t.project.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        t.client.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        t.id.toLowerCase().includes(searchQuery.toLowerCase());
+
+      const matchesFilter =
+        activeFilter === 'All' ||
+        (activeFilter === 'Disputed' && (t.status === 'DISPUTED' || t.riskLevel === 'high')) ||
+        (activeFilter === 'Completed' && t.status === 'COMPLETED') ||
+        (activeFilter === 'Refunded' && t.status === 'REFUNDED');
+
+      return matchesSearch && matchesFilter;
+    });
+
+    return result.sort((a: any, b: any) => {
+      if (sortField === 'amount') {
+        return sortOrder === 'asc' ? a.rawAmount - b.rawAmount : b.rawAmount - a.rawAmount;
+      } else {
+        return sortOrder === 'asc' ? a.date.localeCompare(b.date) : b.date.localeCompare(a.date);
+      }
+    });
+  }, [rawTransactions, searchQuery, activeFilter, sortField, sortOrder]);
+
+  const totalPages = Math.ceil(filteredTransactions.length / ITEMS_PER_PAGE) || 1;
+  const paginatedTransactions = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredTransactions.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredTransactions, currentPage]);
+
+  const toggleSort = (field: 'date' | 'amount') => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortOrder('desc');
+    }
+  };
+
+  // CSV EXPORT FUNCTIONALITY
+  const handleExportCSV = () => {
+    if (filteredTransactions.length === 0) {
+      showToast('No transaction records available to export.', 'error');
+      return;
+    }
+
+    const headers = ['Transaction ID', 'Project Title', 'Client', 'Freelancer', 'Amount ($)', 'Status', 'Risk Level', 'Date'];
+    const rows = filteredTransactions.map((t: any) => [
+      `"${t.id || ''}"`,
+      `"${(t.project || '').replace(/"/g, '""')}"`,
+      `"${(t.client || '').replace(/"/g, '""')}"`,
+      `"${(t.freelancer || '').replace(/"/g, '""')}"`,
+      `"${typeof t.rawAmount === 'number' ? t.rawAmount.toFixed(2) : (t.amount || '0.00').replace('$', '')}"`,
+      `"${t.status || ''}"`,
+      `"${t.risk || ''}"`,
+      `"${t.date || ''}"`,
+    ]);
+
+    const csvContent = [headers.join(','), ...rows.map((r: string[]) => r.join(','))].join('\n');
+
+    if (typeof window !== 'undefined' && window.document) {
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `financial_escrow_ledger_${new Date().toISOString().slice(0, 10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    showToast(`Exported ${filteredTransactions.length} transaction records to CSV.`, 'success');
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <AdminToast
+        visible={toast.visible}
+        message={toast.message}
+        type={toast.type}
+        onDismiss={() => setToast((prev) => ({ ...prev, visible: false }))}
+      />
+
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-        {/* Platform Escrow Value Hero Card (Matching Screenshot 3) */}
-        <View style={styles.heroCard}>
-          <Text style={styles.heroLabel}>PLATFORM ESCROW VALUE</Text>
-          <View style={styles.heroValueRow}>
-            <Text style={styles.heroValue}>$284,500</Text>
-            <View style={styles.trendBadge}>
-              <Text style={styles.trendText}>This Month +18%</Text>
+        <View style={adminLayout.content}>
+          <AdminScreenHeader
+            title="Financial & Escrow Ledger"
+            subtitle={`${rawTransactions.length} total escrow transactions`}
+            right={<AdminButton label="Export CSV" icon="download-outline" variant="secondary" onPress={handleExportCSV} />}
+          />
+
+          {/* Escrow Balance hero */}
+          <View style={styles.hero}>
+            <View style={styles.heroTop}>
+              <View style={styles.heroIcon}>
+                <AdminIcon name="shield-checkmark-outline" size={20} color={Colors.primary} />
+              </View>
+              <Text style={styles.heroTitle}>Active Platform Escrow Balance</Text>
+            </View>
+            <Text style={styles.heroAmount} numberOfLines={1} adjustsFontSizeToFit>
+              ${typeof platformEscrowValue === 'number'
+                ? platformEscrowValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                : platformEscrowValue}
+            </Text>
+            <View style={styles.trendTag}>
+              <AdminIcon name="trending-up-outline" size={14} color={Colors.primary} />
+              <Text style={styles.trendText}>{trend}</Text>
             </View>
           </View>
-        </View>
 
-        {/* Search Input Bar */}
-        <View style={styles.searchBar}>
-          <Text style={{ fontSize: 16, marginRight: 8 }}>🔍</Text>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search by Txn ID, Project, Client..."
-            placeholderTextColor={Colors.neutralLight}
+          <AdminSearchBar
+            style={styles.search}
+            placeholder="Search transaction ID, project, or party..."
             value={searchQuery}
-            onChangeText={setSearchQuery}
+            onChangeText={(text) => {
+              setSearchQuery(text);
+              setCurrentPage(1);
+            }}
           />
-        </View>
 
-        {/* Transaction Cards List */}
-        <View style={styles.txnList}>
-          {filteredTxns.map((item) => (
-            <TouchableOpacity
-              key={item.id}
-              style={styles.card}
-              onPress={() => handleInspectTxn(item.id)}
-              activeOpacity={0.85}
-            >
-              <View style={styles.cardHeader}>
-                <Text style={styles.txnId}>{item.id}</Text>
-                <Text style={styles.txnDate}>{item.date}</Text>
-              </View>
-
-              <Text style={styles.projectTitle}>{item.project}</Text>
-              <Text style={styles.partiesText}>
-                C: {item.client} • F: {item.freelancer}
-              </Text>
-
-              <View style={styles.cardDivider} />
-
-              <View style={styles.cardFooter}>
-                <Text style={styles.amountText}>{item.amount}</Text>
-
-                <View style={styles.badgesRow}>
-                  <View
-                    style={[
-                      styles.statusBadge,
-                      item.status === 'In Dispute'
-                        ? styles.badgeDispute
-                        : item.status === 'Escrow Locked'
-                        ? styles.badgeEscrow
-                        : styles.badgeReleased,
-                    ]}
+          {/* Filters & Sort Controls */}
+          <View style={styles.filterSortRow}>
+            <View style={styles.filterChips}>
+              {['All', 'Completed', 'Disputed', 'Refunded'].map((filter) => {
+                const isSelected = activeFilter === filter;
+                return (
+                  <TouchableOpacity
+                    key={filter}
+                    style={[styles.chip, isSelected && styles.chipActive]}
+                    onPress={() => {
+                      setActiveFilter(filter);
+                      setCurrentPage(1);
+                    }}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected }}
                   >
-                    <Text
-                      style={[
-                        styles.statusBadgeText,
-                        item.status === 'In Dispute'
-                          ? styles.textDispute
-                          : item.status === 'Escrow Locked'
-                          ? styles.textEscrow
-                          : styles.textReleased,
-                      ]}
-                    >
-                      {item.status}
+                    <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>{filter}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <View style={styles.sortGroup}>
+              <Text style={styles.sortLabel}>Sort by</Text>
+              <View style={styles.segment}>
+                <TouchableOpacity
+                  style={[styles.segBtn, sortField === 'date' && styles.segBtnActive]}
+                  onPress={() => toggleSort('date')}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: sortField === 'date' }}
+                >
+                  <Text style={[styles.segText, sortField === 'date' && styles.segTextActive]}>Date</Text>
+                  {sortField === 'date' ? (
+                    <AdminIcon name={sortOrder === 'asc' ? 'arrow-up' : 'arrow-down'} size={13} color={Colors.surface} />
+                  ) : null}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.segBtn, sortField === 'amount' && styles.segBtnActive]}
+                  onPress={() => toggleSort('amount')}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: sortField === 'amount' }}
+                >
+                  <Text style={[styles.segText, sortField === 'amount' && styles.segTextActive]}>Amount</Text>
+                  {sortField === 'amount' ? (
+                    <AdminIcon name={sortOrder === 'asc' ? 'arrow-up' : 'arrow-down'} size={13} color={Colors.surface} />
+                  ) : null}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+
+          {/* Transactions List */}
+          <View style={styles.txnList}>
+            {isLoading ? (
+              <>
+                <SkeletonCard height={110} />
+                <SkeletonCard height={110} />
+                <SkeletonCard height={110} />
+              </>
+            ) : filteredTransactions.length === 0 ? (
+              <AdminCard>
+                <AdminEmptyState
+                  icon="card-outline"
+                  title="No Transactions Found"
+                  message="No financial records matched your search filters."
+                />
+              </AdminCard>
+            ) : (
+              filteredTransactions.slice(0, visibleLimit).map((txn: any) => (
+                <AdminCard key={txn.id} style={styles.txnCard}>
+                  <View style={styles.txnMain}>
+                    <Text style={styles.txnProject} numberOfLines={2}>{txn.project}</Text>
+                    <Text style={styles.txnParties} numberOfLines={2}>
+                      {txn.client} • {txn.freelancer}
                     </Text>
+                    <View style={styles.dateRow}>
+                      <AdminIcon name="time-outline" size={13} color={MUTED_TEXT} />
+                      <Text style={styles.txnDate}>{formatAdminDateTime(txn.date)}</Text>
+                    </View>
                   </View>
 
-                  <View
-                    style={[
-                      styles.riskBadge,
-                      item.riskLevel === 'high'
-                        ? styles.riskHigh
-                        : item.riskLevel === 'medium'
-                        ? styles.riskMedium
-                        : styles.riskLow,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.riskText,
-                        item.riskLevel === 'high'
-                          ? styles.textRiskHigh
-                          : item.riskLevel === 'medium'
-                          ? styles.textRiskMedium
-                          : styles.textRiskLow,
-                      ]}
-                    >
-                      {item.risk}
-                    </Text>
+                  <Text style={styles.txnAmount}>{formatAdminMoney(txn.amount)}</Text>
+
+                  <View style={styles.txnMeta}>
+                    <StatusPill label={txn.status} tone={statusTone(txn.status)} style={styles.metaPill} />
+                    <AdminTag label={txn.risk} tone={riskTone(txn.riskLevel)} style={styles.metaTag} />
+                    <AdminButton
+                      label="Inspect"
+                      icon="search-outline"
+                      size="sm"
+                      variant="secondary"
+                      onPress={() => handleOpenDetail(txn)}
+                    />
                   </View>
-                </View>
-              </View>
-            </TouchableOpacity>
-          ))}
+                </AdminCard>
+              ))
+            )}
+          </View>
+
+          {/* Load More Pagination Option for > 4 items */}
+          {filteredTransactions.length > 4 && (
+            <View style={styles.loadMoreContainer}>
+              {visibleLimit < filteredTransactions.length ? (
+                <AdminButton
+                  label={`Load More (+${filteredTransactions.length - visibleLimit} remaining)`}
+                  onPress={() => setVisibleLimit((prev) => prev + 4)}
+                />
+              ) : (
+                <AdminButton label="Show Less" variant="secondary" onPress={() => setVisibleLimit(4)} />
+              )}
+            </View>
+          )}
         </View>
       </ScrollView>
 
-      {/* Admin Bottom Navigation Bar */}
-      <View style={styles.adminTabBar}>
-        <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/admin-dashboard')}>
-          <Text style={styles.tabIcon}>🎛️</Text>
-          <Text style={styles.tabLabel}>Dashboard</Text>
-        </TouchableOpacity>
+      {/* TRANSACTION INSPECT / DETAIL MODAL */}
+      <AdminModal
+        visible={isDetailModalOpen}
+        onClose={() => setIsDetailModalOpen(false)}
+        title="Financial Ledger Record"
+        subtitle={selectedTxn ? `ID: ${selectedTxn.id}` : undefined}
+        icon="receipt-outline"
+        footer={<AdminButton label="Close Record" variant="secondary" onPress={() => setIsDetailModalOpen(false)} />}
+      >
+        {selectedTxn && (
+          <>
+            <View style={styles.summary}>
+              <Text style={styles.summaryProject}>{selectedTxn.project}</Text>
+              <Text style={styles.summaryAmount}>{formatAdminMoney(selectedTxn.amount)}</Text>
+              <StatusPill label={selectedTxn.status} tone={statusTone(selectedTxn.status)} />
+            </View>
 
-        <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/admin-users')}>
-          <Text style={styles.tabIcon}>👥</Text>
-          <Text style={styles.tabLabel}>Users</Text>
-        </TouchableOpacity>
+            <AdminDetailList
+              rows={[
+                { label: 'Client', value: selectedTxn.client },
+                { label: 'Freelancer', value: selectedTxn.freelancer },
+                { label: 'Date & Time', value: formatAdminDateTime(selectedTxn.date) },
+                {
+                  label: 'Status',
+                  value: selectedTxn.status,
+                  tone: selectedTxn.status === 'REFUNDED' ? 'danger' : 'neutral',
+                },
+                { label: 'Audit Risk Level', value: selectedTxn.risk, tone: riskTone(selectedTxn.riskLevel) },
+              ]}
+            />
 
-        <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/admin-transactions')}>
-          <Text style={[styles.tabIcon, styles.tabIconActive]}>💵</Text>
-          <Text style={[styles.tabLabel, styles.tabLabelActive]}>Transactions</Text>
-        </TouchableOpacity>
+            <AdminSectionTitle>Actions</AdminSectionTitle>
+            <AdminActionList>
+              <AdminActionRow
+                icon="flag-outline"
+                tone="warning"
+                label={selectedTxn.status === 'DISPUTED' ? 'Unflag / Clear Audit' : 'Flag Transaction for Audit'}
+                onPress={() =>
+                  flagMutation.mutate({
+                    id: selectedTxn.id,
+                    newStatus: selectedTxn.status === 'DISPUTED' ? 'COMPLETED' : 'DISPUTED',
+                    project: selectedTxn.project,
+                    amount: selectedTxn.rawAmount,
+                    client: selectedTxn.client,
+                  })
+                }
+              />
+              {selectedTxn.status === 'REFUNDED' ? (
+                <AdminActionRow
+                  last
+                  icon="checkmark-circle-outline"
+                  tone="success"
+                  label="Escrow Refund Issued & Settled"
+                />
+              ) : (
+                <AdminActionRow
+                  last
+                  icon="arrow-undo-outline"
+                  tone="danger"
+                  label="Process Escrow Refund"
+                  onPress={handleOpenRefund}
+                />
+              )}
+            </AdminActionList>
+          </>
+        )}
+      </AdminModal>
 
-        <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/admin-disputes')}>
-          <Text style={styles.tabIcon}>⚠️</Text>
-          <Text style={styles.tabLabel}>Disputes</Text>
-        </TouchableOpacity>
+      {/* REFUND TRANSACTION MODAL */}
+      <AdminModal
+        visible={isRefundModalOpen}
+        onClose={() => setIsRefundModalOpen(false)}
+        title="Process Escrow Refund"
+        icon="arrow-undo-outline"
+        tone="danger"
+        footer={
+          <>
+            <AdminButton label="Cancel" variant="secondary" onPress={() => setIsRefundModalOpen(false)} />
+            <AdminButton
+              label="Confirm & Issue Refund"
+              variant="danger"
+              onPress={handleRefundSubmit}
+              loading={refundMutation.isPending}
+            />
+          </>
+        }
+      >
+        {selectedTxn && (
+          <>
+            <AdminNotice tone="warning">
+              Refunding <Text style={styles.noticeStrong}>{formatAdminMoney(selectedTxn.amount)}</Text> for milestone:{' '}
+              <Text style={styles.noticeStrong}>{selectedTxn.project}</Text>
+            </AdminNotice>
 
-        <TouchableOpacity style={styles.tabItem} onPress={() => router.push('/admin-security')}>
-          <Text style={styles.tabIcon}>•••</Text>
-          <Text style={styles.tabLabel}>More</Text>
-        </TouchableOpacity>
-      </View>
+            <AdminField
+              label="Reason for Refund"
+              placeholder="e.g. Milestone cancelled by client"
+              value={refundReason}
+              onChangeText={setRefundReason}
+            />
+
+            <AdminField
+              label="Admin Note"
+              placeholder="Enter administrative memo or notes..."
+              multiline
+              value={refundNote}
+              onChangeText={setRefundNote}
+            />
+          </>
+        )}
+      </AdminModal>
+
+      <AdminTabBar activeTab="transactions" />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  container: {
-    flex: 1,
-  },
+  safeArea: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1 },
   contentContainer: {
-    padding: Theme.spacing.md,
-    paddingBottom: 80,
+    padding: adminSpace.lg,
+    paddingBottom: adminLayout.bottomClearance,
   },
-  heroCard: {
-    backgroundColor: '#F0FDF4',
-    borderWidth: 1,
-    borderColor: Colors.primaryLight,
-    borderRadius: Theme.borderRadius.lg,
-    padding: Theme.spacing.lg,
-    marginBottom: Theme.spacing.md,
+
+  hero: {
+    backgroundColor: Colors.dark,
+    borderRadius: adminRadius.lg,
+    padding: adminSpace.xl,
+    marginBottom: adminSpace.lg,
+    shadowColor: '#101827',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 3,
   },
-  heroLabel: { fontSize: 12, fontWeight: '700', color: Colors.primaryDark, letterSpacing: 0.5, marginBottom: 4 },
-  heroValueRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  heroValue: { fontSize: 32, fontWeight: '800', color: Colors.dark },
-  trendBadge: { backgroundColor: '#DCFCE7', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 },
-  trendText: { fontSize: 11, fontWeight: '700', color: Colors.primaryDark },
-  searchBar: {
-    height: 48,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: Theme.borderRadius.md,
+  heroTop: { flexDirection: 'row', alignItems: 'center', gap: adminSpace.sm },
+  heroIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: adminRadius.sm + 2,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroTitle: { flex: 1, fontSize: 13, fontWeight: '700', color: '#D1D5DB', letterSpacing: 0.2 },
+  heroAmount: {
+    fontSize: 38,
+    fontWeight: '800',
+    color: Colors.surface,
+    letterSpacing: -1,
+    marginTop: adminSpace.lg,
+    marginBottom: adminSpace.md,
+    fontVariant: ['tabular-nums'],
+  },
+  trendTag: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: Theme.spacing.md,
-    marginBottom: Theme.spacing.md,
+    gap: 6,
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: adminRadius.pill,
   },
-  searchInput: { flex: 1, fontSize: 14, color: Colors.dark },
-  txnList: { gap: Theme.spacing.md },
-  card: {
-    backgroundColor: Colors.surface,
-    borderRadius: Theme.borderRadius.lg,
-    padding: Theme.spacing.md,
+  trendText: { color: Colors.primary, fontSize: 12, fontWeight: '700' },
+
+  search: { marginBottom: adminSpace.md },
+  filterSortRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: adminSpace.md,
+    marginBottom: adminSpace.lg,
+  },
+  filterChips: { flexDirection: 'row', flexWrap: 'wrap', gap: adminSpace.sm },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    minHeight: 36,
+    justifyContent: 'center',
+    borderRadius: adminRadius.pill,
     borderWidth: 1,
     borderColor: Colors.border,
-    ...Theme.shadows.card,
-  },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
-  txnId: { fontSize: 14, fontWeight: '800', color: Colors.dark },
-  txnDate: { fontSize: 12, color: Colors.neutralLight },
-  projectTitle: { fontSize: 15, fontWeight: '700', color: Colors.dark, marginBottom: 2 },
-  partiesText: { fontSize: 12, color: Colors.neutralMedium },
-  cardDivider: { height: 1, backgroundColor: Colors.border, marginVertical: Theme.spacing.sm },
-  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  amountText: { fontSize: 18, fontWeight: '800', color: Colors.primary },
-  badgesRow: { flexDirection: 'row', gap: Theme.spacing.xs },
-  statusBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4 },
-  statusBadgeText: { fontSize: 11, fontWeight: '700' },
-  badgeEscrow: { backgroundColor: '#EFF6FF' },
-  textEscrow: { color: '#2563EB', fontSize: 11, fontWeight: '700' },
-  badgeReleased: { backgroundColor: '#DCFCE7' },
-  textReleased: { color: Colors.primaryDark, fontSize: 11, fontWeight: '700' },
-  badgeDispute: { backgroundColor: '#FEF3C7' },
-  textDispute: { color: Colors.warningText, fontSize: 11, fontWeight: '700' },
-  riskBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4 },
-  riskText: { fontSize: 11, fontWeight: '700' },
-  riskLow: { backgroundColor: '#DCFCE7' },
-  textRiskLow: { color: Colors.primaryDark, fontSize: 11, fontWeight: '700' },
-  riskMedium: { backgroundColor: '#FEF3C7' },
-  textRiskMedium: { color: Colors.warningText, fontSize: 11, fontWeight: '700' },
-  riskHigh: { backgroundColor: '#FEE2E2' },
-  textRiskHigh: { color: Colors.errorText, fontSize: 11, fontWeight: '700' },
-  adminTabBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 64,
     backgroundColor: Colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
   },
-  tabItem: { alignItems: 'center', justifyContent: 'center' },
-  tabIcon: { fontSize: 18, opacity: 0.6 },
-  tabIconActive: { opacity: 1, transform: [{ scale: 1.1 }] },
-  tabLabel: { fontSize: 10, fontWeight: '600', color: Colors.neutralMedium, marginTop: 2 },
-  tabLabelActive: { color: Colors.primary, fontWeight: '700' },
+  chipActive: { backgroundColor: Colors.dark, borderColor: Colors.dark },
+  chipText: { fontSize: 13, fontWeight: '600', color: Colors.neutralMedium },
+  chipTextActive: { color: Colors.surface },
+  sortGroup: { flexDirection: 'row', alignItems: 'center', gap: adminSpace.sm },
+  sortLabel: { ...adminType.label, color: MUTED_TEXT },
+  segment: {
+    flexDirection: 'row',
+    backgroundColor: '#F3F4F6',
+    borderRadius: adminRadius.sm + 2,
+    padding: 3,
+    gap: 2,
+  },
+  segBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    minHeight: 36,
+    paddingHorizontal: adminSpace.md,
+    borderRadius: adminRadius.sm,
+  },
+  segBtnActive: { backgroundColor: Colors.dark },
+  segText: { fontSize: 12, fontWeight: '700', color: Colors.neutralMedium },
+  segTextActive: { color: Colors.surface },
+
+  txnList: { gap: adminSpace.md },
+  txnCard: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    columnGap: adminSpace.lg,
+    rowGap: adminSpace.md,
+  },
+  txnMain: { flexGrow: 1, flexShrink: 1, flexBasis: 220, minWidth: 200 },
+  txnProject: { ...adminType.cardTitle },
+  txnParties: { ...adminType.body, marginTop: 2 },
+  dateRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6 },
+  txnDate: { ...adminType.caption },
+  txnAmount: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: Colors.dark,
+    letterSpacing: -0.3,
+    fontVariant: ['tabular-nums'],
+    minWidth: 110,
+  },
+  // Centered with the Inspect button (the pill's own top-alignment would float it up) and given a
+  // fixed minimum width so amounts and buttons line up in a column across rows
+  metaPill: { alignSelf: 'center', minWidth: 112, justifyContent: 'center' },
+  metaTag: { alignSelf: 'center', minWidth: 92, justifyContent: 'center' },
+  txnMeta: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: adminSpace.sm,
+  },
+
+  loadMoreContainer: { marginTop: adminSpace.lg, alignItems: 'center' },
+
+  summary: {
+    backgroundColor: Colors.background,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: adminRadius.md,
+    padding: adminSpace.lg,
+    marginBottom: adminSpace.lg,
+    gap: adminSpace.sm,
+  },
+  summaryProject: { ...adminType.cardTitle, fontSize: 16 },
+  summaryAmount: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: Colors.dark,
+    letterSpacing: -0.5,
+    fontVariant: ['tabular-nums'],
+  },
+  noticeStrong: { fontWeight: '800' },
 });
+
+const statusTone = (status: string): Tone => {
+  switch (status) {
+    case 'COMPLETED':
+      return 'success';
+    case 'REFUNDED':
+      return 'danger';
+    case 'DISPUTED':
+      return 'warning';
+    case 'PENDING':
+    case 'HELD':
+    case 'IN_ESCROW':
+      return 'info';
+    default:
+      return 'neutral';
+  }
+};
+
+const riskTone = (level: string): Tone =>
+  level === 'high' ? 'danger' : level === 'medium' ? 'warning' : level === 'low' ? 'success' : 'neutral';

@@ -10,35 +10,114 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
 import apiClient from '../src/services/api';
+import { saveUserSession } from '../src/services/storage';
 import { saveAuthSession } from '../src/services/authService';
+
+import ContactSupportModal from '../src/components/ContactSupportModal';
+import ForgotPasswordModal from '../src/components/ForgotPasswordModal';
+import GoogleAuthModal from '../src/components/GoogleAuthModal';
 
 export default function LoginScreen() {
   const router = useRouter();
+  const { email: paramEmail, password: paramPassword } = useLocalSearchParams<{ email?: string, password?: string }>();
 
   // Form State Management
-  const [email, setEmail] = useState('hello@design.com');
-  const [password, setPassword] = useState('supersecret');
+  const [email, setEmail] = useState(paramEmail || 'hello@design.com');
+  const [password, setPassword] = useState(paramPassword || 'supersecret');
   const [rememberMe, setRememberMe] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Input Validation Error States
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [generalError, setGeneralError] = useState('');
+
+  // Support & Auth Modals State
+  const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
+  const [supportCategory, setSupportCategory] = useState('General Inquiry');
+  const [supportSubject, setSupportSubject] = useState('');
+
+  const [isForgotPasswordModalOpen, setIsForgotPasswordModalOpen] = useState(false);
+  const [isGoogleModalOpen, setIsGoogleModalOpen] = useState(false);
+
+  const openSupportModal = (category: string = 'General Inquiry', subject: string = '') => {
+    setSupportCategory(category);
+    setSupportSubject(subject);
+    setIsSupportModalOpen(true);
+  };
+
+  const validateForm = () => {
+    let isValid = true;
+    setEmailError('');
+    setPasswordError('');
+    setGeneralError('');
+
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      setEmailError('Email address is required.');
+      isValid = false;
+    } else {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(trimmedEmail)) {
+        setEmailError('Please enter a valid email address.');
+        isValid = false;
+      }
+    }
+
+    if (!password) {
+      setPasswordError('Password is required.');
+      isValid = false;
+    } else if (password.length < 6) {
+      setPasswordError('Password must be at least 6 characters long.');
+      isValid = false;
+    }
+
+    return isValid;
+  };
+
   // Spring Boot Authentication Endpoint Hook
   const handleLogin = async () => {
-    if (!email.trim() || !password) {
-      Alert.alert('Error', 'Please enter your email address and password.');
+    let trimmedEmail = email.trim().toLowerCase();
+
+    // Automatically normalize legacy inputs like 'chathuniimalsha.com' -> 'chathuni@design.com'
+    if (trimmedEmail === 'chathuniimalsha.com') {
+      trimmedEmail = 'chathuni@design.com';
+    } else if (trimmedEmail && !trimmedEmail.includes('@')) {
+      trimmedEmail = `${trimmedEmail}@design.com`;
+    }
+
+    if (!validateForm()) {
       return;
     }
 
     setIsSubmitting(true);
+    setGeneralError('');
     try {
-      // Spring Boot backend authentication call to Neon PostgreSQL
-      const response = await apiClient.post('/auth/login', { email, password });
-      saveAuthSession( response.data.token, response.data );
-      const userRole = response.data?.role;
+      const response = await apiClient.post('/auth/login', {
+        email: trimmedEmail,
+        password: password,
+      });
+
+      // Save auth session (JWT token & profile details)
+      if (response.data?.token) {
+        saveAuthSession(response.data.token, response.data);
+      }
+
+      const userRole = String(response.data?.role || 'FREELANCER').toUpperCase();
+
+      // Save user session credentials for profile modal
+      saveUserSession({
+        id: response.data?.id,
+        fullName: response.data?.fullName || (email.includes('admin') ? 'System Admin' : 'User Account'),
+        email: response.data?.email || email.trim(),
+        role: userRole,
+        token: response.data?.token,
+      });
 
       // Role-based dynamic routing from returned AuthResponse
       if (userRole === 'ADMIN') {
@@ -48,25 +127,17 @@ export default function LoginScreen() {
       } else if (userRole === 'CLIENT') {
         router.replace('/client-dashboard');
       } else {
-        router.replace('/select-role');
+        router.replace({ pathname: '/(tabs)/dashboard', params: { role: 'FREELANCER' } });
       }
     } catch (error: any) {
-        console.log('LOGIN ERROR:', error);
-          console.log('STATUS:', error?.response?.status);
-          console.log('BACKEND RESPONSE:', error?.response?.data);
-
-          Alert.alert(
-            'Login Failed',
-            error?.response?.data?.message ||
-              error?.response?.data ||
-              error?.message ||
-              'Unable to login'
-          );
-      // Fallback transition to Role Selection for demo preview
-      setTimeout(() => {
-        setIsSubmitting(false);
-        router.replace('/select-role');
-      }, 600);
+      const errorMessage =
+        error.response?.data?.message ||
+        (typeof error.response?.data === 'string' ? error.response.data : null) ||
+        error.message ||
+        'Invalid email address or password. Please try again.';
+      setGeneralError(errorMessage);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -94,30 +165,55 @@ export default function LoginScreen() {
         <Text style={styles.title}>Welcome Back</Text>
         <Text style={styles.subtitle}>Please enter your details to sign in.</Text>
 
+        {/* Global Error Banner */}
+        {generalError ? (
+          <View style={styles.generalErrorBanner}>
+            <Text style={styles.generalErrorText}>⚠️ {generalError}</Text>
+            {generalError.toLowerCase().includes('contact support') || generalError.toLowerCase().includes('suspended') ? (
+              <TouchableOpacity
+                style={styles.supportBannerActionBtn}
+                onPress={() => openSupportModal('🚫 Account Suspension Appeal', `Account Suspension Appeal for ${email}`)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.supportBannerActionText}>🎧 Contact Support Team</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        ) : null}
+
         {/* Form Fields */}
         <View style={styles.formGroup}>
           {/* Email Field */}
           <Text style={styles.label}>Email Address</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, emailError ? styles.inputError : null]}
             placeholder="you@example.com"
             placeholderTextColor={Colors.neutralLight}
             value={email}
-            onChangeText={setEmail}
+            onChangeText={(text) => {
+              setEmail(text);
+              if (emailError) setEmailError('');
+              if (generalError) setGeneralError('');
+            }}
             keyboardType="email-address"
             autoCapitalize="none"
           />
+          {emailError ? <Text style={styles.fieldErrorText}>⚠️ {emailError}</Text> : null}
 
           {/* Password Field */}
           <Text style={styles.label}>Password</Text>
-          <View style={styles.passwordContainer}>
+          <View style={[styles.passwordContainer, passwordError ? styles.inputError : null]}>
             <TextInput
               style={styles.passwordInput}
               placeholder="Enter your password"
               placeholderTextColor={Colors.neutralLight}
               secureTextEntry={!showPassword}
               value={password}
-              onChangeText={setPassword}
+              onChangeText={(text) => {
+                setPassword(text);
+                if (passwordError) setPasswordError('');
+                if (generalError) setGeneralError('');
+              }}
             />
             <TouchableOpacity
               style={styles.eyeBtn}
@@ -126,6 +222,7 @@ export default function LoginScreen() {
               <Text style={{ fontSize: 16 }}>{showPassword ? '👁️' : '👁️‍🗨️'}</Text>
             </TouchableOpacity>
           </View>
+          {passwordError ? <Text style={styles.fieldErrorText}>⚠️ {passwordError}</Text> : null}
 
           {/* Remember Me & Forgot Password Row */}
           <View style={styles.optionsRow}>
@@ -141,7 +238,7 @@ export default function LoginScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity
-              onPress={() => Alert.alert('Reset Password', 'Password reset instructions sent to your email.')}
+              onPress={() => setIsForgotPasswordModalOpen(true)}
             >
               <Text style={styles.forgotText}>Forgot password?</Text>
             </TouchableOpacity>
@@ -172,7 +269,7 @@ export default function LoginScreen() {
         {/* Continue with Google Social Button */}
         <TouchableOpacity
           style={styles.googleButton}
-          onPress={handleGoogleLogin}
+          onPress={() => setIsGoogleModalOpen(true)}
           activeOpacity={0.8}
         >
           <Text style={styles.googleIcon}>⊗</Text>
@@ -186,7 +283,38 @@ export default function LoginScreen() {
             <Text style={styles.footerLink}>Create account</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Dedicated Support Footer Link */}
+        <View style={[styles.footerRow, { marginTop: Theme.spacing.md }]}>
+          <TouchableOpacity onPress={() => openSupportModal('❓ General Inquiry', '')} style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={styles.footerText}>Need assistance? </Text>
+            <Text style={styles.footerLink}>Contact Help Desk 🎧</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
+
+      {/* Contact Support Modal */}
+      <ContactSupportModal
+        visible={isSupportModalOpen}
+        onClose={() => setIsSupportModalOpen(false)}
+        initialEmail={email}
+        initialCategory={supportCategory}
+        initialSubject={supportSubject}
+      />
+
+      {/* Forgot Password Modal */}
+      <ForgotPasswordModal
+        visible={isForgotPasswordModalOpen}
+        onClose={() => setIsForgotPasswordModalOpen(false)}
+        initialEmail={email}
+      />
+
+      {/* Google Sign-In Modal */}
+      <GoogleAuthModal
+        visible={isGoogleModalOpen}
+        onClose={() => setIsGoogleModalOpen(false)}
+        defaultRole="FREELANCER"
+      />
     </SafeAreaView>
   );
 }
@@ -372,5 +500,42 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: Colors.primary,
+  },
+  generalErrorBanner: {
+    backgroundColor: Colors.errorBg,
+    borderWidth: 1,
+    borderColor: Colors.error,
+    borderRadius: Theme.borderRadius.md,
+    padding: Theme.spacing.md,
+    marginBottom: Theme.spacing.md,
+  },
+  generalErrorText: {
+    color: Colors.errorText,
+    fontSize: 13,
+    fontWeight: '600',
+    lineHeight: 18,
+  },
+  supportBannerActionBtn: {
+    marginTop: Theme.spacing.sm,
+    backgroundColor: Colors.errorText,
+    paddingHorizontal: Theme.spacing.md,
+    paddingVertical: Theme.spacing.xs + 3,
+    borderRadius: Theme.borderRadius.md,
+    alignSelf: 'flex-start',
+  },
+  supportBannerActionText: {
+    color: Colors.surface,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  inputError: {
+    borderColor: Colors.error,
+    backgroundColor: Colors.errorBg + '30',
+  },
+  fieldErrorText: {
+    color: Colors.errorText,
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 4,
   },
 });

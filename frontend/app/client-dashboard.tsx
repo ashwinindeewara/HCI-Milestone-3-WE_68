@@ -14,6 +14,7 @@ import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
 import { getSavedUserData } from '../src/services/authService';
 import apiClient from '../src/services/api';
+import { getUserSession } from '../src/services/storage';
 
 interface ProjectCardData {
   id: string;
@@ -162,6 +163,8 @@ export default function ClientDashboardScreen() {
   const [activities, setActivities] = useState<ActivityItemData[]>([]);
 
   const currentUser = getSavedUserData();
+  const session = getUserSession();
+  const currentRole = String(session?.role || currentUser?.role || 'FREELANCER').toUpperCase();
 
   const getInitials = (fullName?: string) => {
     if (!fullName) return 'CL';
@@ -364,8 +367,16 @@ export default function ClientDashboardScreen() {
   }, [clientName]);
 
   useEffect(() => {
+    if (currentRole !== 'CLIENT') {
+      router.replace({
+        pathname: '/(tabs)/dashboard',
+        params: { role: currentRole },
+      });
+      return;
+    }
     loadData();
   }, [loadData]);
+
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -472,7 +483,7 @@ export default function ClientDashboardScreen() {
 
           <TouchableOpacity
             style={styles.actionPillGreen}
-            onPress={() => router.push('/client-milestone-review')}
+            onPress={() => router.push('/client-milestones')}
             activeOpacity={0.8}
           >
             <Text style={styles.actionPillTextWhite}>Milestones</Text>
@@ -849,6 +860,47 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
     ...Theme.shadows.card,
+  },
+  deadlineCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+    borderRadius: Theme.borderRadius.md,
+    padding: Theme.spacing.md,
+    marginBottom: Theme.spacing.sm,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  deadlineIcon: {
+    fontSize: 20,
+    marginRight: Theme.spacing.sm,
+  },
+  deadlineContent: {
+    flex: 1,
+  },
+  deadlineTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.dark,
+  },
+  deadlineDescription: {
+    fontSize: 12,
+    color: Colors.neutralMedium,
+    marginTop: 2,
+  },
+  deadlineDate: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.primaryDark,
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: Theme.borderRadius.sm,
+  },
+  emptyDeadlineText: {
+    color: Colors.neutralMedium,
+    fontSize: 13,
+    marginBottom: Theme.spacing.md,
   },
   projectCardHeader: {
     flexDirection: 'row',

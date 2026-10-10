@@ -13,8 +13,13 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 @Service
 public class FreelancerProfileService {
+
+    private static final Logger logger = LoggerFactory.getLogger(FreelancerProfileService.class);
 
     @Autowired
     private FreelancerProfileRepository profileRepository;
@@ -25,10 +30,18 @@ public class FreelancerProfileService {
     @Autowired
     private FileStorageService fileStorageService;
 
+    public List<FreelancerProfile> getAllFreelancerProfiles() {
+        return profileRepository.findAll();
+    }
+
+    public FreelancerProfile getProfileById(Long id) {
+        return profileRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Freelancer profile not found with id: " + id));
+    }
+
     public FreelancerProfile getDefaultProfile() {
-        return profileRepository.findByEmail("chathuniimalsha.com")
-                .orElseGet(() -> profileRepository.findAll().stream().findFirst()
-                        .orElseGet(() -> new FreelancerProfile("freelancer@example.com", "Freelancer")));
+        return profileRepository.findAll().stream().findFirst()
+                .orElseGet(() -> new FreelancerProfile("freelancer@example.com", "Freelancer"));
     }
 
     public FreelancerProfile getProfileByEmail(String email) {
@@ -36,9 +49,9 @@ public class FreelancerProfileService {
             return getDefaultProfile();
         }
         String cleanEmail = email.trim().toLowerCase();
-        return profileRepository.findByEmail(cleanEmail)
+        return profileRepository.findByEmailIgnoreCase(cleanEmail)
                 .orElseGet(() -> {
-                    String name = userRepository.findByEmail(cleanEmail)
+                    String name = userRepository.findByEmailIgnoreCase(cleanEmail)
                             .map(com.freelance.backend.entity.User::getFullName)
                             .orElse("Freelancer");
                     FreelancerProfile freshProfile = new FreelancerProfile(cleanEmail, name);
@@ -46,25 +59,14 @@ public class FreelancerProfileService {
                 });
     }
 
-    public List<FreelancerProfile> getAllFreelancerProfiles() {
-        return profileRepository.findAll();
-    }
-
-    public FreelancerProfile getProfileById(Long id) {
-        System.out.println("== GET FREELANCER BY ID ==>" + id);
-        return profileRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException( "Freelancer profile not found with id: " + id)
-        );
-    }
-
     @Transactional
     public FreelancerProfile updateProfile(String email, FreelancerProfileDTO dto) {
-        String cleanEmail = (email != null && !email.isBlank()) ? email.trim().toLowerCase() : "chathuniimalsha.com";
-        FreelancerProfile profile = profileRepository.findByEmail(cleanEmail)
+        String cleanEmail = (email != null && !email.isBlank()) ? email.trim().toLowerCase() : (dto.getEmail() != null ? dto.getEmail().trim().toLowerCase() : "freelancer@example.com");
+        FreelancerProfile profile = profileRepository.findByEmailIgnoreCase(cleanEmail)
                 .orElseGet(() -> {
                     String name = (dto.getFullName() != null && !dto.getFullName().isBlank())
                             ? dto.getFullName()
-                            : userRepository.findByEmail(cleanEmail)
+                            : userRepository.findByEmailIgnoreCase(cleanEmail)
                             .map(com.freelance.backend.entity.User::getFullName)
                             .orElse("Freelancer");
                     FreelancerProfile newProfile = new FreelancerProfile(cleanEmail, name);
@@ -96,7 +98,7 @@ public class FreelancerProfileService {
                     else if (mimeType.contains("webp")) ext = "webp";
                     else if (mimeType.contains("gif")) ext = "gif";
                     String fileName = "avatar_" + System.currentTimeMillis() + "." + ext;
-
+                    
                     com.freelance.backend.util.ByteArrayMultipartFile customFile =
                             new com.freelance.backend.util.ByteArrayMultipartFile(data, fileName, mimeType);
                     com.freelance.backend.entity.FileAttachment attachment =
@@ -226,5 +228,52 @@ public class FreelancerProfileService {
         profile.setAvatarUrl("/api/files/" + attachment.getId() + "/preview");
         profile.setUpdatedAt(LocalDateTime.now());
         return profileRepository.save(profile);
+    }
+
+    @Transactional
+    public void deleteProfileById(Long id) {
+        logger.info("[FREELANCER PROFILE DELETE REQUEST] Initiating deletion for Profile ID: {}", id);
+        FreelancerProfile profile = profileRepository.findById(id)
+                .orElseThrow(() -> {
+                    logger.warn("[FREELANCER PROFILE DELETE WARN] Profile not found with ID: {}", id);
+                    return new ResourceNotFoundException("FreelancerProfile not found with id: " + id);
+                });
+
+        logger.info("[FREELANCER PROFILE DELETE PROCESS] Profile record found: ID={}, Email={}, Name={}. Executing database delete.", profile.getId(), profile.getEmail(), profile.getFullName());
+        String email = profile.getEmail();
+        profileRepository.delete(profile);
+
+        if (email != null && !email.isBlank()) {
+            userRepository.findByEmailIgnoreCase(email.trim().toLowerCase())
+                    .ifPresent(u -> {
+                        logger.info("[FREELANCER PROFILE DELETE PROCESS] Removing matching User entity with Email: {}", u.getEmail());
+                        userRepository.delete(u);
+                    });
+        }
+        logger.info("[FREELANCER PROFILE DELETE SUCCESS] Profile ID: {} permanently deleted from database.", id);
+    }
+
+    @Transactional
+    public void deleteProfileByEmail(String email) {
+        if (email == null || email.isBlank()) {
+            throw new ResourceNotFoundException("Email cannot be empty for profile deletion");
+        }
+        String cleanEmail = email.trim().toLowerCase();
+        logger.info("[FREELANCER PROFILE DELETE REQUEST] Initiating deletion for Email: {}", cleanEmail);
+        
+        boolean deletedAny = false;
+
+        profileRepository.findByEmailIgnoreCase(cleanEmail).ifPresent(profile -> {
+            logger.info("[FREELANCER PROFILE DELETE PROCESS] Profile record found: ID={}, Email={}. Executing database delete.", profile.getId(), profile.getEmail());
+            profileRepository.delete(profile);
+        });
+
+        userRepository.findByEmailIgnoreCase(cleanEmail).ifPresent(user -> {
+            logger.info("[FREELANCER PROFILE DELETE PROCESS] Removing matching User entity with Email: {}", user.getEmail());
+            userRepository.delete(user);
+            userRepository.flush();
+        });
+        
+        logger.info("[FREELANCER PROFILE DELETE SUCCESS] Profile for Email: {} permanently deleted from database.", cleanEmail);
     }
 }

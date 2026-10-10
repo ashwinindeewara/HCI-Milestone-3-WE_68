@@ -12,6 +12,7 @@ import {
 import { useRouter } from 'expo-router';
 import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
+import { FreelancerApiService, calculateMilestoneProgress, getCurrentUser } from '../src/services/api';
 import apiClient from '../src/services/api';
 import { getSavedUserData } from '../src/services/authService';
 
@@ -61,8 +62,9 @@ export default function ClientContractsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  const loadContracts = useCallback(async () => {
+    const loadContracts = useCallback(async () => {
     setErrorMessage('');
+
 
     try {
       const currentUser = getSavedUserData();

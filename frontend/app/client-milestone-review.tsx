@@ -428,7 +428,7 @@ export default function ClientMilestoneReviewScreen() {
       setChangesReason('');
       Alert.alert('Changes Requested', 'Your change request has been sent to the freelancer.');
     } catch (error: any) {
-      console.error('[MilestoneReview] Status update failed:', error);
+      console.error('[MilestoneReview] Request changes failed:', error);
       Alert.alert(
         'Unable to request changes',
         error?.response?.data?.message ??
@@ -528,6 +528,19 @@ export default function ClientMilestoneReviewScreen() {
     return styles.badgeTextNeutral;
   };
 
+  const handleGoBack = () => {
+    try {
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace('/client-dashboard');
+      }
+    } catch (e) {
+      console.warn('[MilestoneReview] Navigation goBack error, falling back to dashboard:', e);
+      router.replace('/client-dashboard');
+    }
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.stateScreen}>
@@ -545,7 +558,7 @@ export default function ClientMilestoneReviewScreen() {
         <TouchableOpacity style={styles.primaryButton} onPress={loadReview}>
           <Text style={styles.primaryButtonText}>Retry</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backButton} onPress={handleGoBack}>
           <Text style={styles.backButtonText}>Go back</Text>
         </TouchableOpacity>
       </SafeAreaView>
@@ -567,7 +580,7 @@ export default function ClientMilestoneReviewScreen() {
           <View style={styles.header}>
             <TouchableOpacity
               style={styles.headerBack}
-              onPress={() => router.back()}
+              onPress={handleGoBack}
               accessibilityRole="button"
               accessibilityLabel="Go back"
             >

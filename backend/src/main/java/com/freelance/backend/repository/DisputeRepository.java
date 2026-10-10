@@ -7,6 +7,8 @@ import java.util.List;
 
 public interface DisputeRepository extends JpaRepository<Dispute, String> {
     List<Dispute> findByStatus(String status);
+
     List<Dispute> findByStatusType(String statusType);
+
     List<Dispute> findByClientNameIgnoreCaseOrderByCreatedAtDesc(String clientName);
 }

@@ -1,4 +1,5 @@
-import apiClient from './api';
+import apiClient, { clearApiCache } from './api';
+import { clearUserSession } from './storage';
 
 const TOKEN_KEY = 'freelanceflow_auth_token';
 const USER_KEY = 'freelanceflow_user_data';
@@ -43,23 +44,6 @@ const storage = {
       // Memory fallback
     }
   },
-};
-
-export const matchesUserIdentity = (recordedName: string | null | undefined, identities: unknown[]) => {
-  const normalize = (value: unknown) =>
-    typeof value === 'string' ? value.trim().toLowerCase().replace(/\s+/g, ' ') : '';
-  const normalizedName = normalize(recordedName);
-
-  if (!normalizedName) return false;
-
-  return identities.some((identity) => {
-    const normalizedIdentity = normalize(identity);
-    return normalizedIdentity.length > 0 && (
-      normalizedName === normalizedIdentity ||
-      normalizedName.startsWith(`${normalizedIdentity} `) ||
-      normalizedIdentity.startsWith(`${normalizedName} `)
-    );
-  });
 };
 
 /**
@@ -111,9 +95,26 @@ export const updateSavedUserData = (updatedFields: any): any => {
  * Clears stored authentication session tokens and API authorization headers
  */
 export const clearAuthSession = (): void => {
-  storage.removeItem(TOKEN_KEY);
-  storage.removeItem(USER_KEY);
+  storage.clear();
+  clearUserSession();
   delete apiClient.defaults.headers.common['Authorization'];
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.removeItem('auth_user');
+      window.localStorage.removeItem('auth_email');
+      window.localStorage.removeItem('auth_name');
+      window.localStorage.removeItem('auth_role');
+      window.localStorage.removeItem('auth_token');
+      window.localStorage.removeItem('freelance_app_user_session');
+      window.localStorage.removeItem('freelanceflow_user_data');
+      window.localStorage.removeItem('freelanceflow_auth_token');
+      window.localStorage.removeItem('freelancer_email');
+      window.localStorage.removeItem('user_email');
+      window.localStorage.removeItem('user_role');
+      window.localStorage.removeItem('active_user_role');
+    }
+  } catch {}
+  clearApiCache();
 };
 
 /**
@@ -125,13 +126,6 @@ export const performLogout = (router: any): void => {
   clearAuthSession();
 
   if (router) {
-    try {
-      if (typeof router.dismissAll === 'function') {
-        router.dismissAll();
-      }
-    } catch {
-      // Ignored if stack has no dismissable screens
-    }
     try {
       router.replace('/login');
     } catch {

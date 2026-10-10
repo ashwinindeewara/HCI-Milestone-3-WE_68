@@ -1,10 +1,8 @@
 package com.freelance.backend.service;
 
-import com.freelance.backend.dto.ClientProfileResponse;
-import com.freelance.backend.dto.ClientProfileUpdateRequest;
-import com.freelance.backend.entity.ClientProfile;
+import com.freelance.backend.dto.UserProfileDTO;
 import com.freelance.backend.entity.User;
-import com.freelance.backend.repository.ClientProfileRepository;
+import com.freelance.backend.exception.ResourceNotFoundException;
 import com.freelance.backend.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -12,81 +10,42 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ClientService {
 
-    private final ClientProfileRepository clientProfileRepository;
     private final UserRepository userRepository;
 
-    public ClientService(
-            ClientProfileRepository clientProfileRepository,
-            UserRepository userRepository) {
-
-        this.clientProfileRepository = clientProfileRepository;
+    public ClientService(UserRepository userRepository) {
         this.userRepository = userRepository;
     }
 
     @Transactional(readOnly = true)
-    public ClientProfileResponse getClientProfile(Long userId) {
-
-        // Get user
+    public UserProfileDTO getClientProfile(Long userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() ->
-                        new RuntimeException("User not found"));
-
-        // Get client profile
-        ClientProfile profile = clientProfileRepository
-                .findByUserId(userId)
-                .orElseThrow(() ->
-                        new RuntimeException("Client profile not found"));
-
-        // Build response
-        ClientProfileResponse response = new ClientProfileResponse();
-
-        // User information
-        response.setUserId(user.getId());
-        response.setFullName(user.getFullName());
-        response.setEmail(user.getEmail());
-        response.setProfileImageUrl(user.getProfileImageUrl());
-
-        // Client profile information
-        response.setLocation(profile.getLocation());
-        response.setCompanyName(profile.getCompanyName());
-        response.setAbout(profile.getAbout());
-        response.setStatus(profile.getStatus());
-        response.setSkills(profile.getSkills());
-
-        // Member since comes from User.createdAt
-        if (user.getCreatedAt() != null) {
-            response.setMemberSince(
-                    user.getCreatedAt().getYear()
-            );
-        }
-
-        return response;
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
+        return new UserProfileDTO(user);
     }
 
     @Transactional
-    public ClientProfileResponse updateClientProfile(
-            Long userId, ClientProfileUpdateRequest request) {
-
+    public UserProfileDTO updateClientProfile(Long userId, UserProfileDTO request) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() ->
-                        new RuntimeException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
 
-        ClientProfile profile = clientProfileRepository
-                .findByUserId(userId)
-                .orElseThrow(() ->
-                        new RuntimeException("Client profile not found"));
+        if (request.getLocation() != null) user.setLocation(request.getLocation());
+        if (request.getAbout() != null) user.setAbout(request.getAbout());
+        if (request.getCompany() != null) user.setCompany(request.getCompany());
+        if (request.getFullName() != null) user.setFullName(request.getFullName());
 
-        profile.setLocation(request.getLocation());
-        profile.setCompanyName(request.getCompanyName());
-        profile.setAbout(request.getAbout());
+        User saved = userRepository.save(user);
+        return new UserProfileDTO(saved);
+    }
 
-        if (request.getSkills() != null) {
-            profile.setSkills(request.getSkills());
+    @Transactional
+    public void deleteClientProfile(Long userId) {
+        userRepository.findById(userId).ifPresent(userRepository::delete);
+    }
+
+    @Transactional
+    public void deleteClientProfileByEmail(String email) {
+        if (email != null && !email.isBlank()) {
+            userRepository.findByEmailIgnoreCase(email.trim()).ifPresent(userRepository::delete);
         }
-
-        clientProfileRepository.save(profile);
-
-        // Return the same DTO used by GET profile
-        return getClientProfile(userId);
     }
 }

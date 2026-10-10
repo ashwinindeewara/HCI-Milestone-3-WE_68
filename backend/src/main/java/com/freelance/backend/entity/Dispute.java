@@ -29,7 +29,8 @@ public class Dispute {
     private Double amount;
 
     @Column(nullable = false)
-    private String status; // Open, Under Review, Waiting for Client, Waiting for Freelancer, Resolved, Rejected, Closed
+    private String status; // Open, Under Review, Waiting for Client, Waiting for Freelancer, Resolved,
+                           // Rejected, Closed
 
     private String statusType; // open, review, resolved
     @Column(name = "resolution_note", columnDefinition = "TEXT")
@@ -38,7 +39,7 @@ public class Dispute {
     private String filedDate;
     private String lastUpdatedDate;
     private String priority = "Medium"; // High, Medium, Low
-    @Column(name = "client_name")
+
     private String clientName;
     private String freelancerName;
     @Column(name = "freelancer_email")
@@ -55,9 +56,11 @@ public class Dispute {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 
-    public Dispute() {}
+    public Dispute() {
+    }
 
-    public Dispute(String id, String dspNumber, String project, String parties, String issueType, String description, String evidenceFile, Double amount, String status, String statusType) {
+    public Dispute(String id, String dspNumber, String project, String parties, String issueType, String description,
+            String evidenceFile, Double amount, String status, String statusType) {
         this.id = id;
         this.dspNumber = dspNumber;
         this.project = project;
@@ -69,11 +72,15 @@ public class Dispute {
         this.status = status;
         this.statusType = statusType;
         this.filedDate = "Filed Oct 10, 2024";
-        this.timelineStep = "Resolved".equalsIgnoreCase(status) ? 3 : ("Under Review".equalsIgnoreCase(status) || "review".equalsIgnoreCase(statusType) ? 2 : 1);
+
+        this.timelineStep = "Resolved".equalsIgnoreCase(status) ? 3
+                : ("Under Review".equalsIgnoreCase(status) || "review".equalsIgnoreCase(statusType) ? 2 : 1);
         this.createdAt = LocalDateTime.now();
     }
 
-    public Dispute(String id, String dspNumber, String project, String parties, String issueType, String description, String evidenceFile, Double amount, String status, String statusType, String filedDate, Integer timelineStep) {
+    public Dispute(String id, String dspNumber, String project, String parties, String issueType, String description,
+            String evidenceFile, Double amount, String status, String statusType, String filedDate,
+            Integer timelineStep) {
         this.id = id;
         this.dspNumber = dspNumber;
         this.project = project;

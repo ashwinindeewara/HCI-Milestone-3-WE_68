@@ -66,6 +66,13 @@ public class ProjectService {
         return projectRepository.findByFreelancerEmailIgnoreCase(email.trim());
     }
 
+    public List<Project> getClientProjects(String clientName) {
+        if (clientName == null || clientName.isBlank()) {
+            return List.of();
+        }
+        return projectRepository.findByClientNameIgnoreCase(clientName.trim());
+    }
+
     public Project getProjectById(String id) {
         return projectRepository.findById(id)
                 .orElseGet(() -> projectRepository.findByContractId(id)

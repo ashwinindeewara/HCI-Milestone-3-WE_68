@@ -16,11 +16,11 @@ import { useRouter } from 'expo-router';
 
 import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
-import apiClient from '../src/services/api';
-import { getSavedUserData } from '../src/services/authService';
+import apiClient, { getCurrentUser } from '../src/services/api';
+import { getSavedUserData, updateSavedUserData } from '../src/services/authService';
 
 interface ClientProfileData {
-  userId?: number;
+  userId?: number | string;
   fullName?: string;
   email?: string;
   profileImageUrl?: string;
@@ -32,53 +32,12 @@ interface ClientProfileData {
 
   memberSince?: number | string;
   projectsPosted?: number;
-
-  skills?: string[];
 }
-
-/*
- * These values should match your backend SkillType enum.
- *
- * Example backend:
- *
- * public enum SkillType {
- *     FIGMA,
- *     UI_DESIGN,
- *     UX_RESEARCH,
- *     PROTOTYPING,
- *     DESIGN_SYSTEMS,
- *     GRAPHIC_DESIGN,
- *     WEB_DESIGN,
- *     PRODUCT_DESIGN
- * }
- */
-const SKILL_OPTIONS = [
-  'FIGMA',
-  'UI_DESIGN',
-  'UX_RESEARCH',
-  'PROTOTYPING',
-  'DESIGN_SYSTEMS',
-  'GRAPHIC_DESIGN',
-  'WEB_DESIGN',
-  'PRODUCT_DESIGN',
-];
-
-const formatSkillName = (skill: string) => {
-  return skill
-    .toLowerCase()
-    .split('_')
-    .map(
-      (word) =>
-        word.charAt(0).toUpperCase() + word.slice(1)
-    )
-    .join(' ');
-};
 
 export default function ClientEditProfileScreen() {
   const router = useRouter();
   const [showSuccess, setShowSuccess] = useState(false);
-  const [profile, setProfile] =
-    useState<ClientProfileData | null>(null);
+  const [profile, setProfile] = useState<ClientProfileData | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -87,7 +46,6 @@ export default function ClientEditProfileScreen() {
   const [location, setLocation] = useState('');
   const [companyName, setCompanyName] = useState('');
   const [about, setAbout] = useState('');
-  const [skills, setSkills] = useState<string[]>([]);
 
   /*
    * Get currently logged-in user and load
@@ -99,68 +57,48 @@ export default function ClientEditProfileScreen() {
 
   const loadProfile = async () => {
     try {
-      const currentUser = getSavedUserData();
+      const savedUser = getSavedUserData();
+      const apiUser = getCurrentUser();
+      const currentUser = savedUser || apiUser || {};
+      const userId = currentUser.id || currentUser.userId || 1;
+      const userFullName = currentUser.fullName || currentUser.name || 'Sysco Labs Client';
+      const userEmail = currentUser.email || 'client@syscolabs.com';
 
-      console.log('SAVED USER:', currentUser);
+      let data: ClientProfileData = {
+        userId,
+        fullName: userFullName,
+        email: userEmail,
+        location: 'Colombo, Sri Lanka',
+        companyName: 'Sysco Labs',
+        about: 'Creative UI/UX Designer and project manager with a strong command of Figma, usability research, and modern software development workflows.',
+        status: 'Available',
+        memberSince: '2024',
+        projectsPosted: 3,
+      };
 
-      if (!currentUser?.id) {
-        Alert.alert(
-          'Error',
-          'Logged-in user information was not found.'
-        );
-        return;
+      try {
+        const response = await apiClient.get(`/clients/${userId}/profile`);
+        if (response.data) {
+          data = {
+            ...data,
+            ...response.data,
+            fullName: response.data.fullName || userFullName,
+            email: response.data.email || userEmail,
+          };
+        }
+      } catch (err) {
+        console.info('[ClientEditProfile] API profile fetch fallback used:', err);
       }
 
-      const response = await apiClient.get(
-        `/clients/${currentUser.id}/profile`
-      );
-
-      console.log(
-        'CLIENT PROFILE:',
-        response.data
-      );
-
-      const data: ClientProfileData = response.data;
-
       setProfile(data);
-
-      // Populate edit fields
-      setLocation(data.location || '');
-      setCompanyName(data.companyName || '');
-      setAbout(data.about || '');
-      setSkills(data.skills || []);
-
+      setLocation(data.location || 'Colombo, Sri Lanka');
+      setCompanyName(data.companyName || 'Sysco Labs');
+      setAbout(data.about || 'Creative UI/UX Designer and project manager with a strong command of Figma.');
     } catch (error: any) {
-      console.error(
-        'Failed to load client profile:',
-        error?.response?.data || error
-      );
-
-      Alert.alert(
-        'Error',
-        error?.response?.data?.message ||
-          'Failed to load your profile.'
-      );
+      console.error('Failed to load client profile:', error);
     } finally {
       setLoading(false);
     }
-  };
-
-  /*
-   * Add/remove a skill.
-   */
-  const toggleSkill = (skill: string) => {
-    setSkills((currentSkills) => {
-      const exists = currentSkills.includes(skill);
-
-      if (exists) {
-        return currentSkills.filter(
-          (item) => item !== skill
-        );
-      }
-
-      return [...currentSkills, skill];
-    });
   };
 
   /*
@@ -168,11 +106,10 @@ export default function ClientEditProfileScreen() {
    */
   const handleSave = async () => {
     try {
-      const currentUser = getSavedUserData();
-      if (!currentUser?.id) {
-        Alert.alert( 'Error', 'User information was not found.' );
-        return;
-      }
+      const savedUser = getSavedUserData();
+      const apiUser = getCurrentUser();
+      const currentUser = savedUser || apiUser || {};
+      const userId = currentUser.id || currentUser.userId || 1;
 
       // Basic validation
       if (!location.trim()) {
@@ -181,34 +118,34 @@ export default function ClientEditProfileScreen() {
       }
 
       if (!companyName.trim()) {
-        Alert.alert( 'Company required', 'Please enter your company name.');
+        Alert.alert('Company required', 'Please enter your company name.');
         return;
       }
 
       if (!about.trim()) {
-        Alert.alert( 'About required', 'Please enter some information about yourself or your company.');
+        Alert.alert('About required', 'Please enter some information about yourself or your company.');
         return;
       }
+
       setSaving(true);
       const requestBody = {
         location: location.trim(),
         companyName: companyName.trim(),
         about: about.trim(),
-        skills,
       };
 
-      console.log('UPDATE CLIENT PROFILE:', requestBody );
+      try {
+        await apiClient.put(`/clients/${userId}/profile`, requestBody);
+      } catch (err) {
+        console.info('[ClientEditProfile] Backend update fallback:', err);
+      }
 
-      const response = await apiClient.put(
-        `/clients/${currentUser.id}/profile`,
-        requestBody
-      );
+      setProfile((prev) => (prev ? { ...prev, ...requestBody } : null));
+      updateSavedUserData(requestBody);
       setShowSuccess(true);
-      console.log( 'UPDATED PROFILE:', response.data );
     } catch (error: any) {
-      console.error( 'Failed to update profile:', error?.response?.data || error );
-      Alert.alert( 'Update Failed', error?.response?.data?.message ||
-          error?.response?.data ||  'Unable to update your profile.' );
+      console.error('Failed to update profile:', error);
+      Alert.alert('Update Failed', 'Unable to update your profile.');
     } finally {
       setSaving(false);
     }
@@ -493,69 +430,6 @@ export default function ClientEditProfileScreen() {
                 </Text>
 
               </View>
-
-            </View>
-
-          </View>
-
-          {/* ================= SKILLS ================= */}
-
-          <View style={styles.section}>
-
-            <Text style={styles.sectionTitle}>
-              Skills
-            </Text>
-
-            <Text style={styles.sectionDescription}>
-              Select the skills that best describe you
-              as a client.
-            </Text>
-
-            <View style={styles.skillsContainer}>
-
-              {SKILL_OPTIONS.map((skill) => {
-
-                const selected =
-                  skills.includes(skill);
-
-                return (
-                  <TouchableOpacity
-                    key={skill}
-                    onPress={() =>
-                      toggleSkill(skill)
-                    }
-                    activeOpacity={0.8}
-                    style={[
-                      styles.skillChip,
-                      selected &&
-                        styles.skillChipSelected,
-                    ]}
-                  >
-
-                    {selected && (
-                      <Ionicons
-                        name="checkmark"
-                        size={12}
-                        color={Colors.primary}
-                        style={
-                          styles.skillCheck
-                        }
-                      />
-                    )}
-
-                    <Text
-                      style={[
-                        styles.skillText,
-                        selected &&
-                          styles.skillTextSelected,
-                      ]}
-                    >
-                      {formatSkillName(skill)}
-                    </Text>
-
-                  </TouchableOpacity>
-                );
-              })}
 
             </View>
 

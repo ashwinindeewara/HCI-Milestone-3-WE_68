@@ -1,6 +1,5 @@
 package com.freelance.backend.entity;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -8,7 +7,6 @@ import java.util.List;
 
 @Entity
 @Table(name = "contracts")
-@JsonIgnoreProperties(ignoreUnknown = true)
 public class Contract {
 
     @Id
@@ -39,13 +37,6 @@ public class Contract {
     private String description;
 
     private String paymentTerms;
-    private String paymentStrategy;
-
-    @Column(columnDefinition = "TEXT")
-    private String scopeOfWork;
-
-    @Column(columnDefinition = "TEXT")
-    private String minimumRequirements;
 
     @Column(columnDefinition = "TEXT")
     private String keyDeliverables;
@@ -261,32 +252,5 @@ public class Contract {
 
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
-    }
-
-    public String getScopeOfWork() {
-        return scopeOfWork;
-    }
-
-    public void setScopeOfWork(String scopeOfWork) {
-        this.scopeOfWork = scopeOfWork;
-    }
-
-    public String getMinimumRequirements() {
-        return minimumRequirements;
-    }
-
-    public void setMinimumRequirements(String minimumRequirements) {
-        this.minimumRequirements = minimumRequirements;
-    }
-
-    public String getPaymentStrategy() {
-        return paymentStrategy != null ? paymentStrategy : paymentTerms;
-    }
-
-    public void setPaymentStrategy(String paymentStrategy) {
-        this.paymentStrategy = paymentStrategy;
-        if (this.paymentTerms == null || this.paymentTerms.isBlank()) {
-            this.paymentTerms = paymentStrategy;
-        }
     }
 }

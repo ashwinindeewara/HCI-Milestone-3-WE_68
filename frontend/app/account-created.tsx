@@ -6,15 +6,19 @@ import {
   TouchableOpacity,
   SafeAreaView,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import Colors from '../src/constants/colors';
 import Theme from '../src/constants/theme';
 
 export default function AccountCreatedScreen() {
   const router = useRouter();
+  const { email, password } = useLocalSearchParams<{ email?: string, password?: string }>();
 
   const handleGoToLogin = () => {
-    router.replace('/login');
+    router.replace({
+      pathname: '/login',
+      params: { email, password }
+    });
   };
 
   return (
@@ -102,7 +106,7 @@ const styles = StyleSheet.create({
   },
   star: {
     position: 'absolute',
-    color: '#FBBF24',
+    color: Colors.warning,
     fontSize: 20,
   },
   starTopLeft: { top: 10, left: 20 },
@@ -115,7 +119,7 @@ const styles = StyleSheet.create({
   hairHead: {
     width: 60,
     height: 30,
-    backgroundColor: '#1E293B',
+    backgroundColor: Colors.dark,
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     marginBottom: -10,
@@ -129,7 +133,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
-    borderColor: '#1E293B',
+    borderColor: Colors.dark,
   },
   happyEyesRow: {
     flexDirection: 'row',
@@ -138,13 +142,13 @@ const styles = StyleSheet.create({
   eyeSmile: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#1E293B',
+    color: Colors.dark,
   },
   happySmile: {
     width: 12,
     height: 6,
     borderBottomWidth: 2,
-    borderColor: '#1E293B',
+    borderColor: Colors.dark,
     borderRadius: 6,
     marginTop: 2,
   },
@@ -156,7 +160,7 @@ const styles = StyleSheet.create({
   armLeft: {
     width: 14,
     height: 45,
-    backgroundColor: '#3B82F6',
+    backgroundColor: Colors.info,
     borderRadius: 7,
     transform: [{ rotate: '-35deg' }],
     marginRight: -4,
@@ -164,7 +168,7 @@ const styles = StyleSheet.create({
   armRight: {
     width: 14,
     height: 45,
-    backgroundColor: '#3B82F6',
+    backgroundColor: Colors.info,
     borderRadius: 7,
     transform: [{ rotate: '35deg' }],
     marginLeft: -4,
@@ -172,7 +176,7 @@ const styles = StyleSheet.create({
   suitTorso: {
     width: 50,
     height: 60,
-    backgroundColor: '#3B82F6',
+    backgroundColor: Colors.info,
     borderRadius: 8,
     alignItems: 'center',
     paddingTop: 2,
@@ -180,14 +184,14 @@ const styles = StyleSheet.create({
   shirtCollar: {
     width: 18,
     height: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.surface,
     borderBottomLeftRadius: 9,
     borderBottomRightRadius: 9,
   },
   tie: {
     width: 6,
     height: 24,
-    backgroundColor: '#0284C7',
+    backgroundColor: Colors.infoText,
     marginTop: -8,
   },
   legsRow: {
@@ -198,7 +202,7 @@ const styles = StyleSheet.create({
   leg: {
     width: 12,
     height: 35,
-    backgroundColor: '#1E293B',
+    backgroundColor: Colors.dark,
     borderRadius: 6,
   },
   textContainer: {
