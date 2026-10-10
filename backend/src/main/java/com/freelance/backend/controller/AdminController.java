@@ -13,7 +13,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping({"/api/v1/admin", "/api/admin"})
-@CrossOrigin(origins = "*")
+@CrossOrigin(originPatterns = "*", allowCredentials = "true")
 public class AdminController {
 
     private final AdminService adminService;

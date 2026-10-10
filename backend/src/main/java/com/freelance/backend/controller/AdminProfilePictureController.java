@@ -12,7 +12,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping({"/api/v1/admin/profile/picture", "/api/admin/profile/picture"})
-@CrossOrigin(origins = "*")
+@CrossOrigin(originPatterns = "*", allowCredentials = "true")
 public class AdminProfilePictureController {
 
     private final ProfilePictureService profilePictureService;

@@ -13,7 +13,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping({"/api/v1/reconciliation", "/api/reconciliation", "/api/v1/staff/reconcile", "/api/staff/reconcile"})
-@CrossOrigin(origins = "*")
+@CrossOrigin(originPatterns = "*", allowCredentials = "true")
 public class ReconciliationController {
 
     private final ReconciliationService reconciliationService;

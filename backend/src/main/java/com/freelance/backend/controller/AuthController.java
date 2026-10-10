@@ -13,7 +13,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping({"/api/v1/auth", "/api/auth"})
-@CrossOrigin(origins = "*")
+@CrossOrigin(originPatterns = "*", allowCredentials = "true")
 public class AuthController {
 
     private static final Logger logger = LoggerFactory.getLogger(AuthController.class);

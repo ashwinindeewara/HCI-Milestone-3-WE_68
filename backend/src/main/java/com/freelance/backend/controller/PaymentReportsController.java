@@ -10,7 +10,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping({"/api/v1/staff/reports", "/api/staff/reports"})
-@CrossOrigin(origins = "*")
+@CrossOrigin(originPatterns = "*", allowCredentials = "true")
 public class PaymentReportsController {
 
     @Autowired

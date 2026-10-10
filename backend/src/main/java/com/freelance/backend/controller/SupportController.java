@@ -9,7 +9,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping({"/api/v1/support", "/api/support", "/support", "/api/v1", "/api", ""})
-@CrossOrigin(origins = "*")
+@CrossOrigin(originPatterns = "*", allowCredentials = "true")
 public class SupportController {
 
     @Autowired
