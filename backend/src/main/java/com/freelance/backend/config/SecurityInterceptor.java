@@ -16,8 +16,8 @@ public class SecurityInterceptor implements HandlerInterceptor {
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
         String uri = request.getRequestURI();
-        // Exempt admin block management endpoints to prevent self-lockout
-        if (uri != null && (uri.contains("/admin/security/block-ip") || uri.contains("/admin/security/blocked-ips"))) {
+        // Exempt health check endpoints & admin block management endpoints
+        if (uri != null && (uri.equals("/") || uri.equals("/health") || uri.contains("/health") || uri.contains("/admin/security/block-ip") || uri.contains("/admin/security/blocked-ips"))) {
             return true;
         }
 

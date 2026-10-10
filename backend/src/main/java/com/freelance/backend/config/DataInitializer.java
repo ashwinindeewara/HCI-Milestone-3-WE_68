@@ -70,16 +70,20 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     @Override
-    public void run(String... args) throws Exception {
-        seedUsers();
-        seedContractsAndMilestones();
-        seedProjects();
-        seedTransactions();
-        seedDisputes();
-        seedReconciliationRecords();
-        seedSecurityLogs();
-        seedFreelancerProfiles();
-        seedNotifications();
+    public void run(String... args) {
+        try {
+            seedUsers();
+            seedContractsAndMilestones();
+            seedProjects();
+            seedTransactions();
+            seedDisputes();
+            seedReconciliationRecords();
+            seedSecurityLogs();
+            seedFreelancerProfiles();
+            seedNotifications();
+        } catch (Exception e) {
+            System.err.println("[DATA INITIALIZER] Warning: Data seeding encountered an exception during startup: " + e.getMessage());
+        }
     }
 
     private void seedUser(String fullName, String email, String password, UserRole role, String status) {
